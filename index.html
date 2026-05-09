@@ -1652,25 +1652,102 @@ function enterApp(userKey){
   document.getElementById("userName").textContent = user.name+(userKey==="admin"?" 👑":"");
   const isAdm = userKey==="admin";
   const isTaniaAdm = userKey==="tania"||isAdm;
+  const isMihaela = userKey==="mihaela";
+
+  // Mihaela — doar sortatori, fără concedii
+  const concediiModule = document.getElementById("concediiModule");
+  const sortatoriModule = document.getElementById("sortatoriModule");
+  const modConcedii = document.getElementById("modConcedii");
+  const modSortatori = document.getElementById("modSortatori");
+  const quickAction = document.querySelector(".quick-action");
+  const groupFilterBar = document.getElementById("groupFilterBar");
+  const statsBar = document.querySelector(".stats");
+  const holidayBanner = document.getElementById("holidayBanner");
+  const legend = document.querySelector(".legend");
+  const sidebarToggle = document.getElementById("sidebarToggleBtn");
+  const sidebarColl = document.getElementById("sidebarCollapsible");
+
+  if(isMihaela){
+    // Ascunde tot ce e concedii
+    if(concediiModule) concediiModule.style.display="none";
+    if(modConcedii)    modConcedii.style.display="none";
+    if(modSortatori)   modSortatori.style.display="none"; // nu trebe tab daca e doar sortatori
+    if(quickAction)    quickAction.style.display="none";
+    if(groupFilterBar) groupFilterBar.style.display="none";
+    if(statsBar)       statsBar.style.display="none";
+    if(holidayBanner)  holidayBanner.style.display="none";
+    if(legend)         legend.style.display="none";
+    if(sidebarToggle)  sidebarToggle.style.display="none";
+    if(sidebarColl)    sidebarColl.style.display="none";
+    // Forțează sortatori
+    appMode="sortatori";
+    if(sortatoriModule) sortatoriModule.style.display="block";
+    // Setează grup
+    sortView="ruhstorf";
+    const tabEis=document.getElementById("sortTabEiselfing");
+    const tabRuh=document.getElementById("sortTabRuhstorf");
+    if(tabEis) tabEis.style.display="none";
+    if(tabRuh){tabRuh.classList.add("active");tabRuh.style.display="block";}
+  } else {
+    // Ceilalți useri — arată normal
+    if(concediiModule) concediiModule.style.display="block";
+    if(modSortatori)   modSortatori.style.display="block";
+    if(modConcedii)    modConcedii.style.display="block";
+    if(quickAction)    quickAction.style.display="";
+    if(statsBar)       statsBar.style.display="";
+    if(legend)         legend.style.display="";
+    appMode="concedii";
+    // Filter tabs pentru sortatori
+    const tabEis=document.getElementById("sortTabEiselfing");
+    const tabRuh=document.getElementById("sortTabRuhstorf");
+    if(userKey==="madalina"){
+      sortView="eiselfing";
+      if(tabRuh) tabRuh.style.display="none";
+      if(tabEis){tabEis.classList.add("active");tabEis.style.display="block";}
+    } else {
+      sortView="eiselfing";
+      if(tabEis){tabEis.style.display="block";}
+      if(tabRuh){tabRuh.style.display="block";}
+    }
+  }
+
   document.getElementById("addDriverBtn").style.display = isAdm?"block":"none";
   document.getElementById("pinMgrBtn").style.display   = isAdm?"block":"none";
-  const filterBar = document.getElementById("groupFilterBar");
-  if(filterBar) filterBar.style.display = isTaniaAdm?"flex":"none";
+  if(groupFilterBar && !isMihaela) groupFilterBar.style.display = isTaniaAdm?"flex":"none";
+
   document.getElementById("authScreen").style.display = "none";
   document.getElementById("appRoot").style.display    = "grid";
-  // Krank rapid — all users
-  const quickKrankBtn = document.getElementById("quickKrankBtn");
-  if(quickKrankBtn) quickKrankBtn.style.display = "block";
-  const backupBtn = document.getElementById("backupBtn");
-  const loadBackupBtn = document.getElementById("loadBackupBtn");
-  if(loadBackupBtn) loadBackupBtn.style.display = isAdm ? "block" : "none";
-  const downloadBackupBtn = document.getElementById("downloadBackupBtn");
-  if(downloadBackupBtn) downloadBackupBtn.style.display = isAdm ? "block" : "none";
-  const uploadBackupBtn = document.getElementById("uploadBackupBtn");
-  if(uploadBackupBtn) uploadBackupBtn.style.display = isAdm ? "block" : "none";
 
-  if(legendUnpaid) legendUnpaid.style.display = isTaniaAdm ? "flex" : "none";
-  initApp(userKey);
+  const quickKrankBtn = document.getElementById("quickKrankBtn");
+  if(quickKrankBtn) quickKrankBtn.style.display = isMihaela?"none":"block";
+
+  const loadBackupBtn = document.getElementById("loadBackupBtn");
+  if(loadBackupBtn) loadBackupBtn.style.display = isAdm?"block":"none";
+  const downloadBackupBtn = document.getElementById("downloadBackupBtn");
+  if(downloadBackupBtn) downloadBackupBtn.style.display = isAdm?"block":"none";
+  const uploadBackupBtn = document.getElementById("uploadBackupBtn");
+  if(uploadBackupBtn) uploadBackupBtn.style.display = isAdm?"block":"none";
+
+  const legendUnpaid = document.getElementById("legendUnpaid");
+  if(legendUnpaid) legendUnpaid.style.display = isTaniaAdm?"flex":"none";
+
+  const statsBtn = document.getElementById("statsBtn");
+  if(statsBtn) statsBtn.style.display = isTaniaAdm?"block":"none";
+  const statKrankBox = document.getElementById("statKrankBox");
+  if(statKrankBox) statKrankBox.style.display = isTaniaAdm?"flex":"none";
+  const sortAdm = document.getElementById("sortAdminControls");
+  if(sortAdm) sortAdm.style.display = isTaniaAdm?"inline":"none";
+
+  // Load sortatori și inițializează
+  loadSortState().then(()=>{
+    if(appMode==="sortatori") renderSortatoriTimeline();
+  });
+
+  if(!isMihaela) initApp(userKey);
+  else {
+    // Mihaela nu are nevoie de initApp (concedii), direct finishInit minimal
+    setSaveStatus("ok","Bine ai venit, Mihaela!");
+  }
 }
 
 // ============================================================

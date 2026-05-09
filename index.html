@@ -617,9 +617,12 @@
   .tl-cell.holiday:not(.sunday) { background: rgba(168,85,247,0.12); }
   .tl-cell:not(.sunday):hover { background: rgba(245,158,11,0.15); }
   .tl-cell.in-leave { background: var(--green); }
-  .tl-cell.sort-present { background: rgba(16,185,129,0.3); color: var(--green); font-weight:900; font-size:14px; }
-  .tl-cell.sort-present:hover { background: rgba(16,185,129,0.5); }
-  .sort-cat-header { background: rgba(16,185,129,0.1); font-size:10px; font-weight:700; text-transform:uppercase; }
+  .tl-cell.sort-cell { font-size:13px; font-weight:900; }
+  .tl-cell.sort-present { background: rgba(16,185,129,0.35); color: #34d399; }
+  .tl-cell.sort-present:hover { background: rgba(16,185,129,0.55); }
+  .tl-cell.sort-absent  { background: rgba(239,68,68,0.25); color: #f87171; }
+  .tl-cell.sort-absent:hover  { background: rgba(239,68,68,0.4); }
+  .sort-cat-header { font-size:10px; font-weight:700; text-transform:uppercase; }
   .tl-cell.in-leave:hover { background: #0ea271; }
   .tl-cell.tl-selecting { background: rgba(245,158,11,0.45) !important; }
   .tl-cell.in-leave.tl-selecting { background: rgba(239,68,68,0.55) !important; }
@@ -2868,8 +2871,11 @@ function togglePresence(driverName, day){
   if(!sortState.presence) sortState.presence={};
   if(!sortState.presence[monthKey]) sortState.presence[monthKey]={};
   if(!sortState.presence[monthKey][driverName]) sortState.presence[monthKey][driverName]={};
-  const current = sortState.presence[monthKey][driverName][day];
-  sortState.presence[monthKey][driverName][day] = !current;
+  const current = sortState.presence[monthKey][driverName][String(day)];
+  // Cycle: undefined/null → true (prezent) → false (absent) → delete
+  if(current===undefined||current===null){ sortState.presence[monthKey][driverName][String(day)] = true; }
+  else if(current===true){ sortState.presence[monthKey][driverName][String(day)] = false; }
+  else { delete sortState.presence[monthKey][driverName][String(day)]; }
   saveSortState();
   renderSortatoriTimeline();
 }
@@ -2906,13 +2912,54 @@ function openAddSortator(){
 }
 
 function openAddSortatorCat(group, category){
-  const name = prompt("Numele sortatorului nou:");
-  if(!name||!name.trim()) return;
+  // Build list of available drivers from concedii state, not already in sortatori
+  const existingNames = new Set((sortState.drivers||[]).filter(d=>d.group===group).map(d=>d.name.toLowerCase()));
+  // Get drivers visible for this group
+  const groupKey = group==="eiselfing"?"madalina":group==="ruhstorf"?"raluca":"corina";
+  const available = (state.drivers||[]).filter(d=>{
+    const vis = d.visibleTo||[];
+    return (vis.includes(groupKey)||vis.includes("tania")) && !existingNames.has(d.name.toLowerCase());
+  });
+  if(!available.length){ toast("Toți șoferii sunt deja adăugați", true); return; }
+  // Show selection modal
+  openSortatorPickModal(group, category, available);
+}
+
+function openSortatorPickModal(group, category, available){
   const cats = {"permanent":"Permanent","rotatie":"Rotație","urgenta":"Urgență"};
-  sortState.drivers.push({id:uid(),name:name.trim(),group,category});
+  const groupLabel = group==="eiselfing"?"Eiselfing":"Ruhstorf";
+  let html = '<div style="max-height:300px;overflow-y:auto;margin:10px 0">';
+  available.sort((a,b)=>a.name.localeCompare(b.name,"ro")).forEach(dr=>{
+    html += `<label style="display:flex;align-items:center;gap:8px;padding:6px 4px;cursor:pointer;border-bottom:1px solid var(--border)">
+      <input type="checkbox" value="${dr.id}" data-name="${escapeHtml(dr.name)}" style="width:16px;height:16px">
+      <span style="font-size:13px">${escapeHtml(dr.name)}</span>
+    </label>`;
+  });
+  html += '</div>';
+  html += `<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+    <button class="btn btn-secondary" onclick="closeModal('modalSortPick')">Anulează</button>
+    <button class="btn" onclick="confirmSortatorPick('${group}','${category}')">Adaugă selectații</button>
+  </div>`;
+  // Use day modal for simplicity
+  document.getElementById("modalDayTitle").textContent = cats[category]+" — "+groupLabel;
+  document.getElementById("modalDaySub").textContent = "Selectează persoanele de adăugat";
+  document.getElementById("dayDriversList").innerHTML = html;
+  document.getElementById("modalDay").dataset.pickGroup = group;
+  document.getElementById("modalDay").dataset.pickCat = category;
+  openModal("modalDay");
+}
+
+function confirmSortatorPick(group, category){
+  const checkboxes = document.querySelectorAll("#dayDriversList input[type=checkbox]:checked");
+  if(!checkboxes.length){ toast("Nu ai selectat nimic", true); return; }
+  checkboxes.forEach(cb=>{
+    const name = cb.dataset.name;
+    if(name) sortState.drivers.push({id:uid(),name,group,category});
+  });
   saveSortState();
   renderSortatoriTimeline();
-  toast("+ "+name.trim()+" adăugat ("+cats[category]+")");
+  closeModal("modalDay");
+  toast("✓ "+checkboxes.length+" sortator(i) adăugat(i)");
 }
 
 function deleteSortator(id){

@@ -1150,12 +1150,12 @@
 // FIREBASE CONFIG
 // ============================================================
 const firebaseConfig = {
-  apiKey: "AIzaSyCaWrQnIAcquK71N_EwKT45lwcUW5RyDK0",
-  authDomain: "concedii-test.firebaseapp.com",
-  projectId: "concedii-test",
-  storageBucket: "concedii-test.firebasestorage.app",
-  messagingSenderId: "212982580101",
-  appId: "1:212982580101:web:5a41c6816a6893e5423aec"
+  apiKey: "AIzaSyBb0IFuofRG4vRlcnd9eMBuA8MyK_z0PRc",
+  authDomain: "calendar-f2589.firebaseapp.com",
+  projectId: "calendar-f2589",
+  storageBucket: "calendar-f2589.firebasestorage.app",
+  messagingSenderId: "124144206277",
+  appId: "1:124144206277:web:dc813e88dd100a0443cbac"
 };
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
@@ -2332,29 +2332,44 @@ async function loadLastFirestoreBackup(){
 // Manual download of current leaves data
 function uploadLocalBackup(e){
   const file=e.target.files[0];if(!file)return;
-  if(!confirm("Restaurezi datele din fișierul backup?\nConcedii, krank, fără plată, zile disponibile și reportate vor fi înlocuite."))
+  if(!confirm("Restaurezi datele din fișierul backup?\nDatele actuale vor fi înlocuite complet."))
     {e.target.value="";return;}
   const reader=new FileReader();
   reader.onload=ev=>{
     try{
       const bk=JSON.parse(ev.target.result);
       let restored=0;
-      // Support both old format (bk.leaves) and new format (bk.drivers)
-      if(bk.drivers){
-        restored=restoreCompleteBackup(bk);
+      if(bk.drivers && bk.drivers.length>0){
+        // Format nou — înlocuiește complet lista de persoane
+        state.drivers = bk.drivers.map(d=>({
+          id:             d.id||uid(),
+          name:           d.name,
+          visibleTo:      d.visibleTo||["tania"],
+          maxDays:        d.maxDays||0,
+          carryOverDays:  d.carryOverDays||0,
+          carryOverByYear:d.carryOverByYear||{},
+          leaves:         d.leaves||[],
+          krankLeaves:    d.krankLeaves||[],
+          unpaidLeaves:   d.unpaidLeaves||[]
+        }));
+        restored = state.drivers.length;
       } else if(bk.leaves){
-        // Old format fallback
-        state.drivers.forEach(dr=>{
-          if(bk.leaves[dr.name]){
-            const d=bk.leaves[dr.name];
-            dr.leaves=d.leaves||[];dr.krankLeaves=d.krankLeaves||[];dr.unpaidLeaves=d.unpaidLeaves||[];
-            restored++;
+        // Format vechi — creează persoane dacă nu există
+        Object.entries(bk.leaves).forEach(([name,data])=>{
+          let dr=state.drivers.find(d=>d.name===name);
+          if(!dr){
+            dr={id:uid(),name,visibleTo:["tania"],maxDays:0,carryOverDays:0,carryOverByYear:{},leaves:[],krankLeaves:[],unpaidLeaves:[]};
+            state.drivers.push(dr);
           }
+          dr.leaves=data.leaves||[];
+          dr.krankLeaves=data.krankLeaves||[];
+          dr.unpaidLeaves=data.unpaidLeaves||[];
+          restored++;
         });
       } else throw new Error("Format necunoscut");
       scheduleSave();renderAll();
-      toast("✓ Restaurat: "+restored+" persoane din "+file.name);
-    }catch(err){toast("Eroare: "+err.message,true);}
+      toast("✓ Restaurat complet: "+restored+" persoane");
+    }catch(err){toast("Eroare: "+err.message,true);console.error(err);}
   };
   reader.readAsText(file);e.target.value="";
 }

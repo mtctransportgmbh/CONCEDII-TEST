@@ -1741,9 +1741,23 @@ function enterApp(userKey){
   // Load sortatori — onSnapshot va re-renderi automat la orice schimbare
   loadSortState();
 
-  if(!isMihaela) initApp(userKey);
-  else {
+  if(!isMihaela){
+    initApp(userKey);
+  } else {
+    // Mihaela — setup modal listeners and show sortatori
+    document.querySelectorAll(".modal-bg").forEach(m=>{
+      m.addEventListener("click",e=>{if(e.target===m)m.classList.remove("show");});
+    });
+    document.addEventListener("keydown",e=>{
+      if(e.key==="Escape")document.querySelectorAll(".modal-bg.show").forEach(m=>m.classList.remove("show"));
+    });
     setSaveStatus("ok","Bine ai venit, Mihaela!");
+    // Force render sortatori after short delay to ensure DOM is ready
+    setTimeout(()=>{
+      if(sortState.drivers && sortState.drivers.length>0){
+        renderSortatoriTimeline();
+      }
+    }, 800);
   }
 }
 
@@ -2859,9 +2873,8 @@ function goSortToday(){ sortCurrentDate = new Date(); renderSortatoriTimeline();
 // ---- Firestore ----
 async function saveSortState(){
   try{
-    const data = JSON.parse(JSON.stringify(sortState));
-    if(!data.drivers||!data.drivers.length) return; // nu salva daca e gol
-    await db.collection("sortatori").doc("state").set(data);
+    await db.collection("sortatori").doc("state").set(JSON.parse(JSON.stringify(sortState)));
+    console.log("Sortatori saved:", sortState.drivers.length, "drivers");
   }catch(e){ console.error("sort save",e); }
 }
 
@@ -2885,8 +2898,9 @@ function loadSortState(){
       sortState.presence = {};
       saveSortState();
     }
-    // Re-render live pentru toti
-    if(appMode==="sortatori") renderSortatoriTimeline();
+    // Re-render live pentru toti userii cu sortatori activ
+    const mod = document.getElementById("sortatoriModule");
+    if(mod && mod.style.display!=="none") renderSortatoriTimeline();
   }, err=>console.error("sort snap err",err));
 }
 
@@ -2951,7 +2965,8 @@ function confirmSortPick(){
     const dr = _pickAvail[parseInt(cb.value)];
     if(dr) sortState.drivers.push({id:uid(),name:dr.name,group:_pickGroup,category:_pickCat});
   });
-  saveSortState();
+  renderSortatoriTimeline(); // render imediat
+  saveSortState();           // salveaza in Firestore
   closeModal("modalDay");
   toast("✓ "+checked.length+" sortator(i) adăugat(i)");
 }
@@ -2960,6 +2975,7 @@ function deleteSortator(id){
   const dr = (sortState.drivers||[]).find(d=>d.id===id);
   if(!dr||!confirm("Ștergi "+dr.name+" din sortatori?")) return;
   sortState.drivers = sortState.drivers.filter(d=>d.id!==id);
+  renderSortatoriTimeline();
   saveSortState();
   toast("🗑 "+dr.name+" șters");
 }

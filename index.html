@@ -1741,14 +1741,11 @@ function enterApp(userKey){
   const sortAdm = document.getElementById("sortAdminControls");
   if(sortAdm) sortAdm.style.display = isTaniaAdm?"inline":"none";
 
-  // Load sortatori și inițializează
-  loadSortState().then(()=>{
-    if(appMode==="sortatori") renderSortatoriTimeline();
-  });
+  // Load sortatori — onSnapshot va re-renderi automat la orice schimbare
+  loadSortState();
 
   if(!isMihaela) initApp(userKey);
   else {
-    // Mihaela nu are nevoie de initApp (concedii), direct finishInit minimal
     setSaveStatus("ok","Bine ai venit, Mihaela!");
   }
 }
@@ -2872,10 +2869,14 @@ function togglePresence(driverName, day){
   if(!sortState.presence[monthKey]) sortState.presence[monthKey]={};
   if(!sortState.presence[monthKey][driverName]) sortState.presence[monthKey][driverName]={};
   const current = sortState.presence[monthKey][driverName][String(day)];
-  // Cycle: undefined/null → true (prezent) → false (absent) → delete
-  if(current===undefined||current===null){ sortState.presence[monthKey][driverName][String(day)] = true; }
-  else if(current===true){ sortState.presence[monthKey][driverName][String(day)] = false; }
-  else { delete sortState.presence[monthKey][driverName][String(day)]; }
+  // Cycle: undefined → "1" (prezent) → "0" (absent) → delete (necunoscut)
+  if(current===undefined||current===null||current===""){ 
+    sortState.presence[monthKey][driverName][String(day)] = "1"; 
+  } else if(current==="1"||current===true){ 
+    sortState.presence[monthKey][driverName][String(day)] = "0"; 
+  } else { 
+    delete sortState.presence[monthKey][driverName][String(day)]; 
+  }
   saveSortState();
   renderSortatoriTimeline();
 }
@@ -3040,32 +3041,40 @@ function renderSortatoriTimeline(){
   }
   gridHtml+="</div>";
 
-  // Permanenti
+  // Permanenți — mereu vizibil
   const hPerm = buildCategoryHeader("Permanenți","#10b981",permanent.length,gridCols,canAdmin,currentGroup,"permanent");
   driverHtml+=hPerm.driverRow; gridHtml+=hPerm.gridRow;
   permanent.forEach(dr=>{
     const r=buildSortRow(dr,presence,daysInMonth,y,m,today,gridCols);
     driverHtml+=r.driverRow; gridHtml+=r.gridRow;
   });
-
-  // Rotatie
-  if(rotatie.length>0){
-    const hRot = buildCategoryHeader("Rotații","#f59e0b",rotatie.length,gridCols,canAdmin,currentGroup,"rotatie");
-    driverHtml+=hRot.driverRow; gridHtml+=hRot.gridRow;
-    rotatie.forEach(dr=>{
-      const r=buildSortRow(dr,presence,daysInMonth,y,m,today,gridCols);
-      driverHtml+=r.driverRow; gridHtml+=r.gridRow;
-    });
+  if(!permanent.length){
+    driverHtml+=`<div class='tl-driver-row' style='color:var(--text-dim);font-size:11px;font-style:italic'>Niciun permanent adăugat</div>`;
+    gridHtml+=`<div class='tl-row' style='grid-template-columns:${gridCols}'></div>`;
   }
 
-  // Urgenta
-  if(urgenta.length>0){
-    const hUrg = buildCategoryHeader("Urgențe","#ef4444",urgenta.length,gridCols,canAdmin,currentGroup,"urgenta");
-    driverHtml+=hUrg.driverRow; gridHtml+=hUrg.gridRow;
-    urgenta.forEach(dr=>{
-      const r=buildSortRow(dr,presence,daysInMonth,y,m,today,gridCols);
-      driverHtml+=r.driverRow; gridHtml+=r.gridRow;
-    });
+  // Rotații — mereu vizibil pentru admin
+  const hRot = buildCategoryHeader("Rotații","#f59e0b",rotatie.length,gridCols,canAdmin,currentGroup,"rotatie");
+  driverHtml+=hRot.driverRow; gridHtml+=hRot.gridRow;
+  rotatie.forEach(dr=>{
+    const r=buildSortRow(dr,presence,daysInMonth,y,m,today,gridCols);
+    driverHtml+=r.driverRow; gridHtml+=r.gridRow;
+  });
+  if(!rotatie.length){
+    driverHtml+=`<div class='tl-driver-row' style='color:var(--text-dim);font-size:11px;font-style:italic'>Nicio rotație adăugată</div>`;
+    gridHtml+=`<div class='tl-row' style='grid-template-columns:${gridCols}'></div>`;
+  }
+
+  // Urgențe — mereu vizibil pentru admin
+  const hUrg = buildCategoryHeader("Urgențe","#ef4444",urgenta.length,gridCols,canAdmin,currentGroup,"urgenta");
+  driverHtml+=hUrg.driverRow; gridHtml+=hUrg.gridRow;
+  urgenta.forEach(dr=>{
+    const r=buildSortRow(dr,presence,daysInMonth,y,m,today,gridCols);
+    driverHtml+=r.driverRow; gridHtml+=r.gridRow;
+  });
+  if(!urgenta.length){
+    driverHtml+=`<div class='tl-driver-row' style='color:var(--text-dim);font-size:11px;font-style:italic'>Nicio urgență adăugată</div>`;
+    gridHtml+=`<div class='tl-row' style='grid-template-columns:${gridCols}'></div>`;
   }
 
   driverHtml+="</div>";

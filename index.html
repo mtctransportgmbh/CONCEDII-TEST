@@ -1152,14 +1152,31 @@
 // ============================================================
 // FIREBASE CONFIG
 // ============================================================
-const firebaseConfig = {
-  apiKey: "AIzaSyBb0IFuofRG4vRlcnd9eMBuA8MyK_z0PRc",
-  authDomain: "calendar-f2589.firebaseapp.com",
-  projectId: "calendar-f2589",
-  storageBucket: "calendar-f2589.firebasestorage.app",
-  messagingSenderId: "124144206277",
-  appId: "1:124144206277:web:dc813e88dd100a0443cbac"
+// ============================================================
+// CONFIGURARE — schimbă doar USE_TEST pentru a comuta între medii
+// ============================================================
+const USE_TEST = true; // true = test | false = producție
+
+const FIREBASE_CONFIGS = {
+  production: {
+    apiKey: "AIzaSyBb0IFuofRG4vRlcnd9eMBuA8MyK_z0PRc",
+    authDomain: "calendar-f2589.firebaseapp.com",
+    projectId: "calendar-f2589",
+    storageBucket: "calendar-f2589.firebasestorage.app",
+    messagingSenderId: "124144206277",
+    appId: "1:124144206277:web:dc813e88dd100a0443cbac"
+  },
+  test: {
+    apiKey: "AIzaSyCaWrQnIAcquK71N_EwKT45lwcUW5RyDK0",
+    authDomain: "concedii-test.firebaseapp.com",
+    projectId: "concedii-test",
+    storageBucket: "concedii-test.firebasestorage.app",
+    messagingSenderId: "212982580101",
+    appId: "1:212982580101:web:5a41c6816a6893e5423aec"
+  }
 };
+
+const firebaseConfig = USE_TEST ? FIREBASE_CONFIGS.test : FIREBASE_CONFIGS.production;
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db   = firebase.firestore();

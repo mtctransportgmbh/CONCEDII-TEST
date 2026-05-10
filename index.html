@@ -377,6 +377,26 @@
     text-transform: capitalize;
   }
   
+  .mod-tab {
+    padding: 10px 24px;
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    background: var(--bg-elev-2);
+    color: var(--text-dim);
+    transition: all 0.15s;
+  }
+  .mod-tab:hover { border-color: var(--accent); color: var(--text); }
+  .mod-tab-active, .mod-tab.active {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+    box-shadow: 0 2px 12px rgba(245,158,11,0.4);
+  }
+
   .view-tabs {
     display: flex;
     background: var(--bg-elev);
@@ -616,7 +636,7 @@
   .tl-cell.sunday { background: repeating-linear-gradient(45deg,rgba(239,68,68,0.05),rgba(239,68,68,0.05) 4px,rgba(239,68,68,0.1) 4px,rgba(239,68,68,0.1) 8px); cursor: not-allowed; }
   .tl-cell.holiday:not(.sunday) { background: rgba(168,85,247,0.12); }
   .tl-cell:not(.sunday):hover { background: rgba(245,158,11,0.15); }
-  .tl-cell.in-leave { background: var(--green); }
+  .tl-cell.in-leave { background: var(--green); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:900; color:#fff; }
   .tl-cell.sort-cell { font-size:13px; font-weight:900; }
   .tl-cell.sort-present { background: rgba(16,185,129,0.35); color: #34d399; }
   .tl-cell.sort-present:hover { background: rgba(16,185,129,0.55); }
@@ -882,8 +902,8 @@
   
   <main class="main">
     <div style="display:flex;gap:8px;margin-bottom:12px">
-      <button id="modConcedii" class="view-tab active" onclick="setAppMode('concedii')" style="padding:8px 18px;font-size:13px">📅 Concedii</button>
-      <button id="modSortatori" class="view-tab" onclick="setAppMode('sortatori')" style="padding:8px 18px;font-size:13px;display:none" id="modSortatoriBtn">📦 Sortatori</button>
+      <button id="modConcedii" class="mod-tab mod-tab-active" onclick="setAppMode('concedii')">📅 CONCEDII</button>
+      <button id="modSortatori" class="mod-tab" onclick="setAppMode('sortatori')" style="display:none">📦 SORTATORI</button>
     </div>
     <div id="concediiModule">
     <div class="header">
@@ -894,8 +914,8 @@
         <button class="btn-small btn btn-secondary" onclick="goToday()" style="width:auto; margin-left:8px">Azi</button>
       </div>
       <div class="view-tabs">
-        <button class="view-tab active" onclick="setView('calendar')">📅 Calendar</button>
-        <button class="view-tab" onclick="setView('timeline')">📊 Timeline</button>
+        <button id="viewTabCalendar" class="view-tab active" onclick="setView('calendar')">📅 Calendar</button>
+        <button id="viewTabTimeline" class="view-tab" onclick="setView('timeline')">📊 Timeline</button>
       </div>
     </div>
     
@@ -2755,7 +2775,7 @@ function renderTimeline(){
         `onmousemove="if(event.buttons===1&&tlDrag.active)tlDragMove(${dn},event.pageX,event.pageY)" `;
       const tipLabel=onKrank?"Krank":onUnpaid?"Fără plată":onLeave?"Concediu":"";
       const tipText=isSun?"Duminică":holiday?"Sărbătoare — "+holiday:(isOccupied?"Drag pentru a șterge ("+tipLabel+")":"Drag pentru a adăuga concediu");
-      const cellContent=onKrank?"K":onUnpaid?"U":"";
+      const cellContent=onKrank?"K":onUnpaid?"U":onLeave?"✓":"";
       gridHtml+=`<div class='${cls.join(" ")}' ${dragAttrs} title="${escapeHtml(dr.name+" · "+formatDateRO(ds)+(holiday?" · "+holiday:"")+" — "+tipText)}" data-driver='${dr.id}' data-day='${dn}'>${cellContent}</div>`;
     }
     gridHtml+="</div>";
@@ -2826,7 +2846,8 @@ function autoCalculateCarryOver(fromYear, toYear){
 function goToday(){currentDate=new Date();renderMain();}
 function setView(v){
   view=v;
-  document.querySelectorAll(".view-tab").forEach((t,i)=>t.classList.toggle("active",(i===0&&v==="calendar")||(i===1&&v==="timeline")));
+  document.getElementById("viewTabCalendar").classList.toggle("active", v==="calendar");
+  document.getElementById("viewTabTimeline").classList.toggle("active", v==="timeline");
   document.getElementById("calendarView").style.display=v==="calendar"?"block":"none";
   document.getElementById("timelineView").style.display=v==="timeline"?"block":"none";
   renderMain();
@@ -2870,7 +2891,9 @@ function setAppMode(mode){
   document.getElementById("concediiModule").style.display  = mode==="concedii"?"block":"none";
   document.getElementById("sortatoriModule").style.display  = mode==="sortatori"?"block":"none";
   document.getElementById("modConcedii").classList.toggle("active",  mode==="concedii");
+  document.getElementById("modConcedii").classList.toggle("mod-tab-active",  mode==="concedii");
   document.getElementById("modSortatori").classList.toggle("active", mode==="sortatori");
+  document.getElementById("modSortatori").classList.toggle("mod-tab-active", mode==="sortatori");
   if(mode==="sortatori") renderSortatoriTimeline();
 }
 

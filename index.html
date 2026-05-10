@@ -904,6 +904,7 @@
     <div style="display:flex;gap:8px;margin-bottom:12px">
       <button id="modConcedii" class="mod-tab mod-tab-active" onclick="setAppMode('concedii')">📅 CONCEDII</button>
       <button id="modSortatori" class="mod-tab" onclick="setAppMode('sortatori')" style="display:none">📦 SORTATORI</button>
+      <button id="modPrezente" class="mod-tab" onclick="setAppMode('prezente')" style="display:none">✅ PREZENȚE</button>
     </div>
     <div id="concediiModule">
     <div class="header">
@@ -1003,6 +1004,28 @@
       </div>
       <div class="timeline-wrap">
         <div class="timeline" id="sortatoriTimeline"></div>
+      </div>
+    </div>
+
+    <!-- PREZENTE MODULE -->
+    <div id="prezenteModule" style="display:none">
+      <div class="header" style="margin-bottom:12px">
+        <div class="nav">
+          <button onclick="changePresMonth(-1)">&#8249;</button>
+          <h2 id="presMonthLabel"></h2>
+          <button onclick="changePresMonth(1)">&#8250;</button>
+          <button class="btn-small btn btn-secondary" onclick="goPresToday()" style="width:auto;margin-left:8px">Azi</button>
+        </div>
+        <div style="display:flex;gap:6px" id="presFilterTabs">
+          <button id="presTabAll" class="group-tab active" onclick="setPresView('all')" style="display:none">🌐 Total</button>
+          <button id="presTabEis" class="group-tab" onclick="setPresView('eiselfing')" style="display:none">📍 Eiselfing</button>
+          <button id="presTabRuh" class="group-tab" onclick="setPresView('ruhstorf')" style="display:none">📍 Ruhstorf</button>
+          <button id="presTabCam" class="group-tab" onclick="setPresView('camion')" style="display:none">🚚 Camion</button>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px">Click = prezent ✓ | Click din nou = absent ✗ | Click din nou = necunoscut</div>
+      <div class="timeline-wrap">
+        <div class="timeline" id="prezenteTimeline"></div>
       </div>
     </div>
   </main>
@@ -1673,6 +1696,7 @@ auth.onAuthStateChanged(user=>{
 window.doLogout = async function(){
   unsubAll();
   if(_sortUnsub){ try{_sortUnsub();}catch(e){} _sortUnsub=null; }
+  if(_presUnsub){ try{_presUnsub();}catch(e){} _presUnsub=null; }
   clearSession(window.activeUserKey);
   if(window.activeUserKey==="admin") await auth.signOut();
   window.activeUserKey = null;
@@ -1727,6 +1751,8 @@ function enterApp(userKey){
     if(tabRuh){tabRuh.classList.add("active");tabRuh.style.display="block";}
   } else {
     // Ceilalți useri — arată normal
+    if(sidebarColl)    sidebarColl.style.display=""; // reset from Mihaela hide
+    if(sidebarToggle)  sidebarToggle.style.display=""; // reset
     if(concediiModule) concediiModule.style.display="block";
     if(modSortatori)   modSortatori.style.display="block";
     if(modConcedii)    modConcedii.style.display="block";
@@ -1774,6 +1800,11 @@ function enterApp(userKey){
   if(statKrankBox) statKrankBox.style.display = isTaniaAdm?"flex":"none";
   const sortAdm = document.getElementById("sortAdminControls");
   if(sortAdm) sortAdm.style.display = isTaniaAdm?"inline":"none";
+
+  // Prezente tab — all users
+  const modPrezente = document.getElementById("modPrezente");
+  if(modPrezente) modPrezente.style.display = "block";
+  setupPrezenteForUser(userKey);
 
   // Load sortatori — onSnapshot va re-renderi automat la orice schimbare
   loadSortState();
@@ -2888,13 +2919,18 @@ function getSortDrivers(){
 
 function setAppMode(mode){
   appMode = mode;
-  document.getElementById("concediiModule").style.display  = mode==="concedii"?"block":"none";
+  document.getElementById("concediiModule").style.display   = mode==="concedii"?"block":"none";
   document.getElementById("sortatoriModule").style.display  = mode==="sortatori"?"block":"none";
+  const pm = document.getElementById("prezenteModule");
+  if(pm) pm.style.display = mode==="prezente"?"block":"none";
   document.getElementById("modConcedii").classList.toggle("active",  mode==="concedii");
   document.getElementById("modConcedii").classList.toggle("mod-tab-active",  mode==="concedii");
   document.getElementById("modSortatori").classList.toggle("active", mode==="sortatori");
   document.getElementById("modSortatori").classList.toggle("mod-tab-active", mode==="sortatori");
+  const mp=document.getElementById("modPrezente");
+  if(mp){ mp.classList.toggle("active", mode==="prezente"); mp.classList.toggle("mod-tab-active", mode==="prezente"); }
   if(mode==="sortatori") renderSortatoriTimeline();
+  if(mode==="prezente")  renderPrezenteTimeline();
 }
 
 function setSortView(v){
@@ -3102,7 +3138,159 @@ function renderSortatoriTimeline(){
 }
 
 
-function renderAll(includeDrivers=true){if(includeDrivers)renderDrivers();renderMain();}
+// ============================================================
+// PREZENTE MODULE
+// ============================================================
+let presState = {presence:{}}; 
+let presCurrentDate = new Date();
+let presView = "all";
+let _presUnsub = null;
+
+function getPresKey(){ 
+  return presCurrentDate.getFullYear()+"-"+String(presCurrentDate.getMonth()+1).padStart(2,"0"); 
+}
+
+function getPresDrivers(){
+  const uk = window.activeUserKey||"tania";
+  let drivers = state.drivers||[];
+  if(uk==="raluca")   drivers=drivers.filter(d=>(d.visibleTo||[]).includes("raluca"));
+  else if(uk==="madalina") drivers=drivers.filter(d=>(d.visibleTo||[]).includes("madalina"));
+  else if(uk==="corina")   drivers=drivers.filter(d=>(d.visibleTo||[]).includes("corina"));
+  else if(uk==="mihaela")  drivers=drivers.filter(d=>(d.visibleTo||[]).includes("raluca")); // ruhstorf
+  else {
+    // tania/admin — filter by presView
+    if(presView==="eiselfing") drivers=drivers.filter(d=>(d.visibleTo||[]).includes("madalina"));
+    else if(presView==="ruhstorf")  drivers=drivers.filter(d=>(d.visibleTo||[]).includes("raluca"));
+    else if(presView==="camion")    drivers=drivers.filter(d=>(d.visibleTo||[]).includes("corina"));
+  }
+  return [...drivers].sort((a,b)=>a.name.localeCompare(b.name,"ro"));
+}
+
+function setPresView(v){
+  presView=v;
+  ["all","eiselfing","ruhstorf","camion"].forEach(x=>{
+    const el=document.getElementById("presTab"+x.charAt(0).toUpperCase()+x.slice(1));
+    if(el) el.classList.toggle("active", x===v);
+  });
+  renderPrezenteTimeline();
+}
+
+function changePresMonth(delta){
+  presCurrentDate=new Date(presCurrentDate.getFullYear(),presCurrentDate.getMonth()+delta,1);
+  renderPrezenteTimeline();
+}
+function goPresToday(){ presCurrentDate=new Date(); renderPrezenteTimeline(); }
+
+async function savePresState(){
+  try{
+    await db.collection("prezente").doc("state").set(JSON.parse(JSON.stringify(presState)));
+  }catch(e){ console.error("pres save",e); }
+}
+
+function loadPresState(){
+  if(_presUnsub){ try{_presUnsub();}catch(e){} _presUnsub=null; }
+  _presUnsub = db.collection("prezente").doc("state").onSnapshot(snap=>{
+    if(snap.exists){
+      presState = snap.data();
+      if(!presState.presence) presState.presence={};
+    } else {
+      presState = {presence:{}};
+    }
+    const mod=document.getElementById("prezenteModule");
+    if(mod && mod.style.display!=="none") renderPrezenteTimeline();
+  }, err=>console.error("pres snap",err));
+}
+
+function togglePresenta(driverName, day){
+  const mk=getPresKey();
+  if(!presState.presence[mk]) presState.presence[mk]={};
+  if(!presState.presence[mk][driverName]) presState.presence[mk][driverName]={};
+  const cur=presState.presence[mk][driverName][String(day)];
+  if(!cur) presState.presence[mk][driverName][String(day)]="prezent";
+  else if(cur==="prezent") presState.presence[mk][driverName][String(day)]="absent";
+  else delete presState.presence[mk][driverName][String(day)];
+  renderPrezenteTimeline();
+  savePresState();
+}
+
+function renderPrezenteTimeline(){
+  const y=presCurrentDate.getFullYear(), m=presCurrentDate.getMonth();
+  const days=new Date(y,m+1,0).getDate();
+  const tl=document.getElementById("prezenteTimeline");
+  if(!tl)return;
+  document.getElementById("presMonthLabel").textContent=MONTHS[m]+" "+y;
+  const drivers=getPresDrivers();
+  if(!drivers.length){tl.innerHTML="<div style='padding:40px;text-align:center;color:var(--text-dim)'>Nicio persoană</div>";return;}
+  const mk=getPresKey();
+  const presence=(presState.presence&&presState.presence[mk])||{};
+  const colW=34, gridCols=`repeat(${days},${colW}px)`;
+
+  let dH="<div class='tl-driver-col'><div class='tl-driver-header'>Persoană</div>";
+  let gH="<div class='tl-grid-wrap'>";
+
+  // Day headers
+  gH+=`<div class='tl-day-headers' style='grid-template-columns:${gridCols}'>`;
+  for(let dn=1;dn<=days;dn++){
+    const d=new Date(y,m,dn),isSun=isSunday(d),hol=getHoliday(d),isTd=sameDay(d,new Date());
+    const cls=["tl-day-header"];if(isSun)cls.push("sunday");if(hol)cls.push("holiday");if(isTd)cls.push("today");
+    gH+=`<div class='${cls.join(" ")}'><div class='dnum'>${dn}</div><div class='dow'>${DOW_MIN[(d.getDay()+6)%7]}</div></div>`;
+  }
+  gH+="</div>";
+
+  drivers.forEach(dr=>{
+    const dp=presence[dr.name]||{};
+    dH+=`<div class='tl-driver-row' style='font-size:12px'>${escapeHtml(dr.name)}</div>`;
+    gH+=`<div class='tl-row' style='grid-template-columns:${gridCols}'>`;
+    for(let dn=1;dn<=days;dn++){
+      const d=new Date(y,m,dn),blocked=isSunday(d)||!!getHoliday(d);
+      const val=dp[String(dn)];
+      const isP=val==="prezent", isA=val==="absent";
+      const cls=["tl-cell","sort-cell"];
+      if(isSunday(d))cls.push("sunday");
+      if(getHoliday(d))cls.push("holiday");
+      if(isP)cls.push("sort-p");
+      if(isA)cls.push("sort-a");
+      const safeName=dr.name.replace(/"/g,"&quot;");
+      const click=blocked?"":`data-n="${safeName}" data-d="${dn}" onclick="togglePresenta(this.dataset.n,this.dataset.d)"`;
+      gH+=`<div class='${cls.join(" ")}' ${click}>${isP?"✓":isA?"✗":""}</div>`;
+    }
+    gH+="</div>";
+  });
+
+  dH+="</div>"; gH+="</div>";
+  tl.innerHTML=dH+gH;
+}
+
+function setupPrezenteForUser(userKey){
+  const isTaniaAdm = userKey==="tania"||userKey==="admin";
+  // Show/hide filter tabs
+  const tabAll=document.getElementById("presTabAll");
+  const tabEis=document.getElementById("presTabEis");
+  const tabRuh=document.getElementById("presTabRuh");
+  const tabCam=document.getElementById("presTabCam");
+  if(isTaniaAdm){
+    if(tabAll)tabAll.style.display="block";
+    if(tabEis)tabEis.style.display="block";
+    if(tabRuh)tabRuh.style.display="block";
+    if(tabCam)tabCam.style.display="block";
+    presView="all";
+    if(tabAll)tabAll.classList.add("active");
+  } else {
+    [tabAll,tabEis,tabRuh,tabCam].forEach(t=>{if(t)t.style.display="none";});
+    presView="all";
+  }
+  loadPresState();
+}
+
+function renderAll(includeDrivers=true){
+  const uk = window.activeUserKey;
+  if(uk && uk!=="mihaela"){
+    const sc = document.getElementById("sidebarCollapsible");
+    if(sc && sc.style.display==="none") sc.style.display="";
+  }
+  if(includeDrivers)renderDrivers();
+  renderMain();
+}
 
 function openStats(filter){
   if(!isAdminOrTania()) return;

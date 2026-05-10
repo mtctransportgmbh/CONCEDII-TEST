@@ -1635,6 +1635,7 @@ auth.onAuthStateChanged(user=>{
 });
 window.doLogout = async function(){
   unsubAll();
+  if(_sortUnsub){ try{_sortUnsub();}catch(e){} _sortUnsub=null; }
   clearSession(window.activeUserKey);
   if(window.activeUserKey==="admin") await auth.signOut();
   window.activeUserKey = null;
@@ -2817,6 +2818,7 @@ let sortState = {drivers:[], presence:{}};
 let sortCurrentDate = new Date();
 let sortView = "ruhstorf";
 let appMode = "concedii";
+let _sortUnsub = null; // separate from unsubListeners
 
 // ---- Helpers ----
 function getSortKey(){ 
@@ -2857,13 +2859,17 @@ function goSortToday(){ sortCurrentDate = new Date(); renderSortatoriTimeline();
 // ---- Firestore ----
 async function saveSortState(){
   try{
-    await db.collection("sortatori").doc("state").set(JSON.parse(JSON.stringify(sortState)));
+    const data = JSON.parse(JSON.stringify(sortState));
+    if(!data.drivers||!data.drivers.length) return; // nu salva daca e gol
+    await db.collection("sortatori").doc("state").set(data);
   }catch(e){ console.error("sort save",e); }
 }
 
 function loadSortState(){
-  // onSnapshot — live updates pentru toti userii
-  const unsub = db.collection("sortatori").doc("state").onSnapshot(snap=>{
+  // Unsubscribe previous listener if exists
+  if(_sortUnsub){ try{_sortUnsub();}catch(e){} _sortUnsub=null; }
+  
+  _sortUnsub = db.collection("sortatori").doc("state").onSnapshot(snap=>{
     if(snap.exists){
       const data = snap.data();
       sortState.drivers  = data.drivers  || [];
@@ -2882,7 +2888,6 @@ function loadSortState(){
     // Re-render live pentru toti
     if(appMode==="sortatori") renderSortatoriTimeline();
   }, err=>console.error("sort snap err",err));
-  unsubListeners.push(unsub);
 }
 
 // ---- Prezenta ----

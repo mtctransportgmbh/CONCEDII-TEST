@@ -2886,25 +2886,30 @@ async function saveSortState(){
   }catch(e){ console.error("sort save err",e); }
 }
 
-async function loadSortState(){
-  try{
-    const snap = await db.collection("sortatori").doc("state").get();
-    if(snap.exists){
-      sortState = snap.data();
-      if(!sortState.drivers) sortState.drivers=[];
-      if(!sortState.presence) sortState.presence={};
-    } else {
-      // Init with default sortatori
-      sortState.drivers = [
-        ...SORT_EISELFING_DEFAULT.map(name=>({id:uid(),name,group:"eiselfing",category:"permanent"})),
-        ...SORT_RUHSTORF_PERM_DEFAULT.map(name=>({id:uid(),name,group:"ruhstorf",category:"permanent"})),
-        ...SORT_RUHSTORF_ROTATIE_DEFAULT.map(name=>({id:uid(),name,group:"ruhstorf",category:"rotatie"})),
-        ...SORT_RUHSTORF_URGENTA_DEFAULT.map(name=>({id:uid(),name,group:"ruhstorf",category:"urgenta"}))
-      ];
-      sortState.presence = {};
-      await saveSortState();
-    }
-  }catch(e){ console.error("sort load err",e); }
+function loadSortState(){
+  return new Promise((resolve)=>{
+    const unsub = db.collection("sortatori").doc("state").onSnapshot(snap=>{
+      if(snap.exists){
+        sortState = snap.data();
+        if(!sortState.drivers) sortState.drivers=[];
+        if(!sortState.presence) sortState.presence={};
+      } else {
+        // Prima dată — init cu default
+        sortState.drivers = [
+          ...SORT_EISELFING_DEFAULT.map(name=>({id:uid(),name,group:"eiselfing",category:"permanent"})),
+          ...SORT_RUHSTORF_PERM_DEFAULT.map(name=>({id:uid(),name,group:"ruhstorf",category:"permanent"})),
+          ...SORT_RUHSTORF_ROTATIE_DEFAULT.map(name=>({id:uid(),name,group:"ruhstorf",category:"rotatie"})),
+          ...SORT_RUHSTORF_URGENTA_DEFAULT.map(name=>({id:uid(),name,group:"ruhstorf",category:"urgenta"}))
+        ];
+        sortState.presence = {};
+        saveSortState();
+      }
+      // Re-render whenever data changes (live updates for all users)
+      if(appMode==="sortatori") renderSortatoriTimeline();
+      resolve();
+    }, err=>{ console.error("sort snap err",err); resolve(); });
+    unsubListeners.push(unsub);
+  });
 }
 
 function openAddSortator(){
@@ -2925,46 +2930,51 @@ function openAddSortatorCat(group, category){
   openSortatorPickModal(group, category, available);
 }
 
+// Stocăm lista disponibilă pentru pick modal
+let _sortPickAvailable = [];
+let _sortPickGroup = "";
+let _sortPickCat = "";
+
 function openSortatorPickModal(group, category, available){
+  _sortPickAvailable = available.sort((a,b)=>a.name.localeCompare(b.name,"ro"));
+  _sortPickGroup = group;
+  _sortPickCat = category;
   const cats = {"permanent":"Permanent","rotatie":"Rotație","urgenta":"Urgență"};
   const groupLabel = group==="eiselfing"?"Eiselfing":"Ruhstorf";
   let html = '<div style="max-height:300px;overflow-y:auto;margin:10px 0">';
-  available.sort((a,b)=>a.name.localeCompare(b.name,"ro")).forEach(dr=>{
+  _sortPickAvailable.forEach((dr,idx)=>{
     html += `<label style="display:flex;align-items:center;gap:8px;padding:6px 4px;cursor:pointer;border-bottom:1px solid var(--border)">
-      <input type="checkbox" value="${dr.id}" data-name="${escapeHtml(dr.name)}" style="width:16px;height:16px">
+      <input type="checkbox" class="sort-pick-cb" value="${idx}" style="width:16px;height:16px">
       <span style="font-size:13px">${escapeHtml(dr.name)}</span>
     </label>`;
   });
   html += '</div>';
   html += `<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
-    <button class="btn btn-secondary" onclick="closeModal('modalSortPick')">Anulează</button>
-    <button class="btn" onclick="confirmSortatorPick('${group}','${category}')">Adaugă selectații</button>
+    <button class="btn btn-secondary" onclick="closeModal('modalDay')">Anulează</button>
+    <button class="btn" onclick="confirmSortatorPick()">+ Adaugă selectații</button>
   </div>`;
-  // Use day modal for simplicity
   document.getElementById("modalDayTitle").textContent = cats[category]+" — "+groupLabel;
   document.getElementById("modalDaySub").textContent = "Selectează persoanele de adăugat";
   document.getElementById("dayDriversList").innerHTML = html;
-  document.getElementById("modalDay").dataset.pickGroup = group;
-  document.getElementById("modalDay").dataset.pickCat = category;
   openModal("modalDay");
 }
 
-function confirmSortatorPick(group, category){
-  const checkboxes = document.querySelectorAll("#dayDriversList input[type=checkbox]:checked");
+function confirmSortatorPick(){
+  const checkboxes = document.querySelectorAll(".sort-pick-cb:checked");
   if(!checkboxes.length){ toast("Nu ai selectat nimic", true); return; }
   checkboxes.forEach(cb=>{
-    const name = cb.dataset.name;
-    if(name) sortState.drivers.push({id:uid(),name,group,category});
+    const idx = parseInt(cb.value);
+    const dr = _sortPickAvailable[idx];
+    if(dr) sortState.drivers.push({id:uid(),name:dr.name,group:_sortPickGroup,category:_sortPickCat});
   });
   saveSortState();
-  renderSortatoriTimeline();
   closeModal("modalDay");
   toast("✓ "+checkboxes.length+" sortator(i) adăugat(i)");
 }
 
 function deleteSortator(id){
   const dr=sortState.drivers.find(d=>d.id===id);
-  if(!dr||!confirm("Ștergi sortator "+dr.name+"?")) return;
+  if(!dr||!confirm("Ștergi "+dr.name+" din sortatori?")) return;
   sortState.drivers=sortState.drivers.filter(d=>d.id!==id);
   saveSortState();
   renderSortatoriTimeline();

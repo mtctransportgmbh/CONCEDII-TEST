@@ -1195,10 +1195,6 @@ const GROUPS = {
 // STATE
 // ============================================================
 let state = {drivers:[], thresholds:{warn:3,crit:5}};
-let sortState = {drivers:[], presence:{}};
-let sortCurrentDate = new Date();
-let sortView = "eiselfing";
-let appMode = "concedii";
 let activeGroup = "total"; // for tania/admin filter
 let view = "calendar";
 let currentDate = new Date();
@@ -2810,48 +2806,45 @@ function updateThresholdLegend(){
 function renderMain(){if(view==="calendar")renderCalendar();else renderTimeline();}
 
 // ============================================================
-// SORTATORI MODULE
+// SORTATORI MODULE — complet rescris
 // ============================================================
 const SORT_EISELFING_DEFAULT = ["Aremia Aurel","Asmarandei Andrei","Bruma Alexandru","Gruia Raul","Movila Andrei","Pana Alexandru","Paul Petre","Rus Denisa","Stranici Cristian","Tufisi Rares","Vancea Cosmin"];
+const SORT_RUHSTORF_PERM_DEFAULT    = ["Ciobotaru Adrian","Ciobotaru Iulian","Ciobotaru Larisa","Feraru Razvan","Ferent Simon","Pop Marcel","Stan Ionel","Toiu Georgiana","Tufeanu Claudia","Stanciu Anastasia","Toth Cristina","Zestrea Mihail"];
+const SORT_RUHSTORF_ROTATIE_DEFAULT = ["Dutescu Daniel","Maricosu Adelin","Maies Antonio","Mereacre Mihail","Tuca Valentin"];
+const SORT_RUHSTORF_URGENTA_DEFAULT = ["Raghinaru Marian","Dobinda Dumitru"];
 
-// Default Ruhstorf sortatori (loaded from Firestore, editable by admin)
-const SORT_RUHSTORF_PERM_DEFAULT = [
-  "Ciobotaru Adrian","Ciobotaru Iulian","Ciobotaru Larisa",
-  "Feraru Razvan","Ferent Simon","Pop Marcel","Stan Ionel",
-  "Toiu Georgiana","Tufeanu Claudia","Stanciu Anastasia",
-  "Toth Cristina","Zestrea Mihail"
-];
-const SORT_RUHSTORF_ROTATIE_DEFAULT = [
-  "Dutescu Daniel","Maricosu Adelin","Maies Antonio",
-  "Mereacre Mihail","Tuca Valentin"
-];
-const SORT_RUHSTORF_URGENTA_DEFAULT = [
-  "Raghinaru Marian","Dobinda Dumitru"
-];
+let sortState = {drivers:[], presence:{}};
+let sortCurrentDate = new Date();
+let sortView = "ruhstorf";
+let appMode = "concedii";
 
-function setAppMode(mode){
-  appMode = mode;
-  document.getElementById("concediiModule").style.display = mode==="concedii"?"block":"none";
-  document.getElementById("sortatoriModule").style.display = mode==="sortatori"?"block":"none";
-  document.getElementById("modConcedii").classList.toggle("active", mode==="concedii");
-  document.getElementById("modSortatori").classList.toggle("active", mode==="sortatori");
-  if(mode==="sortatori") renderSortatoriTimeline();
+// ---- Helpers ----
+function getSortKey(){ 
+  return sortCurrentDate.getFullYear()+"-"+String(sortCurrentDate.getMonth()+1).padStart(2,"0"); 
 }
 
 function getSortDrivers(){
   const uk = window.activeUserKey||"tania";
-  if(uk==="mihaela") return (sortState.drivers||[]).filter(d=>d.group==="ruhstorf");
-  if(uk==="madalina") return (sortState.drivers||[]).filter(d=>d.group==="eiselfing");
-  // tania/admin — filtered by sortView
-  if(sortView==="eiselfing") return (sortState.drivers||[]).filter(d=>d.group==="eiselfing");
-  if(sortView==="ruhstorf")  return (sortState.drivers||[]).filter(d=>d.group==="ruhstorf");
-  return sortState.drivers||[];
+  const all = sortState.drivers||[];
+  if(uk==="mihaela")  return all.filter(d=>d.group==="ruhstorf");
+  if(uk==="madalina") return all.filter(d=>d.group==="eiselfing");
+  // tania/admin — filtered by sortView tab
+  return all.filter(d=>d.group===sortView);
+}
+
+function setAppMode(mode){
+  appMode = mode;
+  document.getElementById("concediiModule").style.display  = mode==="concedii"?"block":"none";
+  document.getElementById("sortatoriModule").style.display  = mode==="sortatori"?"block":"none";
+  document.getElementById("modConcedii").classList.toggle("active",  mode==="concedii");
+  document.getElementById("modSortatori").classList.toggle("active", mode==="sortatori");
+  if(mode==="sortatori") renderSortatoriTimeline();
 }
 
 function setSortView(v){
-  sortView=v;
-  document.getElementById("sortTabEiselfing").classList.toggle("active",v==="eiselfing");
-  document.getElementById("sortTabRuhstorf").classList.toggle("active",v==="ruhstorf");
+  sortView = v;
+  document.getElementById("sortTabEiselfing").classList.toggle("active", v==="eiselfing");
+  document.getElementById("sortTabRuhstorf").classList.toggle("active",  v==="ruhstorf");
   renderSortatoriTimeline();
 }
 
@@ -2859,228 +2852,194 @@ function changeSortMonth(delta){
   sortCurrentDate = new Date(sortCurrentDate.getFullYear(), sortCurrentDate.getMonth()+delta, 1);
   renderSortatoriTimeline();
 }
-function goSortToday(){ sortCurrentDate=new Date(); renderSortatoriTimeline(); }
+function goSortToday(){ sortCurrentDate = new Date(); renderSortatoriTimeline(); }
 
-function getSortKey(){ return sortCurrentDate.getFullYear()+"-"+String(sortCurrentDate.getMonth()+1).padStart(2,"0"); }
-
-function togglePresence(driverName, day){
-  const monthKey = getSortKey();
-  if(!sortState.presence) sortState.presence={};
-  if(!sortState.presence[monthKey]) sortState.presence[monthKey]={};
-  if(!sortState.presence[monthKey][driverName]) sortState.presence[monthKey][driverName]={};
-  const current = sortState.presence[monthKey][driverName][String(day)];
-  // Cycle: undefined → "1" (prezent) → "0" (absent) → delete (necunoscut)
-  if(current===undefined||current===null||current===""){ 
-    sortState.presence[monthKey][driverName][String(day)] = "1"; 
-  } else if(current==="1"||current===true){ 
-    sortState.presence[monthKey][driverName][String(day)] = "0"; 
-  } else { 
-    delete sortState.presence[monthKey][driverName][String(day)]; 
-  }
-  saveSortState();
-  renderSortatoriTimeline();
-}
-
+// ---- Firestore ----
 async function saveSortState(){
   try{
     await db.collection("sortatori").doc("state").set(JSON.parse(JSON.stringify(sortState)));
-  }catch(e){ console.error("sort save err",e); }
+  }catch(e){ console.error("sort save",e); }
 }
 
 function loadSortState(){
-  return new Promise((resolve)=>{
-    const unsub = db.collection("sortatori").doc("state").onSnapshot(snap=>{
-      if(snap.exists){
-        sortState = snap.data();
-        if(!sortState.drivers) sortState.drivers=[];
-        if(!sortState.presence) sortState.presence={};
-      } else {
-        // Prima dată — init cu default
-        sortState.drivers = [
-          ...SORT_EISELFING_DEFAULT.map(name=>({id:uid(),name,group:"eiselfing",category:"permanent"})),
-          ...SORT_RUHSTORF_PERM_DEFAULT.map(name=>({id:uid(),name,group:"ruhstorf",category:"permanent"})),
-          ...SORT_RUHSTORF_ROTATIE_DEFAULT.map(name=>({id:uid(),name,group:"ruhstorf",category:"rotatie"})),
-          ...SORT_RUHSTORF_URGENTA_DEFAULT.map(name=>({id:uid(),name,group:"ruhstorf",category:"urgenta"}))
-        ];
-        sortState.presence = {};
-        saveSortState();
-      }
-      // Re-render whenever data changes (live updates for all users)
-      if(appMode==="sortatori") renderSortatoriTimeline();
-      resolve();
-    }, err=>{ console.error("sort snap err",err); resolve(); });
-    unsubListeners.push(unsub);
-  });
+  // onSnapshot — live updates pentru toti userii
+  const unsub = db.collection("sortatori").doc("state").onSnapshot(snap=>{
+    if(snap.exists){
+      const data = snap.data();
+      sortState.drivers  = data.drivers  || [];
+      sortState.presence = data.presence || {};
+    } else {
+      // Prima dată — init cu liste default
+      sortState.drivers = [
+        ...SORT_EISELFING_DEFAULT.map(n=>({id:uid(),name:n,group:"eiselfing",category:"permanent"})),
+        ...SORT_RUHSTORF_PERM_DEFAULT.map(n=>({id:uid(),name:n,group:"ruhstorf",category:"permanent"})),
+        ...SORT_RUHSTORF_ROTATIE_DEFAULT.map(n=>({id:uid(),name:n,group:"ruhstorf",category:"rotatie"})),
+        ...SORT_RUHSTORF_URGENTA_DEFAULT.map(n=>({id:uid(),name:n,group:"ruhstorf",category:"urgenta"}))
+      ];
+      sortState.presence = {};
+      saveSortState();
+    }
+    // Re-render live pentru toti
+    if(appMode==="sortatori") renderSortatoriTimeline();
+  }, err=>console.error("sort snap err",err));
+  unsubListeners.push(unsub);
 }
 
-function openAddSortator(){
-  openAddSortatorCat(sortView,"permanent");
+// ---- Prezenta ----
+function togglePresence(driverName, day){
+  const mk = getSortKey();
+  if(!sortState.presence[mk]) sortState.presence[mk] = {};
+  if(!sortState.presence[mk][driverName]) sortState.presence[mk][driverName] = {};
+  const cur = sortState.presence[mk][driverName][day];
+  if(!cur)           sortState.presence[mk][driverName][day] = "prezent";
+  else if(cur==="prezent") sortState.presence[mk][driverName][day] = "absent";
+  else               delete sortState.presence[mk][driverName][day];
+  renderSortatoriTimeline(); // render imediat local
+  saveSortState();           // salveaza async
 }
 
-function openAddSortatorCat(group, category){
-  // Build list of available drivers from concedii state, not already in sortatori
-  const existingNames = new Set((sortState.drivers||[]).filter(d=>d.group===group).map(d=>d.name.toLowerCase()));
-  // Get drivers visible for this group
-  const groupKey = group==="eiselfing"?"madalina":group==="ruhstorf"?"raluca":"corina";
-  const available = (state.drivers||[]).filter(d=>{
+// ---- Adaugare sortatori ----
+let _pickAvail=[], _pickGroup="", _pickCat="";
+
+function openAddSortatorCat(group, cat){
+  // Colecteaza driveri disponibili din modulul concedii
+  const existingNames = new Set((sortState.drivers||[]).filter(d=>d.group===group).map(d=>d.name));
+  const groupKey = group==="eiselfing"?"madalina":"raluca";
+  const avail = (state.drivers||[]).filter(d=>{
     const vis = d.visibleTo||[];
-    return (vis.includes(groupKey)||vis.includes("tania")) && !existingNames.has(d.name.toLowerCase());
-  });
-  if(!available.length){ toast("Toți șoferii sunt deja adăugați", true); return; }
-  // Show selection modal
-  openSortatorPickModal(group, category, available);
-}
-
-// Stocăm lista disponibilă pentru pick modal
-let _sortPickAvailable = [];
-let _sortPickGroup = "";
-let _sortPickCat = "";
-
-function openSortatorPickModal(group, category, available){
-  _sortPickAvailable = available.sort((a,b)=>a.name.localeCompare(b.name,"ro"));
-  _sortPickGroup = group;
-  _sortPickCat = category;
-  const cats = {"permanent":"Permanent","rotatie":"Rotație","urgenta":"Urgență"};
-  const groupLabel = group==="eiselfing"?"Eiselfing":"Ruhstorf";
-  let html = '<div style="max-height:300px;overflow-y:auto;margin:10px 0">';
-  _sortPickAvailable.forEach((dr,idx)=>{
-    html += `<label style="display:flex;align-items:center;gap:8px;padding:6px 4px;cursor:pointer;border-bottom:1px solid var(--border)">
-      <input type="checkbox" class="sort-pick-cb" value="${idx}" style="width:16px;height:16px">
+    return (vis.includes(groupKey)||vis.includes("tania")) && !existingNames.has(d.name);
+  }).sort((a,b)=>a.name.localeCompare(b.name,"ro"));
+  
+  if(!avail.length){ toast("Toți șoferii sunt deja în lista de sortatori",true); return; }
+  
+  _pickAvail = avail;
+  _pickGroup = group;
+  _pickCat   = cat;
+  
+  const catLabel = cat==="permanent"?"Permanenți":cat==="rotatie"?"Rotații":"Urgențe";
+  const grpLabel = group==="eiselfing"?"Eiselfing":"Ruhstorf";
+  
+  let html = `<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Adaugă la ${catLabel} — ${grpLabel}</div>`;
+  html += '<div style="max-height:280px;overflow-y:auto">';
+  avail.forEach((dr,i)=>{
+    html += `<label style="display:flex;align-items:center;gap:10px;padding:7px 4px;cursor:pointer;border-bottom:1px solid var(--border)">
+      <input type="checkbox" class="sort-pick-cb" value="${i}" style="width:16px;height:16px;cursor:pointer">
       <span style="font-size:13px">${escapeHtml(dr.name)}</span>
     </label>`;
   });
   html += '</div>';
   html += `<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
     <button class="btn btn-secondary" onclick="closeModal('modalDay')">Anulează</button>
-    <button class="btn" onclick="confirmSortatorPick()">+ Adaugă selectații</button>
+    <button class="btn" onclick="confirmSortPick()">+ Adaugă</button>
   </div>`;
-  document.getElementById("modalDayTitle").textContent = cats[category]+" — "+groupLabel;
-  document.getElementById("modalDaySub").textContent = "Selectează persoanele de adăugat";
-  document.getElementById("dayDriversList").innerHTML = html;
+  
+  document.getElementById("modalDayTitle").textContent = catLabel+" — "+grpLabel;
+  document.getElementById("modalDaySub").textContent   = avail.length+" persoane disponibile";
+  document.getElementById("dayDriversList").innerHTML  = html;
   openModal("modalDay");
 }
 
-function confirmSortatorPick(){
-  const checkboxes = document.querySelectorAll(".sort-pick-cb:checked");
-  if(!checkboxes.length){ toast("Nu ai selectat nimic", true); return; }
-  checkboxes.forEach(cb=>{
-    const idx = parseInt(cb.value);
-    const dr = _sortPickAvailable[idx];
-    if(dr) sortState.drivers.push({id:uid(),name:dr.name,group:_sortPickGroup,category:_sortPickCat});
+function confirmSortPick(){
+  const checked = [...document.querySelectorAll(".sort-pick-cb:checked")];
+  if(!checked.length){ toast("Selectează cel puțin o persoană",true); return; }
+  checked.forEach(cb=>{
+    const dr = _pickAvail[parseInt(cb.value)];
+    if(dr) sortState.drivers.push({id:uid(),name:dr.name,group:_pickGroup,category:_pickCat});
   });
   saveSortState();
   closeModal("modalDay");
-  toast("✓ "+checkboxes.length+" sortator(i) adăugat(i)");
+  toast("✓ "+checked.length+" sortator(i) adăugat(i)");
 }
 
 function deleteSortator(id){
-  const dr=sortState.drivers.find(d=>d.id===id);
+  const dr = (sortState.drivers||[]).find(d=>d.id===id);
   if(!dr||!confirm("Ștergi "+dr.name+" din sortatori?")) return;
-  sortState.drivers=sortState.drivers.filter(d=>d.id!==id);
+  sortState.drivers = sortState.drivers.filter(d=>d.id!==id);
   saveSortState();
-  renderSortatoriTimeline();
+  toast("🗑 "+dr.name+" șters");
 }
 
-function buildSortRow(dr, presence, daysInMonth, y, m, today, gridCols){
-  const drPresence=presence[dr.name]||{};
-  const canEdit = isAdminOrTania();
-  const del=canEdit?`<button onclick="deleteSortator('${dr.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:10px;padding:0 4px" title="Șterge">🗑</button>`:"";
-  let driverRow=`<div class='tl-driver-row' style="font-size:12px">${escapeHtml(dr.name)}${del}</div>`;
-  let gridRow=`<div class='tl-row' style='grid-template-columns:${gridCols}'>`;
+// ---- Render ----
+function makeSortRow(dr, presence, daysInMonth, y, m, gridCols, canEdit){
+  const dp = presence[dr.name]||{};
+  const delBtn = canEdit ? `<span onclick="deleteSortator('${dr.id}')" style="color:var(--red);cursor:pointer;font-size:10px;margin-left:4px" title="Șterge">✕</span>` : "";
+  let dRow = `<div class='tl-driver-row' style='font-size:12px'>${escapeHtml(dr.name)}${delBtn}</div>`;
+  let gRow = `<div class='tl-row' style='grid-template-columns:${gridCols}'>`;
   for(let dn=1;dn<=daysInMonth;dn++){
-    const d=new Date(y,m,dn),isSun=isSunday(d),hol=getHoliday(d);
-    const present=drPresence[String(dn)]===true;
-    const blocked=isSun||!!hol;
-    const cls=["tl-cell"];
-    if(isSun)cls.push("sunday");
-    if(hol)cls.push("holiday");
-    if(present)cls.push("sort-present");
-    const safeN=dr.name.replace(/"/g,"&quot;");
-    const click=blocked?"":('data-sn="'+safeN+'" data-sd="'+dn+'" onclick="togglePresence(this.dataset.sn,this.dataset.sd)"');
-    gridRow+=`<div class='${cls.join(" ")}' ${click}>${present?"✓":""}</div>`;
+    const d=new Date(y,m,dn), blocked=isSunday(d)||!!getHoliday(d);
+    const val=dp[String(dn)];
+    const isP=val==="prezent", isA=val==="absent";
+    const cls=["tl-cell","sort-cell"];
+    if(isSunday(d))cls.push("sunday");
+    if(getHoliday(d))cls.push("holiday");
+    if(isP)cls.push("sort-p");
+    if(isA)cls.push("sort-a");
+    const click=blocked?"":'data-n="'+dr.name.replace(/"/g,"&quot;")+'" data-d="'+dn+'" onclick="togglePresence(this.dataset.n,this.dataset.d)"';
+    gRow+=`<div class='${cls.join(" ")}' ${click}>${isP?"✓":isA?"✗":""}</div>`;
   }
-  gridRow+="</div>";
-  return {driverRow, gridRow};
+  gRow+="</div>";
+  return {dRow,gRow};
 }
 
-function buildCategoryHeader(label, color, count, gridCols, canAdd, group, cat){
-  const addBtn = canAdd ? `<button onclick="openAddSortatorCat('${group}','${cat}')" style="background:none;border:none;color:${color};cursor:pointer;font-size:11px;padding:0 6px">+ Adaugă</button>` : "";
-  const driverRow = `<div class='tl-driver-row' style="background:${color}22;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${color};cursor:default">${label} (${count})${addBtn}</div>`;
-  const gridRow = `<div class='tl-row' style='grid-template-columns:${gridCols};background:${color}11'></div>`;
-  return {driverRow, gridRow};
+function makeCatHeader(label, color, count, gridCols, canEdit, group, cat, daysInMonth){
+  const addBtn = canEdit?`<span onclick="openAddSortatorCat('${group}','${cat}')" style="color:${color};cursor:pointer;font-weight:400;font-size:11px;margin-left:6px">+ Adaugă</span>`:"";
+  const dRow=`<div class='tl-driver-row' style="background:${color}22;color:${color};font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;cursor:default">${label} (${count})${addBtn}</div>`;
+  const gRow=`<div class='tl-row' style='grid-template-columns:${gridCols};background:${color}0a'></div>`;
+  return {dRow,gRow};
 }
 
 function renderSortatoriTimeline(){
   const y=sortCurrentDate.getFullYear(), m=sortCurrentDate.getMonth();
-  const daysInMonth=new Date(y,m+1,0).getDate();
-  const today=new Date();
-  document.getElementById("sortMonthLabel").textContent=MONTHS[m]+" "+y;
+  const days=new Date(y,m+1,0).getDate();
   const tl=document.getElementById("sortatoriTimeline");
-  const allDrivers=getSortDrivers();
-  if(!allDrivers.length){tl.innerHTML="<div style='padding:40px;text-align:center;color:var(--text-dim)'>Niciun sortator în acest grup</div>";return;}
-  const monthKey=getSortKey();
-  const presence=sortState.presence&&sortState.presence[monthKey]?sortState.presence[monthKey]:{};
-  const colW=34, gridCols="repeat("+daysInMonth+","+colW+"px)";
-  const canAdmin=isAdminOrTania();
-  const currentGroup = sortView;
+  if(!tl)return;
+  document.getElementById("sortMonthLabel").textContent=MONTHS[m]+" "+y;
+  
+  const drivers=getSortDrivers();
+  const mk=getSortKey();
+  const presence=(sortState.presence&&sortState.presence[mk])||{};
+  const colW=34, gridCols=`repeat(${days},${colW}px)`;
+  const canEdit=isAdminOrTania();
 
-  // Split by category
-  const permanent = allDrivers.filter(d=>!d.category||d.category==="permanent");
-  const rotatie   = allDrivers.filter(d=>d.category==="rotatie");
-  const urgenta   = allDrivers.filter(d=>d.category==="urgenta");
+  const perm   =drivers.filter(d=>!d.category||d.category==="permanent");
+  const rotatie=drivers.filter(d=>d.category==="rotatie");
+  const urgenta=drivers.filter(d=>d.category==="urgenta");
+  const group  =window.activeUserKey==="mihaela"?"ruhstorf":window.activeUserKey==="madalina"?"eiselfing":sortView;
 
-  let driverHtml = "<div class='tl-driver-col'><div class='tl-driver-header'>Sortator</div>";
-  let gridHtml   = "<div class='tl-grid-wrap'>";
+  let dH="<div class='tl-driver-col'><div class='tl-driver-header'>Sortator</div>";
+  let gH="<div class='tl-grid-wrap'>";
 
   // Day headers
-  gridHtml+=`<div class='tl-day-headers' style='grid-template-columns:${gridCols}'>`;
-  for(let dn=1;dn<=daysInMonth;dn++){
-    const d=new Date(y,m,dn),isSun=isSunday(d),hol=getHoliday(d),isTd=sameDay(d,today);
+  gH+=`<div class='tl-day-headers' style='grid-template-columns:${gridCols}'>`;
+  for(let dn=1;dn<=days;dn++){
+    const d=new Date(y,m,dn),isSun=isSunday(d),hol=getHoliday(d),isTd=sameDay(d,new Date());
     const cls=["tl-day-header"];if(isSun)cls.push("sunday");if(hol)cls.push("holiday");if(isTd)cls.push("today");
-    gridHtml+=`<div class='${cls.join(" ")}'><div class='dnum'>${dn}</div><div class='dow'>${DOW_MIN[(d.getDay()+6)%7]}</div></div>`;
+    gH+=`<div class='${cls.join(" ")}'><div class='dnum'>${dn}</div><div class='dow'>${DOW_MIN[(d.getDay()+6)%7]}</div></div>`;
   }
-  gridHtml+="</div>";
+  gH+="</div>";
 
-  // Permanenți — mereu vizibil
-  const hPerm = buildCategoryHeader("Permanenți","#10b981",permanent.length,gridCols,canAdmin,currentGroup,"permanent");
-  driverHtml+=hPerm.driverRow; gridHtml+=hPerm.gridRow;
-  permanent.forEach(dr=>{
-    const r=buildSortRow(dr,presence,daysInMonth,y,m,today,gridCols);
-    driverHtml+=r.driverRow; gridHtml+=r.gridRow;
-  });
-  if(!permanent.length){
-    driverHtml+=`<div class='tl-driver-row' style='color:var(--text-dim);font-size:11px;font-style:italic'>Niciun permanent adăugat</div>`;
-    gridHtml+=`<div class='tl-row' style='grid-template-columns:${gridCols}'></div>`;
-  }
+  // Permanenți
+  const hP=makeCatHeader("Permanenți","#10b981",perm.length,gridCols,canEdit,group,"permanent",days);
+  dH+=hP.dRow; gH+=hP.gRow;
+  perm.forEach(dr=>{ const r=makeSortRow(dr,presence,days,y,m,gridCols,canEdit); dH+=r.dRow; gH+=r.gRow; });
+  if(!perm.length){ dH+=`<div class='tl-driver-row' style='color:var(--text-dim);font-style:italic;font-size:11px'>—</div>`; gH+=`<div class='tl-row' style='grid-template-columns:${gridCols}'></div>`; }
 
-  // Rotații — mereu vizibil pentru admin
-  const hRot = buildCategoryHeader("Rotații","#f59e0b",rotatie.length,gridCols,canAdmin,currentGroup,"rotatie");
-  driverHtml+=hRot.driverRow; gridHtml+=hRot.gridRow;
-  rotatie.forEach(dr=>{
-    const r=buildSortRow(dr,presence,daysInMonth,y,m,today,gridCols);
-    driverHtml+=r.driverRow; gridHtml+=r.gridRow;
-  });
-  if(!rotatie.length){
-    driverHtml+=`<div class='tl-driver-row' style='color:var(--text-dim);font-size:11px;font-style:italic'>Nicio rotație adăugată</div>`;
-    gridHtml+=`<div class='tl-row' style='grid-template-columns:${gridCols}'></div>`;
-  }
+  // Rotații
+  const hR=makeCatHeader("Rotații","#f59e0b",rotatie.length,gridCols,canEdit,group,"rotatie",days);
+  dH+=hR.dRow; gH+=hR.gRow;
+  rotatie.forEach(dr=>{ const r=makeSortRow(dr,presence,days,y,m,gridCols,canEdit); dH+=r.dRow; gH+=r.gRow; });
+  if(!rotatie.length){ dH+=`<div class='tl-driver-row' style='color:var(--text-dim);font-style:italic;font-size:11px'>—</div>`; gH+=`<div class='tl-row' style='grid-template-columns:${gridCols}'></div>`; }
 
-  // Urgențe — mereu vizibil pentru admin
-  const hUrg = buildCategoryHeader("Urgențe","#ef4444",urgenta.length,gridCols,canAdmin,currentGroup,"urgenta");
-  driverHtml+=hUrg.driverRow; gridHtml+=hUrg.gridRow;
-  urgenta.forEach(dr=>{
-    const r=buildSortRow(dr,presence,daysInMonth,y,m,today,gridCols);
-    driverHtml+=r.driverRow; gridHtml+=r.gridRow;
-  });
-  if(!urgenta.length){
-    driverHtml+=`<div class='tl-driver-row' style='color:var(--text-dim);font-size:11px;font-style:italic'>Nicio urgență adăugată</div>`;
-    gridHtml+=`<div class='tl-row' style='grid-template-columns:${gridCols}'></div>`;
-  }
+  // Urgențe
+  const hU=makeCatHeader("Urgențe","#ef4444",urgenta.length,gridCols,canEdit,group,"urgenta",days);
+  dH+=hU.dRow; gH+=hU.gRow;
+  urgenta.forEach(dr=>{ const r=makeSortRow(dr,presence,days,y,m,gridCols,canEdit); dH+=r.dRow; gH+=r.gRow; });
+  if(!urgenta.length){ dH+=`<div class='tl-driver-row' style='color:var(--text-dim);font-style:italic;font-size:11px'>—</div>`; gH+=`<div class='tl-row' style='grid-template-columns:${gridCols}'></div>`; }
 
-  driverHtml+="</div>";
-  gridHtml+="</div>";
-  tl.innerHTML=driverHtml+gridHtml;
+  dH+="</div>"; gH+="</div>";
+  tl.innerHTML=dH+gH;
 }
+
 
 function renderAll(includeDrivers=true){if(includeDrivers)renderDrivers();renderMain();}
 

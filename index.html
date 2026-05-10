@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>MTC Transport — Gestiune Concedii</title>
+<title>MTC Transport — Gestiune Personal</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#f59e0b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -638,6 +638,8 @@
   .tl-cell:not(.sunday):hover { background: rgba(245,158,11,0.15); }
   .tl-cell.in-leave { background: var(--green); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:900; color:#fff; }
   .tl-cell.sort-cell { font-size:13px; font-weight:900; }
+  .tl-cell.pres-concediu { background: rgba(99,102,241,0.35); color: rgba(165,180,252,0.9); font-size:12px; font-weight:900; }
+  .tl-cell.pres-concediu:hover { background: rgba(99,102,241,0.5); }
   .tl-cell.sort-p { background: var(--green) !important; color: #fff !important; }
   .tl-cell.sort-p:hover { filter: brightness(1.2); }
   .tl-cell.sort-a { background: rgba(239,68,68,0.8) !important; color: #fff !important; }
@@ -818,7 +820,7 @@
   <div class="auth-card">
     <div style="margin-bottom:24px">
       <div style="font-size:42px;font-weight:900;letter-spacing:-2px;color:var(--accent);line-height:1">MTC Transport</div>
-      <div style="font-size:11px;font-weight:700;letter-spacing:4px;color:var(--text-dim);text-transform:uppercase;margin-top:4px">GESTIUNE CONCEDII</div>
+      <div style="font-size:11px;font-weight:700;letter-spacing:4px;color:var(--text-dim);text-transform:uppercase;margin-top:4px">GESTIUNE PERSONAL</div>
     </div>
 
     <div class="auth-label">Selectează utilizatorul</div>
@@ -861,7 +863,7 @@
   <aside class="sidebar">
     <div style="margin-bottom:8px">
       <div style="font-size:22px;font-weight:900;letter-spacing:-1px;color:var(--accent);line-height:1">MTC Transport</div>
-      <div style="font-size:8px;font-weight:700;letter-spacing:3px;color:var(--text-dim);text-transform:uppercase;margin-top:2px">GESTIUNE CONCEDII</div>
+      <div style="font-size:8px;font-weight:700;letter-spacing:3px;color:var(--text-dim);text-transform:uppercase;margin-top:2px">GESTIUNE PERSONAL</div>
     </div>
     
     <div class="user-info" id="userInfo">
@@ -1023,7 +1025,8 @@
           <button id="presTabCam" class="group-tab" onclick="setPresView('camion')" style="display:none">🚚 Camion</button>
         </div>
       </div>
-      <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px">Click = prezent ✓ | Click din nou = absent ✗ | Click din nou = necunoscut</div>
+      <div id="presEditInfo" style="font-size:12px;color:var(--text-dim);margin-bottom:10px">Click = prezent ✓ | Click din nou = absent ✗ | Click din nou = necunoscut | <span style="color:rgba(165,180,252,0.9)">U = concediu</span></div>
+      <div id="presReadOnlyInfo" style="display:none;font-size:12px;color:var(--orange);margin-bottom:10px">👁 Vizualizare — nu poți modifica prezentele</div>
       <div class="timeline-wrap">
         <div class="timeline" id="prezenteTimeline"></div>
       </div>
@@ -1801,10 +1804,10 @@ function enterApp(userKey){
   const sortAdm = document.getElementById("sortAdminControls");
   if(sortAdm) sortAdm.style.display = isTaniaAdm?"inline":"none";
 
-  // Prezente tab — all users
+  // Prezente tab — all except Mihaela
   const modPrezente = document.getElementById("modPrezente");
-  if(modPrezente) modPrezente.style.display = "block";
-  setupPrezenteForUser(userKey);
+  if(modPrezente) modPrezente.style.display = userKey!=="mihaela"?"block":"none";
+  if(userKey!=="mihaela") setupPrezenteForUser(userKey);
 
   // Load sortatori — onSnapshot va re-renderi automat la orice schimbare
   loadSortState();
@@ -3225,6 +3228,10 @@ function renderPrezenteTimeline(){
   const presence=(presState.presence&&presState.presence[mk])||{};
   const colW=34, gridCols=`repeat(${days},${colW}px)`;
 
+  const uk=window.activeUserKey||"tania";
+  // Read-only for raluca and tania
+  const canEdit=!["raluca","tania"].includes(uk);
+
   let dH="<div class='tl-driver-col'><div class='tl-driver-header'>Persoană</div>";
   let gH="<div class='tl-grid-wrap'>";
 
@@ -3239,26 +3246,46 @@ function renderPrezenteTimeline(){
 
   drivers.forEach(dr=>{
     const dp=presence[dr.name]||{};
+    // Get concediu days for this driver in this month
+    const leaveDays=new Set();
+    (dr.leaves||[]).forEach(l=>{
+      const ls=parseDate(l.start),le=parseDate(l.end);
+      for(let d=new Date(Math.max(ls,new Date(y,m,1)));d<=Math.min(le,new Date(y,m,days));d.setDate(d.getDate()+1)){
+        if(d.getFullYear()===y&&d.getMonth()===m) leaveDays.add(d.getDate());
+      }
+    });
+
     dH+=`<div class='tl-driver-row' style='font-size:12px'>${escapeHtml(dr.name)}</div>`;
     gH+=`<div class='tl-row' style='grid-template-columns:${gridCols}'>`;
     for(let dn=1;dn<=days;dn++){
-      const d=new Date(y,m,dn),blocked=isSunday(d)||!!getHoliday(d);
+      const d=new Date(y,m,dn);
+      const blocked=isSunday(d)||!!getHoliday(d);
+      const onLeave=leaveDays.has(dn);
       const val=dp[String(dn)];
       const isP=val==="prezent", isA=val==="absent";
       const cls=["tl-cell","sort-cell"];
       if(isSunday(d))cls.push("sunday");
       if(getHoliday(d))cls.push("holiday");
-      if(isP)cls.push("sort-p");
-      if(isA)cls.push("sort-a");
+      // Presence overrides concediu color
+      if(isP) cls.push("sort-p");
+      else if(isA) cls.push("sort-a");
+      else if(onLeave) cls.push("pres-concediu");
       const safeName=dr.name.replace(/"/g,"&quot;");
-      const click=blocked?"":`data-n="${safeName}" data-d="${dn}" onclick="togglePresenta(this.dataset.n,this.dataset.d)"`;
-      gH+=`<div class='${cls.join(" ")}' ${click}>${isP?"✓":isA?"✗":""}</div>`;
+      const click=(blocked||!canEdit)?"":`data-n="${safeName}" data-d="${dn}" onclick="togglePresenta(this.dataset.n,this.dataset.d)"`;
+      // Label: ✓ prezent, ✗ absent, U = concediu (no presence marked yet)
+      const label=isP?"✓":isA?"✗":onLeave?"U":"";
+      gH+=`<div class='${cls.join(" ")}' ${click} title="${canEdit?"":"Vizualizare"}">${label}</div>`;
     }
     gH+="</div>";
   });
 
   dH+="</div>"; gH+="</div>";
   tl.innerHTML=dH+gH;
+  
+  if(!canEdit){
+    const info=document.getElementById("presReadOnlyInfo");
+    if(info) info.style.display="block";
+  }
 }
 
 function setupPrezenteForUser(userKey){

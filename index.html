@@ -600,12 +600,12 @@
     color: rgba(253,186,116,0.95) !important;
   }
   /* Timeline krank cell */
-  .tl-cell.in-krank { background: rgba(59,130,246,0.65) !important; color:#fff !important; }
-  .tl-cell.in-krank:hover { background: rgba(59,130,246,0.85) !important; }
+  .tl-cell.in-krank { background: #dc2626 !important; color:#fff !important; }
+  .tl-cell.in-krank:hover { background: #b91c1c !important; }
 
   /* Timeline unpaid cell */
-  .tl-cell.in-unpaid { background: rgba(249,115,22,0.65) !important; color:#fff !important; }
-  .tl-cell.in-unpaid:hover { background: rgba(249,115,22,0.85) !important; }
+  .tl-cell.in-unpaid { background: rgba(96,165,250,0.7) !important; color:#fff !important; }
+  .tl-cell.in-unpaid:hover { background: rgba(96,165,250,0.9) !important; }
   
   .timeline-wrap { background: var(--bg-elev); border-radius: 8px; border: 1px solid var(--border); overflow: auto; max-height: calc(100vh - 160px); }
   .timeline { display: grid; grid-template-columns: 200px 1fr; min-width: 100%; }
@@ -635,16 +635,16 @@
   .tl-cell { border-right: 1px solid var(--border); cursor: pointer; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:900; color:#fff; }
   .tl-cell.sunday { background: repeating-linear-gradient(45deg,rgba(239,68,68,0.05),rgba(239,68,68,0.05) 4px,rgba(239,68,68,0.1) 4px,rgba(239,68,68,0.1) 8px); cursor: not-allowed; }
   .tl-cell.holiday:not(.sunday) { background: rgba(168,85,247,0.12); }
-  .tl-cell:not(.sunday):hover { background: rgba(245,158,11,0.15); }
+  .tl-cell:not(.sunday):not(.in-leave):not(.in-krank):not(.in-unpaid):not(.pres-p):not(.pres-a):hover { background: rgba(245,158,11,0.15); }
   .tl-cell.in-leave { background: var(--green); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:900; color:#fff; }
   .tl-cell.sort-cell { font-size:13px; font-weight:900; }
   .tl-cell.pres-concediu { background: rgba(99,102,241,0.35); color: rgba(165,180,252,0.9); font-size:12px; font-weight:900; }
   .tl-cell.pres-concediu:hover { background: rgba(99,102,241,0.5); }
-  .tl-cell.pres-p { background: var(--green) !important; color:#fff !important; font-size:11px; font-weight:900; }
-  .tl-cell.pres-p.in-leave { background: #059669 !important; }
-  .tl-cell.pres-a { background: rgba(239,68,68,0.8) !important; color:#fff !important; font-size:11px; font-weight:900; }
-  .tl-cell.pres-a.in-leave { background: rgba(239,68,68,0.9) !important; }
-  .tl-cell.in-leave:not(.pres-p):not(.pres-a) { background: rgba(245,158,11,0.55) !important; color:#fff !important; }
+  .tl-cell.pres-p { background: #16a34a !important; color:#fff !important; font-size:11px; font-weight:900; }
+  .tl-cell.pres-p.in-leave { background: #15803d !important; }
+  .tl-cell.pres-a { background: #dc2626 !important; color:#fff !important; font-size:11px; font-weight:900; }
+  .tl-cell.pres-a.in-leave { background: #b91c1c !important; }
+  .tl-cell.in-leave:not(.pres-p):not(.pres-a) { background: rgba(253,224,71,0.45) !important; color:rgba(120,90,0,0.9) !important; font-weight:900; }
   .tl-cell.sort-p { background: var(--green) !important; color: #fff !important; }
   .tl-cell.sort-p:hover { filter: brightness(1.2); }
   .tl-cell.sort-a { background: rgba(239,68,68,0.8) !important; color: #fff !important; }
@@ -652,6 +652,9 @@
   .sort-cat-header { font-size:10px; font-weight:700; text-transform:uppercase; }
   .tl-cell.in-leave:hover { background: #0ea271; }
   .tl-cell.tl-selecting { background: rgba(245,158,11,0.45) !important; }
+  .tl-cell.tl-col-highlight { box-shadow: inset 0 0 0 1px rgba(245,158,11,0.4); background-color: rgba(245,158,11,0.08) !important; }
+  .tl-row.tl-row-highlight > .tl-cell:not(.in-leave):not(.in-krank):not(.in-unpaid):not(.pres-p):not(.pres-a):not(.sunday) { background: rgba(255,255,255,0.04); }
+  .tl-day-header.tl-col-highlight { background: rgba(245,158,11,0.2) !important; color: var(--accent) !important; }
   .tl-cell.in-leave.tl-selecting { background: rgba(239,68,68,0.55) !important; }
   
   /* Tooltip de selectie */
@@ -971,8 +974,8 @@
       <div class="legend-item"><div class="legend-dot" style="background:rgba(239,68,68,0.8)"></div>≥<span id="legCrit">5</span> (critic)</div>
       <div class="legend-item"><div class="legend-dot" style="background:repeating-linear-gradient(45deg,rgba(239,68,68,0.1),rgba(239,68,68,0.1) 3px,rgba(239,68,68,0.25) 3px,rgba(239,68,68,0.25) 6px)"></div>Duminică</div>
       <div class="legend-item"><div class="legend-dot" style="background:rgba(168,85,247,0.4);border:1px dashed rgba(168,85,247,0.7)"></div>Sărbătoare</div>
-      <div class="legend-item"><div class="legend-dot" style="background:rgba(59,130,246,0.55)"></div>Krank 🤒</div>
-      <div id="legendUnpaid" class="legend-item" style="display:none"><div class="legend-dot" style="background:rgba(249,115,22,0.5)"></div>Fără plată ⛔</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#dc2626"></div>Krank K</div>
+      <div id="legendUnpaid" class="legend-item" style="display:none"><div class="legend-dot" style="background:rgba(96,165,250,0.7)"></div>Fără plată S</div>
     </div>
     
     <div id="calendarView" class="calendar">
@@ -2802,7 +2805,7 @@ function renderTimeline(){
       const tipPres=isPresP?" · ✓Prezent":isPresA?" · ✗Absent":"";
       const tipLabel=onKrank?"Krank":onUnpaid?"Fără plată":onLeave?"Concediu":"";
       const tipText=isBlocked?"Zi liberă":(isOccupied?"Drag=șterge ("+tipLabel+") · Click dr=prezență":"Drag=concediu · Click dr=prezență")+tipPres;
-      const cellLabel=isPresP?"✓":isPresA?"✗":onKrank?"K":onUnpaid?"U":onLeave?"U":"";
+      const cellLabel=isPresP?"✓":isPresA?"✗":onKrank?"K":onUnpaid?"S":onLeave?"U":"";
       gridHtml+=`<div class='${cls.join(" ")}' ${dragAttrs}${rightClick}title="${escapeHtml(dr.name+" · "+formatDateRO(ds)+(holiday?" · "+holiday:"")+" — "+tipText)}" data-driver='${dr.id}' data-day='${dn}'>${cellLabel}</div>`;
     }
     gridHtml+="</div>";
@@ -2819,6 +2822,18 @@ function renderTimeline(){
 
   tl.innerHTML=driverHtml+gridHtml;
   tl.onmouseup=()=>tlDragEnd();
+
+  // Crosshair — highlight column on hover
+  tl.addEventListener("mouseover", e=>{
+    const cell=e.target.closest(".tl-cell[data-day]");
+    if(!cell)return;
+    const day=cell.dataset.day;
+    tl.querySelectorAll(".tl-cell[data-day]").forEach(c=>c.classList.toggle("tl-col-highlight",c.dataset.day===day));
+    tl.querySelectorAll(".tl-day-header").forEach((h,i)=>h.classList.toggle("tl-col-highlight",String(i+1)===day));
+  });
+  tl.addEventListener("mouseleave",()=>{
+    tl.querySelectorAll(".tl-col-highlight").forEach(c=>c.classList.remove("tl-col-highlight"));
+  });
 
   const onLeaveToday=driversOnDate(today).length;
   document.getElementById("statToday").textContent=onLeaveToday;setStatLevel("statTodayBox",onLeaveToday);

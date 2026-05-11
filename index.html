@@ -652,9 +652,7 @@
   .sort-cat-header { font-size:10px; font-weight:700; text-transform:uppercase; }
   .tl-cell.in-leave:hover { background: #0ea271; }
   .tl-cell.tl-selecting { background: rgba(245,158,11,0.45) !important; }
-  .tl-cell.tl-col-highlight:not(.in-leave):not(.in-krank):not(.in-unpaid):not(.pres-p):not(.pres-a):not(.sunday):not(.holiday) { background: rgba(255,255,255,0.14) !important; }
-  .tl-driver-row.tl-row-hl { background: rgba(255,255,255,0.12) !important; color: #fff !important; }
-  .tl-row.tl-row-hl-grid > .tl-cell:not(.sunday):not(.holiday) { background: rgba(255,255,255,0.08) !important; }
+  .tl-driver-row.tl-row-hl { background: rgba(255,255,255,0.15) !important; color: #fff !important; font-weight:700; }
   .tl-day-header.tl-col-highlight { background: rgba(255,255,255,0.18) !important; color: #fff !important; font-weight:700; }
   .tl-cell.in-leave.tl-selecting { background: rgba(239,68,68,0.55) !important; }
   
@@ -961,8 +959,8 @@
         <div class="stat-value" id="statPeak">0</div>
       </div>
       <div class="stat" id="statKrankBox" onclick="openStats('krank')" style="display:none;cursor:pointer;border-left-color:rgba(59,130,246,0.7)">
-        <div class="stat-label">🤒 Krank luna</div>
-        <div class="stat-value" id="statKrank" style="font-size:18px">0</div>
+        <div class="stat-label">🤒 Krank lună</div>
+        <div class="stat-value" id="statKrank">0</div>
       </div>
     </div>
     
@@ -2722,6 +2720,17 @@ function tlDragEnd(){
   const startStr=y+"-"+String(m+1).padStart(2,"0")+"-"+String(s).padStart(2,"0");
   const endStr=y+"-"+String(m+1).padStart(2,"0")+"-"+String(e).padStart(2,"0");
   const dr=state.drivers.find(d=>d.id===tlDrag.driverId);if(!dr)return;
+  // Filter out sundays and holidays from the selected range
+  const filteredDays = [];
+  for(let d=new Date(y,m,s);d<=new Date(y,m,e);d.setDate(d.getDate()+1)){
+    if(!isSunday(d)&&!getHoliday(d)) filteredDays.push(d.getDate());
+  }
+  if(!filteredDays.length){ tlDrag={active:false,driverId:null,startDay:null,endDay:null,removing:false}; return; }
+  // Use filtered start/end
+  const filtStart=filteredDays[0], filtEnd=filteredDays[filteredDays.length-1];
+  const startStr2=y+"-"+String(m+1).padStart(2,"0")+"-"+String(filtStart).padStart(2,"0");
+  const endStr2=y+"-"+String(m+1).padStart(2,"0")+"-"+String(filtEnd).padStart(2,"0");
+
   if(tlDrag.removing){
     const before=dr.leaves.length;
     dr.leaves=(dr.leaves||[]).filter(l=>!(l.start<=endStr&&l.end>=startStr));
@@ -2738,8 +2747,11 @@ function tlDragEnd(){
         if(!confirm("⚠️ Depășire!\n"+dr.name+": "+maxDays+" zile disponibile.\nFolosite: "+used+" · Adăugat: "+newDays+" · Depășire: "+over+"\n\nContinui?"))return;
       }
     }
+    // Check unpaid overlap
+    const hasUnpaid2=(dr.unpaidLeaves||[]).some(l=>l.start<=endStr2&&l.end>=startStr2);
+    if(hasUnpaid2){ toast("⛔ "+dr.name+" are zile fără plată în această perioadă!",true); return; }
     if(!dr.leaves)dr.leaves=[];
-    dr.leaves.push({start:startStr,end:endStr});
+    dr.leaves.push({start:startStr2,end:endStr2});
     renderAll();scheduleSave();toast("✓ "+dr.name+": "+newDays+" zile lucrătoare");
   }
   tlDrag={active:false,driverId:null,startDay:null,endDay:null,removing:false};
@@ -2834,7 +2846,7 @@ function renderTimeline(){
   tl.innerHTML=driverHtml+gridHtml;
   tl.onmouseup=()=>tlDragEnd();
 
-  // Crosshair — highlight full column + driver row on hover
+  // Crosshair — only driver name + day header
   let _hlDay=null, _hlDriver=null;
   tl.addEventListener("mouseover", e=>{
     const cell=e.target.closest(".tl-cell[data-day]");
@@ -2843,12 +2855,10 @@ function renderTimeline(){
     const driverId=cell.dataset.driver;
     if(day===_hlDay&&driverId===_hlDriver)return;
     _hlDay=day; _hlDriver=driverId;
-    // Column highlight — all cells + header
-    tl.querySelectorAll(".tl-cell[data-day]").forEach(c=>c.classList.toggle("tl-col-highlight",c.dataset.day===day));
+    // Only day header highlight
     tl.querySelectorAll(".tl-day-header").forEach((h,i)=>h.classList.toggle("tl-col-highlight",String(i+1)===day));
-    // Row highlight — driver name + full grid row
+    // Only driver name highlight
     tl.querySelectorAll(".tl-driver-row").forEach(r=>r.classList.toggle("tl-row-hl",r.dataset.driverRow===driverId));
-    tl.querySelectorAll(".tl-row").forEach(r=>r.classList.toggle("tl-row-hl-grid",r.dataset.driverRow===driverId));
   });
   tl.addEventListener("mouseleave",()=>{
     _hlDay=null; _hlDriver=null;

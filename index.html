@@ -652,9 +652,10 @@
   .sort-cat-header { font-size:10px; font-weight:700; text-transform:uppercase; }
   .tl-cell.in-leave:hover { background: #0ea271; }
   .tl-cell.tl-selecting { background: rgba(245,158,11,0.45) !important; }
-  .tl-cell.tl-col-highlight:not(.in-leave):not(.in-krank):not(.in-unpaid):not(.pres-p):not(.pres-a):not(.sunday):not(.holiday) { background: rgba(255,255,255,0.07) !important; }
-  .tl-driver-row.tl-row-hl { background: rgba(255,255,255,0.05) !important; }
-  .tl-day-header.tl-col-highlight { background: rgba(255,255,255,0.1) !important; color: #fff !important; font-weight:700; }
+  .tl-cell.tl-col-highlight:not(.in-leave):not(.in-krank):not(.in-unpaid):not(.pres-p):not(.pres-a):not(.sunday):not(.holiday) { background: rgba(255,255,255,0.14) !important; }
+  .tl-driver-row.tl-row-hl { background: rgba(255,255,255,0.12) !important; color: #fff !important; }
+  .tl-row.tl-row-hl-grid > .tl-cell:not(.sunday):not(.holiday) { background: rgba(255,255,255,0.08) !important; }
+  .tl-day-header.tl-col-highlight { background: rgba(255,255,255,0.18) !important; color: #fff !important; font-weight:700; }
   .tl-cell.in-leave.tl-selecting { background: rgba(239,68,68,0.55) !important; }
   
   /* Tooltip de selectie */
@@ -2842,15 +2843,16 @@ function renderTimeline(){
     const driverId=cell.dataset.driver;
     if(day===_hlDay&&driverId===_hlDriver)return;
     _hlDay=day; _hlDriver=driverId;
-    // Column highlight
+    // Column highlight — all cells + header
     tl.querySelectorAll(".tl-cell[data-day]").forEach(c=>c.classList.toggle("tl-col-highlight",c.dataset.day===day));
     tl.querySelectorAll(".tl-day-header").forEach((h,i)=>h.classList.toggle("tl-col-highlight",String(i+1)===day));
-    // Row highlight (driver name)
+    // Row highlight — driver name + full grid row
     tl.querySelectorAll(".tl-driver-row").forEach(r=>r.classList.toggle("tl-row-hl",r.dataset.driverRow===driverId));
+    tl.querySelectorAll(".tl-row").forEach(r=>r.classList.toggle("tl-row-hl-grid",r.dataset.driverRow===driverId));
   });
   tl.addEventListener("mouseleave",()=>{
     _hlDay=null; _hlDriver=null;
-    tl.querySelectorAll(".tl-col-highlight,.tl-row-hl").forEach(c=>c.classList.remove("tl-col-highlight","tl-row-hl"));
+    tl.querySelectorAll(".tl-col-highlight,.tl-row-hl,.tl-row-hl-grid").forEach(c=>c.classList.remove("tl-col-highlight","tl-row-hl","tl-row-hl-grid"));
   });
   // Mark today column permanently
   const todayDn=new Date().getMonth()===m&&new Date().getFullYear()===y?new Date().getDate():null;

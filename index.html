@@ -644,7 +644,7 @@
   .tl-cell.pres-p.in-leave { background: #15803d !important; }
   .tl-cell.pres-a { background: #dc2626 !important; color:#fff !important; font-size:11px; font-weight:900; }
   .tl-cell.pres-a.in-leave { background: #b91c1c !important; }
-  .tl-cell.in-leave:not(.pres-p):not(.pres-a) { background: rgba(253,224,71,0.45) !important; color:rgba(120,90,0,0.9) !important; font-weight:900; }
+  .tl-cell.in-leave:not(.pres-p):not(.pres-a) { background: rgba(255,255,0,0.25) !important; color:#ffff00 !important; font-weight:900; }
   .tl-cell.sort-p { background: var(--green) !important; color: #fff !important; }
   .tl-cell.sort-p:hover { filter: brightness(1.2); }
   .tl-cell.sort-a { background: rgba(239,68,68,0.8) !important; color: #fff !important; }
@@ -652,9 +652,9 @@
   .sort-cat-header { font-size:10px; font-weight:700; text-transform:uppercase; }
   .tl-cell.in-leave:hover { background: #0ea271; }
   .tl-cell.tl-selecting { background: rgba(245,158,11,0.45) !important; }
-  .tl-cell.tl-col-highlight { box-shadow: inset 0 0 0 1px rgba(245,158,11,0.4); background-color: rgba(245,158,11,0.08) !important; }
-  .tl-row.tl-row-highlight > .tl-cell:not(.in-leave):not(.in-krank):not(.in-unpaid):not(.pres-p):not(.pres-a):not(.sunday) { background: rgba(255,255,255,0.04); }
-  .tl-day-header.tl-col-highlight { background: rgba(245,158,11,0.2) !important; color: var(--accent) !important; }
+  .tl-cell.tl-col-highlight:not(.in-leave):not(.in-krank):not(.in-unpaid):not(.pres-p):not(.pres-a):not(.sunday):not(.holiday) { background: rgba(255,255,255,0.07) !important; }
+  .tl-driver-row.tl-row-hl { background: rgba(255,255,255,0.05) !important; }
+  .tl-day-header.tl-col-highlight { background: rgba(255,255,255,0.1) !important; color: #fff !important; font-weight:700; }
   .tl-cell.in-leave.tl-selecting { background: rgba(239,68,68,0.55) !important; }
   
   /* Tooltip de selectie */
@@ -1742,7 +1742,8 @@ function enterApp(userKey){
     if(sidebarColl)    sidebarColl.style.display=""; // reset from Mihaela hide
     if(sidebarToggle)  sidebarToggle.style.display=""; // reset
     if(concediiModule) concediiModule.style.display="block";
-    if(modSortatori)   modSortatori.style.display="block";
+    const canSeeSortatori2 = ["madalina","tania","admin"].includes(userKey);
+    if(modSortatori)   modSortatori.style.display = canSeeSortatori2?"block":"none";
     if(modConcedii)    modConcedii.style.display="block";
     if(quickAction)    quickAction.style.display="";
     if(statsBar)       statsBar.style.display="";
@@ -2177,6 +2178,15 @@ function addLeave(){
         const over=used+newDays-maxDays;
         if(!confirm("⚠️ Depășire!\n"+dr.name+": "+maxDays+" zile disponibile.\nFolosite: "+used+" · Adăugat: "+newDays+" · Depășire: "+over+"\n\nContinui?"))return;
       }
+    }
+  }
+
+  // Block leave if unpaid period exists for that date range
+  if(leaveType==="leaves"){
+    const hasUnpaidOverlap=(dr.unpaidLeaves||[]).some(l=>l.start<=end&&l.end>=start);
+    if(hasUnpaidOverlap){
+      toast("⛔ "+dr.name+" are zile fără plată în această perioadă. Nu se poate adăuga concediu.",true);
+      return;
     }
   }
 
@@ -2823,17 +2833,30 @@ function renderTimeline(){
   tl.innerHTML=driverHtml+gridHtml;
   tl.onmouseup=()=>tlDragEnd();
 
-  // Crosshair — highlight column on hover
+  // Crosshair — highlight full column + driver row on hover
+  let _hlDay=null, _hlDriver=null;
   tl.addEventListener("mouseover", e=>{
     const cell=e.target.closest(".tl-cell[data-day]");
     if(!cell)return;
     const day=cell.dataset.day;
+    const driverId=cell.dataset.driver;
+    if(day===_hlDay&&driverId===_hlDriver)return;
+    _hlDay=day; _hlDriver=driverId;
+    // Column highlight
     tl.querySelectorAll(".tl-cell[data-day]").forEach(c=>c.classList.toggle("tl-col-highlight",c.dataset.day===day));
     tl.querySelectorAll(".tl-day-header").forEach((h,i)=>h.classList.toggle("tl-col-highlight",String(i+1)===day));
+    // Row highlight (driver name)
+    tl.querySelectorAll(".tl-driver-row").forEach(r=>r.classList.toggle("tl-row-hl",r.dataset.driverRow===driverId));
   });
   tl.addEventListener("mouseleave",()=>{
-    tl.querySelectorAll(".tl-col-highlight").forEach(c=>c.classList.remove("tl-col-highlight"));
+    _hlDay=null; _hlDriver=null;
+    tl.querySelectorAll(".tl-col-highlight,.tl-row-hl").forEach(c=>c.classList.remove("tl-col-highlight","tl-row-hl"));
   });
+  // Mark today column permanently
+  const todayDn=new Date().getMonth()===m&&new Date().getFullYear()===y?new Date().getDate():null;
+  if(todayDn){
+    tl.querySelectorAll(`.tl-cell[data-day="${todayDn}"]`).forEach(c=>c.classList.add("tl-col-today"));
+  }
 
   const onLeaveToday=driversOnDate(today).length;
   document.getElementById("statToday").textContent=onLeaveToday;setStatLevel("statTodayBox",onLeaveToday);

@@ -3238,8 +3238,7 @@ function getPrintDrivers(group){
   return [...drivers].sort((a,b)=>a.name.localeCompare(b.name,"ro"));
 }
 
-function renderPrintPreview(){
-  const group = document.getElementById("printGroupSel").value;
+function buildPrintHTML(group){
   const y=currentDate.getFullYear(), m=currentDate.getMonth();
   const days=new Date(y,m+1,0).getDate();
   const today=new Date();
@@ -3247,111 +3246,154 @@ function renderPrintPreview(){
   const drivers=getPrintDrivers(group);
   const presence=(presState.presence&&presState.presence[monthKey])||{};
   const groupLabel={total:"Total",eiselfing:"Eiselfing",ruhstorf:"Ruhstorf",camion:"Camion"}[group];
-
-  document.getElementById("printModalTitle").textContent="Print — "+MONTHS[m]+" "+y+" ("+groupLabel+")";
-
-  // Build day headers
   const DOW_RO=["D","L","M","M","J","V","S"];
-  let html=`<div id="printContent" style="font-family:Arial,sans-serif;font-size:11px;color:#000">`;
-  html+=`<div style="text-align:center;font-size:14px;font-weight:700;margin-bottom:8px">MTC Transport — GESTIUNE PERSONAL<br><span style="font-size:12px">${MONTHS[m]} ${y} · ${groupLabel}</span></div>`;
+  const ROWS_PER_PAGE=20;
 
-  // TIMELINE TABLE
-  html+=`<table style="border-collapse:collapse;width:100%;margin-bottom:16px">`;
-  html+=`<thead><tr>`;
-  html+=`<th style="border:1px solid #ccc;padding:3px 6px;background:#f0f0f0;text-align:left;min-width:110px;font-size:10px">Persoană</th>`;
-  for(let dn=1;dn<=days;dn++){
-    const d=new Date(y,m,dn);
-    const isSun=isSunday(d),hol=getHoliday(d),isTd=sameDay(d,today);
-    const bg=isSun||hol?"#e8e8e8":isTd?"#fff3cd":"#f0f0f0";
-    const dow=DOW_RO[d.getDay()];
-    html+=`<th style="border:1px solid #ccc;padding:2px;text-align:center;width:20px;background:${bg};font-size:9px">${dn}<br><span style="color:#666">${dow}</span></th>`;
-  }
-  // Summary columns
-  html+=`<th style="border:1px solid #ccc;padding:3px;background:#e8f5e9;text-align:center;font-size:9px">Zile<br>dispon.</th>`;
-  html+=`<th style="border:1px solid #ccc;padding:3px;background:#fff9c4;text-align:center;font-size:9px">C<br>usar</th>`;
-  html+=`<th style="border:1px solid #ccc;padding:3px;background:#fff9c4;text-align:center;font-size:9px">Zile<br>rămase</th>`;
-  html+=`<th style="border:1px solid #ccc;padding:3px;background:#ffebee;text-align:center;font-size:9px">K<br>total</th>`;
-  html+=`<th style="border:1px solid #ccc;padding:3px;background:#e3f2fd;text-align:center;font-size:9px">S<br>total</th>`;
-  html+=`</tr></thead><tbody>`;
+  let html=`<style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Arial,sans-serif;font-size:10px;color:#000;background:#fff}
+    h1{font-size:13px;font-weight:700;text-align:center;margin-bottom:2px}
+    h2{font-size:11px;font-weight:600;text-align:center;margin-bottom:5px;color:#444}
+    .page{page-break-after:always;padding:5mm}
+    .page:last-child{page-break-after:avoid}
+    table{border-collapse:collapse;width:100%}
+    th,td{border:1px solid #bbb;text-align:center;padding:0}
+    .name-col{text-align:left!important;padding:2px 5px!important;white-space:nowrap;font-size:9px;min-width:100px}
+    .day-hdr{width:16px;min-width:16px;max-width:16px;font-size:7px;line-height:1.2;padding:1px 0;background:#e8e8e8}
+    .day-hdr.sun{background:#c8c8c8;color:#555}
+    .day-hdr.tod{background:#fff3cd;font-weight:700;color:#000}
+    .day-cell{width:16px;min-width:16px;max-width:16px;height:18px;font-size:9px;font-weight:700;line-height:18px}
+    .sun{background:#c8c8c8!important;color:#666}
+    .c-u{background:#fffde7;color:#e65100}
+    .c-k{background:#ffcdd2;color:#b71c1c}
+    .c-s{background:#bbdefb;color:#0d47a1}
+    .c-p{background:#c8e6c9;color:#1b5e20}
+    .c-a{background:#ffcdd2;color:#7f0000}
+    .sum-tbl th{background:#e8e8e8;padding:5px 8px;font-size:10px}
+    .sum-tbl td{padding:4px 8px;font-size:10px;text-align:center}
+    .sum-tbl .name-col{text-align:left;padding:4px 8px;font-size:10px;min-width:140px}
+    .legend{display:flex;gap:10px;margin-top:4mm;flex-wrap:wrap;font-size:8px;align-items:center}
+    .lb{width:14px;height:14px;border:1px solid #999;display:inline-block;vertical-align:middle;margin-right:2px}
+    @page{size:A4 landscape;margin:5mm}
+    @media print{body{margin:0}}
+  </style>`;
 
-  drivers.forEach(dr=>{
-    const dp=presence[dr.name]||{};
-    const viewedYear=currentDate.getFullYear();
-    const usedLeave=usedDaysThisYear(dr,"leaves",viewedYear);
-    const carry=getCarryOverForYear(dr,viewedYear);
-    const maxDays=(dr.maxDays||0)+carry;
-    const remaining=maxDays>0?Math.max(0,maxDays-usedLeave):"-";
-    const totalKrank=usedDaysThisYear(dr,"krank",viewedYear);
-    const totalUnpaid=usedDaysThisYear(dr,"unpaid",viewedYear);
-
-    html+=`<tr>`;
-    html+=`<td style="border:1px solid #ccc;padding:3px 5px;font-size:10px;white-space:nowrap">${escapeHtml(dr.name)}</td>`;
-
+  // SECTION 1: Timeline (20 rows per page)
+  for(let ps=0; ps<drivers.length; ps+=ROWS_PER_PAGE){
+    const pageDr=drivers.slice(ps,ps+ROWS_PER_PAGE);
+    html+=`<div class="page">`;
+    html+=`<h1>MTC Transport &#8212; GESTIUNE PERSONAL</h1>`;
+    html+=`<h2>${MONTHS[m]} ${y} &nbsp;&#183;&nbsp; ${groupLabel} &nbsp;&#183;&nbsp; Timeline</h2>`;
+    html+=`<table><thead><tr>`;
+    html+=`<th class="name-col">Persoană</th>`;
     for(let dn=1;dn<=days;dn++){
       const d=new Date(y,m,dn);
-      const isSun=isSunday(d),hol=getHoliday(d);
-      const onLeave=!isSun&&!hol&&(dr.leaves||[]).some(l=>dateInLeave(d,l));
-      const onKrank=!isSun&&!hol&&(dr.krankLeaves||[]).some(l=>dateInLeave(d,l));
-      const onUnpaid=!isSun&&!hol&&(dr.unpaidLeaves||[]).some(l=>dateInLeave(d,l));
-      const presVal=dp[String(dn)];
-      const isPresP=presVal==="prezent";
-      const isPresA=presVal==="absent";
-      
-      let bg="#fff", label="", textColor="#000";
-      if(isSun||hol){ bg="#f0f0f0"; label=""; }
-      else if(isPresP){ bg="#c8e6c9"; label="✓"; textColor="#1b5e20"; }
-      else if(isPresA){ bg="#ffcdd2"; label="✗"; textColor="#b71c1c"; }
-      else if(onKrank){ bg="#ffcdd2"; label="K"; textColor="#b71c1c"; }
-      else if(onUnpaid){ bg="#bbdefb"; label="S"; textColor="#0d47a1"; }
-      else if(onLeave){ bg="#fff9c4"; label="U"; textColor="#f57f17"; }
-      
-      html+=`<td style="border:1px solid #ccc;padding:2px;text-align:center;background:${bg};color:${textColor};font-weight:700;font-size:9px;width:20px">${label}</td>`;
+      const isSun=isSunday(d),hol=!!getHoliday(d),isTd=sameDay(d,today);
+      const cls="day-hdr"+(isSun||hol?" sun":"")+(isTd?" tod":"");
+      html+=`<th class="${cls}">${dn}<br>${DOW_RO[d.getDay()]}</th>`;
     }
+    html+=`</tr></thead><tbody>`;
+    pageDr.forEach((dr,idx)=>{
+      const dp=presence[dr.name]||{};
+      html+=`<tr style="background:${idx%2?"#fafafa":"#fff"}">`;
+      html+=`<td class="name-col">${escapeHtml(dr.name)}</td>`;
+      for(let dn=1;dn<=days;dn++){
+        const d=new Date(y,m,dn);
+        if(isSunday(d)||getHoliday(d)){
+          const isSun=isSunday(d);
+          html+=`<td class="day-cell sun" title="${getHoliday(d)||'Duminică'}">${isSun?"D":""}</td>`;
+          continue;
+        }
+        const ol=(dr.leaves||[]).some(l=>dateInLeave(d,l));
+        const ok=(dr.krankLeaves||[]).some(l=>dateInLeave(d,l));
+        const ou=(dr.unpaidLeaves||[]).some(l=>dateInLeave(d,l));
+        const pv=dp[String(dn)];
+        const isP=pv==="prezent",isA=pv==="absent";
+        let cls="day-cell",lb="";
+        if(isP){cls+=" c-p";lb="&#10003;";}
+        else if(isA){cls+=" c-a";lb="&#10007;";}
+        else if(ok){cls+=" c-k";lb="K";}
+        else if(ou){cls+=" c-s";lb="S";}
+        else if(ol){cls+=" c-u";lb="U";}
+        html+=`<td class="${cls}">${lb}</td>`;
+      }
+      html+=`</tr>`;
+    });
+    html+=`</tbody></table>`;
+    html+=`<div class="legend">
+      <span><span class="lb" style="background:#fffde7"></span>U = Concediu</span>
+      <span><span class="lb" style="background:#ffcdd2"></span>K = Krank (medical)</span>
+      <span><span class="lb" style="background:#bbdefb"></span>S = Fără plată</span>
+      <span><span class="lb" style="background:#c8e6c9"></span>&#10003; = Prezent</span>
+      <span><span class="lb" style="background:#ffcdd2;color:#7f0000"></span>&#10007; = Absent</span>
+      <span><span class="lb" style="background:#eee"></span>Duminică / Sărbătoare</span>
+    </div></div>`;
+  }
 
-    // Summary
-    html+=`<td style="border:1px solid #ccc;padding:3px;text-align:center;background:#e8f5e9;font-weight:700;font-size:10px">${maxDays||"-"}</td>`;
-    html+=`<td style="border:1px solid #ccc;padding:3px;text-align:center;background:#fff9c4;font-size:10px">${usedLeave}</td>`;
-    html+=`<td style="border:1px solid #ccc;padding:3px;text-align:center;background:#fff9c4;font-weight:700;font-size:10px">${remaining}</td>`;
-    html+=`<td style="border:1px solid #ccc;padding:3px;text-align:center;background:#ffebee;font-size:10px">${totalKrank||""}</td>`;
-    html+=`<td style="border:1px solid #ccc;padding:3px;text-align:center;background:#e3f2fd;font-size:10px">${totalUnpaid||""}</td>`;
-    html+=`</tr>`;
+  // SECTION 2: Summary
+  html+=`<div class="page">`;
+  html+=`<h1>MTC Transport &#8212; GESTIUNE PERSONAL</h1>`;
+  html+=`<h2>${MONTHS[m]} ${y} &nbsp;&#183;&nbsp; ${groupLabel} &nbsp;&#183;&nbsp; Rezumat zile</h2>`;
+  html+=`<table class="sum-tbl"><thead><tr>
+    <th class="name-col">Persoană</th>
+    <th>Zile / an</th>
+    <th>Reportate</th>
+    <th>Total disponibil</th>
+    <th style="background:#fffde7">Concediu folosit (U)</th>
+    <th style="background:#fffde7;font-weight:700">Zile rămase</th>
+    <th style="background:#ffcdd2">Krank (K)</th>
+    <th style="background:#bbdefb">Fără plată (S)</th>
+  </tr></thead><tbody>`;
+  drivers.forEach((dr,idx)=>{
+    const vy=currentDate.getFullYear();
+    const used=usedDaysThisYear(dr,"leaves",vy);
+    const carry=getCarryOverForYear(dr,vy);
+    const max=dr.maxDays||0;
+    const total=max+carry;
+    const rem=total>0?Math.max(0,total-used):"-";
+    const k=usedDaysThisYear(dr,"krank",vy);
+    const s=usedDaysThisYear(dr,"unpaid",vy);
+    const remCol=typeof rem==="number"&&rem<3?"#c62828":"#2e7d32";
+    html+=`<tr style="background:${idx%2?"#fafafa":"#fff"}">
+      <td class="name-col">${escapeHtml(dr.name)}</td>
+      <td>${max||"-"}</td>
+      <td>${carry>0?"+"+carry:"-"}</td>
+      <td style="font-weight:700">${total||"-"}</td>
+      <td style="background:#fffde7">${used}</td>
+      <td style="font-weight:700;color:${remCol};background:#fffde7">${rem}</td>
+      <td style="background:#ffcdd2">${k||"-"}</td>
+      <td style="background:#bbdefb">${s||"-"}</td>
+    </tr>`;
   });
-  html+=`</tbody></table>`;
+  html+=`</tbody></table></div>`;
+  return html;
+}
 
-  // LEGEND
-  html+=`<div style="display:flex;gap:12px;font-size:9px;flex-wrap:wrap;margin-top:4px">`;
-  html+=`<span><span style="background:#fff9c4;padding:1px 4px;border:1px solid #ccc">U</span> Concediu</span>`;
-  html+=`<span><span style="background:#ffcdd2;padding:1px 4px;border:1px solid #ccc">K</span> Krank</span>`;
-  html+=`<span><span style="background:#bbdefb;padding:1px 4px;border:1px solid #ccc">S</span> Fără plată</span>`;
-  html+=`<span><span style="background:#c8e6c9;padding:1px 4px;border:1px solid #ccc">✓</span> Prezent</span>`;
-  html+=`<span><span style="background:#ffcdd2;padding:1px 4px;border:1px solid #ccc">✗</span> Absent</span>`;
-  html+=`<span><span style="background:#f0f0f0;padding:1px 4px;border:1px solid #ccc"> </span> Duminică/Sărbătoare</span>`;
-  html+=`</div>`;
-  html+=`</div>`;
-
-  document.getElementById("printPreviewArea").innerHTML=html;
+function renderPrintPreview(){
+  const group=document.getElementById("printGroupSel").value;
+  const y=currentDate.getFullYear(),m=currentDate.getMonth();
+  const groupLabel={total:"Total",eiselfing:"Eiselfing",ruhstorf:"Ruhstorf",camion:"Camion"}[group];
+  document.getElementById("printModalTitle").textContent="Print — "+MONTHS[m]+" "+y+" ("+groupLabel+")";
+  const drivers=getPrintDrivers(group);
+  document.getElementById("printPreviewArea").innerHTML=`<div style="color:#555;font-size:13px;padding:24px;text-align:center">
+    <div style="font-size:32px;margin-bottom:12px">🖨️</div>
+    <strong>${MONTHS[m]} ${y} · ${groupLabel}</strong><br>
+    <span style="font-size:11px;color:#888">${drivers.length} persoane · Timeline + Rezumat zile</span><br><br>
+    <span style="font-size:11px">Apasă <strong>Printează / PDF</strong> pentru a deschide fereastra de print (A4 landscape)</span>
+  </div>`;
 }
 
 function doPrint(){
-  const content=document.getElementById("printContent");
-  if(!content) return;
-  const y=currentDate.getFullYear(),m=currentDate.getMonth();
   const group=document.getElementById("printGroupSel").value;
+  const html=buildPrintHTML(group);
+  const y=currentDate.getFullYear(),m=currentDate.getMonth();
   const groupLabel={total:"Total",eiselfing:"Eiselfing",ruhstorf:"Ruhstorf",camion:"Camion"}[group];
-  const w=window.open("","_blank","width=1200,height=800");
-  w.document.write(`<!DOCTYPE html><html><head>
-    <title>MTC Transport — ${MONTHS[m]} ${y} — ${groupLabel}</title>
-    <style>
-      body{font-family:Arial,sans-serif;font-size:10px;margin:10px}
-      table{border-collapse:collapse;width:100%}
-      td,th{border:1px solid #ccc;padding:2px 3px}
-      @page{size:A4 landscape;margin:8mm}
-      @media print{body{margin:0}}
-    </style>
-  </head><body>${content.outerHTML}</body></html>`);
+  const w=window.open("","_blank","width=1400,height=900");
+  w.document.write("<!DOCTYPE html><html><head><meta charset='UTF-8'><title>MTC "+MONTHS[m]+" "+y+" "+groupLabel+"</title></head><body>"+html+"</body></html>");
   w.document.close();
-  setTimeout(()=>{w.focus();w.print();},400);
+  setTimeout(()=>{w.focus();w.print();},600);
 }
+
 
 
 // ============================================================

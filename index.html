@@ -1827,6 +1827,10 @@ function enterApp(userKey){
   if(loadBackupBtn) loadBackupBtn.style.display = isAdm?"block":"none";
   const downloadBackupBtn = document.getElementById("downloadBackupBtn");
   if(downloadBackupBtn) downloadBackupBtn.style.display = isAdm?"block":"none";
+  const actLogBtn2 = document.getElementById("actLogBtn");
+  if(actLogBtn2) actLogBtn2.style.display = isAdm?"block":"none";
+  const verifyExcelBtn2 = document.getElementById("verifyExcelBtn");
+  if(verifyExcelBtn2) verifyExcelBtn2.style.display = isAdm?"block":"none";
   const uploadBackupBtn = document.getElementById("uploadBackupBtn");
   if(uploadBackupBtn) uploadBackupBtn.style.display = isAdm?"block":"none";
 
@@ -2799,9 +2803,30 @@ function tlDragEnd(){
 
   if(tlDrag.removing){
     const before=dr.leaves.length;
-    dr.leaves=(dr.leaves||[]).filter(l=>!(l.start<=endStr&&l.end>=startStr));
-    if(dr.leaves.length<before){logActivity("🗑 Concediu șters",dr.name,startStr+" → "+endStr);renderAll();scheduleSave();toast("🗑 Concediu șters pentru "+dr.name);}
-    else toast("Nicio perioadă de șters",true);
+    const newLeaves=[];
+    let changed=false;
+    (dr.leaves||[]).forEach(l=>{
+      // No overlap — keep as is
+      if(l.end<startStr||l.start>endStr){ newLeaves.push(l); return; }
+      changed=true;
+      // Keep part before selection
+      if(l.start<startStr){
+        const dayBefore=new Date(parseDate(startStr));
+        dayBefore.setDate(dayBefore.getDate()-1);
+        newLeaves.push({start:l.start,end:fmtDate(dayBefore)});
+      }
+      // Keep part after selection
+      if(l.end>endStr){
+        const dayAfter=new Date(parseDate(endStr));
+        dayAfter.setDate(dayAfter.getDate()+1);
+        newLeaves.push({start:fmtDate(dayAfter),end:l.end});
+      }
+    });
+    if(changed){
+      dr.leaves=newLeaves;
+      logActivity("🗑 Concediu șters",dr.name,startStr+" → "+endStr);
+      renderAll();scheduleSave();toast("🗑 Concediu șters pentru "+dr.name);
+    } else toast("Nicio perioadă de șters",true);
   } else {
     const newDays=countWorkdays(new Date(y,m,s),new Date(y,m,e));
     const viewedYear=currentDate.getFullYear();
@@ -3102,7 +3127,7 @@ function loadSortState(){
 }
 
 // ---- Prezenta ----
-function togglePresence(driverName, day){
+function togglePresence(driverName, day, isRightClick){
   const mk = getSortKey();
   if(!sortState.presence[mk]) sortState.presence[mk] = {};
   if(!sortState.presence[mk][driverName]) sortState.presence[mk][driverName] = {};
@@ -3192,7 +3217,8 @@ function makeSortRow(dr, presence, daysInMonth, y, m, gridCols, canEdit){
     if(getHoliday(d))cls.push("holiday");
     if(isP)cls.push("sort-p");
     if(isA)cls.push("sort-a");
-    const click=blocked?"":'data-n="'+dr.name.replace(/"/g,"&quot;")+'" data-d="'+dn+'" onclick="togglePresence(this.dataset.n,this.dataset.d)"';
+    const _sn=dr.name.replace(/"/g,"&quot;");
+    const click=blocked?"":'data-n="'+_sn+'" data-d="'+dn+'" onclick="togglePresence(this.dataset.n,this.dataset.d,false)" oncontextmenu="event.preventDefault();togglePresence(this.dataset.n,this.dataset.d,true)"';
     gRow+=`<div class='${cls.join(" ")}' ${click}>${isP?"✓":isA?"✗":""}</div>`;
   }
   gRow+="</div>";

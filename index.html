@@ -3258,12 +3258,12 @@ function buildPrintHTML(group){
     .page:last-child{page-break-after:avoid}
     table{border-collapse:collapse;width:100%}
     th,td{border:1px solid #bbb;text-align:center;padding:0}
-    .name-col{text-align:left!important;padding:2px 5px!important;white-space:nowrap;font-size:9px;min-width:100px}
-    .day-hdr{width:16px;min-width:16px;max-width:16px;font-size:7px;line-height:1.2;padding:1px 0;background:#e8e8e8}
-    .day-hdr.sun{background:#c8c8c8;color:#555}
+    .name-col{text-align:left!important;padding:2px 4px!important;white-space:nowrap;font-size:9px;width:1%;min-width:0}
+    .day-hdr{width:20px;min-width:20px;max-width:20px;font-size:8px;line-height:1.2;padding:1px 0;background:#e8e8e8}
+    .day-hdr.sun{background:#b0b0b0;color:#777}
     .day-hdr.tod{background:#fff3cd;font-weight:700;color:#000}
-    .day-cell{width:16px;min-width:16px;max-width:16px;height:18px;font-size:9px;font-weight:700;line-height:18px}
-    .sun{background:#c8c8c8!important;color:#666}
+    .day-cell{width:20px;min-width:20px;max-width:20px;height:20px;font-size:10px;font-weight:700;line-height:20px}
+    .sun{background:#b0b0b0!important;color:#b0b0b0}
     .c-u{background:#fffde7;color:#e65100}
     .c-k{background:#ffcdd2;color:#b71c1c}
     .c-s{background:#bbdefb;color:#0d47a1}
@@ -3271,7 +3271,7 @@ function buildPrintHTML(group){
     .c-a{background:#ffcdd2;color:#7f0000}
     .sum-tbl th{background:#e8e8e8;padding:5px 8px;font-size:10px}
     .sum-tbl td{padding:4px 8px;font-size:10px;text-align:center}
-    .sum-tbl .name-col{text-align:left;padding:4px 8px;font-size:10px;min-width:140px}
+    .sum-tbl .name-col{text-align:left;padding:4px 6px;font-size:10px;width:1%;white-space:nowrap;min-width:0}
     .legend{display:flex;gap:10px;margin-top:4mm;flex-wrap:wrap;font-size:8px;align-items:center}
     .lb{width:14px;height:14px;border:1px solid #999;display:inline-block;vertical-align:middle;margin-right:2px}
     @page{size:A4 landscape;margin:5mm}
@@ -3301,7 +3301,7 @@ function buildPrintHTML(group){
         const d=new Date(y,m,dn);
         if(isSunday(d)||getHoliday(d)){
           const isSun=isSunday(d);
-          html+=`<td class="day-cell sun" title="${getHoliday(d)||'Duminică'}">${isSun?"D":""}</td>`;
+          html+=`<td class="day-cell sun"></td>`;
           continue;
         }
         const ol=(dr.leaves||[]).some(l=>dateInLeave(d,l));

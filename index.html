@@ -3132,11 +3132,17 @@ function togglePresence(driverName, day, isRightClick){
   if(!sortState.presence[mk]) sortState.presence[mk] = {};
   if(!sortState.presence[mk][driverName]) sortState.presence[mk][driverName] = {};
   const cur = sortState.presence[mk][driverName][day];
-  if(!cur)           sortState.presence[mk][driverName][day] = "prezent";
-  else if(cur==="prezent") sortState.presence[mk][driverName][day] = "absent";
-  else               delete sortState.presence[mk][driverName][day];
-  renderSortatoriTimeline(); // render imediat local
-  saveSortState();           // salveaza async
+  if(isRightClick){
+    // Click dreapta: absent toggle (absent <-> gol)
+    if(cur==="absent") delete sortState.presence[mk][driverName][day];
+    else sortState.presence[mk][driverName][day] = "absent";
+  } else {
+    // Click stânga: prezent toggle (prezent <-> gol)
+    if(cur==="prezent") delete sortState.presence[mk][driverName][day];
+    else sortState.presence[mk][driverName][day] = "prezent";
+  }
+  renderSortatoriTimeline();
+  saveSortState();
 }
 
 // ---- Adaugare sortatori ----
@@ -3385,6 +3391,10 @@ function processExcelWorkbook(wb, fileName){
   const skipSheets = new Set(["Angajati","Model"]);
   const results = [];
 
+  // Luna curentă din navigatia HTML
+  const curY = currentDate.getFullYear();
+  const curM = currentDate.getMonth()+1; // 1-based
+
   wb.SheetNames.forEach(sheetName=>{
     if(skipSheets.has(sheetName)) return;
     const ws = wb.Sheets[sheetName];
@@ -3406,6 +3416,12 @@ function processExcelWorkbook(wb, fileName){
     // Parse month name to number (German months)
     const DE_MONTHS = {januar:1,februar:2,märz:3,april:4,mai:5,juni:6,juli:7,august:8,september:9,oktober:10,november:11,dezember:12};
     const monthNum = DE_MONTHS[monthStr.toLowerCase()] || (new Date().getMonth()+1);
+
+    // *** Verifică dacă luna din Excel corespunde lunii vizualizate în HTML ***
+    if(monthNum !== curM || yearVal !== curY){
+      results.push({name:personName, found:true, skippedMonth:true, monthStr, yearVal, monthNum, diffs:[]});
+      return;
+    }
 
     // Read days D6:D36 (presence) and H6:H36 (status)
     const excelData = {}; // day -> {present, status}
@@ -3429,6 +3445,10 @@ function processExcelWorkbook(wb, fileName){
       return;
     }
 
+    // Presence data from HTML for this month
+    const mk = curY+"-"+String(curM).padStart(2,"0");
+    const drPres = (presState.presence&&presState.presence[mk]&&presState.presence[mk][dr.name])||{};
+
     // Compare with HTML data for that month/year
     const diffs = [];
     for(let day=1; day<=31; day++){
@@ -3450,9 +3470,18 @@ function processExcelWorkbook(wb, fileName){
       const htmlLeave  = (dr.leaves||[]).some(l=>dateInLeave(d,l));
       const htmlKrank  = (dr.krankLeaves||[]).some(l=>dateInLeave(d,l));
       const htmlUnpaid = (dr.unpaidLeaves||[]).some(l=>dateInLeave(d,l));
+      const htmlPresVal = drPres[String(day)];
+      const htmlPrezent = htmlPresVal==="prezent";
 
       // Skip sundays and holidays (Feiertag)
       if(isSunday(d)||excFeiertag) continue;
+
+      // *** PREZENȚĂ: Excel are sosire → HTML trebuie să aibă prezent marcat ***
+      if(excPresent && !htmlPrezent && !htmlLeave && !htmlKrank && !htmlUnpaid){
+        diffs.push({day, type:"🟠", msg:"Excel: prezent (are sosire) → HTML: prezență nemarcată"});
+      } else if(!excPresent && htmlPrezent && !excUrlaub && !excKrank && !excSonder){
+        diffs.push({day, type:"🟠", msg:"HTML: prezent marcat → Excel: fără sosire"});
+      }
 
       // Check discrepancies
       if(excUrlaub && !htmlLeave){
@@ -3470,16 +3499,21 @@ function processExcelWorkbook(wb, fileName){
       }
     }
 
-    results.push({name:personName, found:true, diffs, monthStr, yearVal});
+    results.push({name:personName, found:true, diffs, monthStr, yearVal, monthNum});
   });
 
   renderVerifyResults(results, fileName, wb.SheetNames.length - 2);
 }
 
 function renderVerifyResults(results, fileName, total){
-  const withDiffs = results.filter(r=>r.found && r.diffs.length>0);
-  const notFound  = results.filter(r=>!r.found);
-  const ok        = results.filter(r=>r.found && r.diffs.length===0);
+  const withDiffs   = results.filter(r=>r.found && !r.skippedMonth && r.diffs.length>0);
+  const notFound    = results.filter(r=>!r.found);
+  const ok          = results.filter(r=>r.found && !r.skippedMonth && r.diffs.length===0);
+  const skipped     = results.filter(r=>r.skippedMonth);
+
+  const MONTHS_RO = ["","Ianuarie","Februarie","Martie","Aprilie","Mai","Iunie","Iulie","August","Septembrie","Octombrie","Noiembrie","Decembrie"];
+  const curY = currentDate.getFullYear();
+  const curM = currentDate.getMonth()+1;
 
   document.getElementById("verifyExcelSub").textContent =
     fileName+" · "+total+" persoane · "+withDiffs.length+" cu diferențe";
@@ -3491,6 +3525,13 @@ function renderVerifyResults(results, fileName, total){
     <div style="padding:8px 14px;background:rgba(16,185,129,0.15);border-radius:6px;font-size:13px">✅ OK: <strong>${ok.length}</strong></div>
     <div style="padding:8px 14px;background:rgba(245,158,11,0.15);border-radius:6px;font-size:13px">⚠️ Diferențe: <strong>${withDiffs.length}</strong></div>
     <div style="padding:8px 14px;background:rgba(239,68,68,0.15);border-radius:6px;font-size:13px">❓ Negăsiți: <strong>${notFound.length}</strong></div>
+    ${skipped.length>0?`<div style="padding:8px 14px;background:rgba(100,100,100,0.15);border-radius:6px;font-size:13px">⏭ Altă lună: <strong>${skipped.length}</strong></div>`:""}
+  </div>`;
+
+  // Info luna verificată
+  html+=`<div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;padding:6px 10px;background:var(--bg-elev-2);border-radius:5px">
+    📅 Se verifică luna: <strong style="color:var(--accent)">${MONTHS_RO[curM]} ${curY}</strong> — doar sheet-urile din Excel cu aceeași lună sunt comparate.
+    ${skipped.length>0?`<span style="color:var(--text-dim)"> (${skipped.length} sheet-uri au altă lună și au fost ignorate)</span>`:""}
   </div>`;
 
   // Persons with differences
@@ -3509,14 +3550,26 @@ function renderVerifyResults(results, fileName, total){
 
   // Not found
   if(notFound.length>0){
-    html+=`<div style="background:var(--bg-elev-2);border-radius:6px;padding:10px;border-left:3px solid var(--red)">`;
+    html+=`<div style="background:var(--bg-elev-2);border-radius:6px;padding:10px;border-left:3px solid var(--red);margin-bottom:8px">`;
     html+=`<div style="font-size:12px;font-weight:700;color:var(--text-dim);margin-bottom:4px">Persoane din Excel negăsite în HTML:</div>`;
     html+=notFound.map(r=>`<div style="font-size:12px;color:var(--text-dim)">• ${escapeHtml(r.name)}</div>`).join("");
     html+=`</div>`;
   }
 
-  if(withDiffs.length===0&&notFound.length===0){
-    html=`<div style="text-align:center;padding:30px;font-size:14px;color:var(--green)">✅ Totul corespunde! Nicio diferență găsită între Excel și HTML.</div>`;
+  // Skipped months
+  if(skipped.length>0){
+    html+=`<div style="background:var(--bg-elev-2);border-radius:6px;padding:10px;border-left:3px solid #666;margin-bottom:8px">`;
+    html+=`<div style="font-size:12px;font-weight:700;color:var(--text-dim);margin-bottom:4px">Sheet-uri cu altă lună (ignorate):</div>`;
+    html+=skipped.map(r=>`<div style="font-size:12px;color:var(--text-dim)">• ${escapeHtml(r.name)} — ${r.monthStr||""} ${r.yearVal||""}</div>`).join("");
+    html+=`</div>`;
+  }
+
+  if(withDiffs.length===0&&notFound.length===0&&ok.length>0){
+    html+=`<div style="text-align:center;padding:20px;font-size:14px;color:var(--green)">✅ Totul corespunde! Nicio diferență găsită pentru ${MONTHS_RO[curM]} ${curY}.</div>`;
+  }
+
+  if(ok.length===0&&withDiffs.length===0&&notFound.length===0){
+    html+=`<div style="text-align:center;padding:30px;font-size:14px;color:var(--text-dim)">⏭ Niciun sheet din Excel nu corespunde lunii ${MONTHS_RO[curM]} ${curY}.<br><span style="font-size:12px">Navighează în HTML la luna din Excel, apoi reîncarcă fișierul.</span></div>`;
   }
 
   document.getElementById("verifyExcelResults").innerHTML=html;

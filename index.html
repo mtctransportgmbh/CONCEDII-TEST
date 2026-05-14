@@ -3258,8 +3258,8 @@ function buildPrintHTML(group){
     .page:last-child{page-break-after:avoid}
     table{border-collapse:collapse;width:100%}
     th,td{border:1px solid #bbb;text-align:center;padding:0}
-    .name-col{text-align:left!important;padding:2px 4px!important;white-space:nowrap;font-size:9px;width:1%;min-width:0}
-    .day-hdr{width:20px;min-width:20px;max-width:20px;font-size:8px;line-height:1.2;padding:1px 0;background:#e8e8e8}
+    .name-col{text-align:left!important;padding:2px 6px!important;white-space:nowrap;font-size:10px;width:1%;min-width:0;font-weight:500}
+    .day-hdr{width:24px;min-width:24px;max-width:24px;font-size:9px;line-height:1.3;padding:1px 0;background:#e8e8e8;font-weight:700}
     .day-hdr.sun{background:#b0b0b0!important;color:#777;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .day-hdr.tod{background:#fff3cd!important;font-weight:700;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .sun{background:#b0b0b0!important;color:#b0b0b0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -3333,39 +3333,66 @@ function buildPrintHTML(group){
     </div></div>`;
   }
 
-  // SECTION 2: Summary
+  // SECTION 2: Summary — per month
   html+=`<div class="page">`;
   html+=`<h1>MTC Transport &#8212; GESTIUNE PERSONAL</h1>`;
   html+=`<h2>${MONTHS[m]} ${y} &nbsp;&#183;&nbsp; ${groupLabel} &nbsp;&#183;&nbsp; Rezumat zile</h2>`;
   html+=`<table class="sum-tbl"><thead><tr>
-    <th class="name-col">Persoană</th>
-    <th>Zile / an</th>
-    <th>Reportate</th>
-    <th>Total disponibil</th>
-    <th style="background:#fffde7">Concediu folosit (U)</th>
-    <th style="background:#fffde7;font-weight:700">Zile rămase</th>
-    <th style="background:#ffcdd2">Krank (K)</th>
-    <th style="background:#bbdefb">Fără plată (S)</th>
+    <th class="name-col" style="min-width:130px">Persoană</th>
+    <th style="-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#e8f5e9!important">Total disponibil (an+reportate)</th>
+    <th style="-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#fffde7!important">Concediu folosit în ${MONTHS[m]}</th>
+    <th style="-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#fffde7!important">Concediu folosit total (${y})</th>
+    <th style="-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#c8e6c9!important;font-weight:800">Zile rămase actual</th>
+    <th style="-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#ffcdd2!important">Krank în ${MONTHS[m]}</th>
+    <th style="-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#ffcdd2!important">Krank total (${y})</th>
+    <th style="-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#bbdefb!important">Fără plată în ${MONTHS[m]}</th>
+    <th style="-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#bbdefb!important">Fără plată total (${y})</th>
   </tr></thead><tbody>`;
   drivers.forEach((dr,idx)=>{
     const vy=currentDate.getFullYear();
-    const used=usedDaysThisYear(dr,"leaves",vy);
+    // Total year
+    const usedYearly=usedDaysThisYear(dr,"leaves",vy);
     const carry=getCarryOverForYear(dr,vy);
     const max=dr.maxDays||0;
     const total=max+carry;
-    const rem=total>0?Math.max(0,total-used):"-";
-    const k=usedDaysThisYear(dr,"krank",vy);
-    const s=usedDaysThisYear(dr,"unpaid",vy);
-    const remCol=typeof rem==="number"&&rem<3?"#c62828":"#2e7d32";
-    html+=`<tr style="background:${idx%2?"#fafafa":"#fff"}">
-      <td class="name-col">${escapeHtml(dr.name)}</td>
-      <td>${max||"-"}</td>
-      <td>${carry>0?"+"+carry:"-"}</td>
-      <td style="font-weight:700">${total||"-"}</td>
-      <td style="background:#fffde7">${used}</td>
-      <td style="font-weight:700;color:${remCol};background:#fffde7">${rem}</td>
-      <td style="background:#ffcdd2">${k||"-"}</td>
-      <td style="background:#bbdefb">${s||"-"}</td>
+    const rem=total>0?Math.max(0,total-usedYearly):"-";
+    const kYearly=usedDaysThisYear(dr,"krank",vy);
+    const sYearly=usedDaysThisYear(dr,"unpaid",vy);
+    // This month only
+    const usedMonth=(dr.leaves||[]).reduce((sum,l)=>{
+      const ls=parseDate(l.start),le=parseDate(l.end);
+      if(le.getFullYear()!==y&&ls.getFullYear()!==y) return sum;
+      const ms=new Date(y,m,1),me=new Date(y,m+1,0);
+      const from=ls<ms?ms:ls,to=le>me?me:le;
+      if(from>to) return sum;
+      return sum+countWorkdays(from,to);
+    },0);
+    const kMonth=(dr.krankLeaves||[]).reduce((sum,l)=>{
+      const ls=parseDate(l.start),le=parseDate(l.end);
+      const ms=new Date(y,m,1),me=new Date(y,m+1,0);
+      const from=ls<ms?ms:ls,to=le>me?me:le;
+      if(from>to) return sum;
+      return sum+countWorkdays(from,to);
+    },0);
+    const sMonth=(dr.unpaidLeaves||[]).reduce((sum,l)=>{
+      const ls=parseDate(l.start),le=parseDate(l.end);
+      const ms=new Date(y,m,1),me=new Date(y,m+1,0);
+      const from=ls<ms?ms:ls,to=le>me?me:le;
+      if(from>to) return sum;
+      return sum+countWorkdays(from,to);
+    },0);
+    const remCol=typeof rem==="number"&&rem<3?"#c62828":typeof rem==="number"&&rem<6?"#e65100":"#2e7d32";
+    const rowBg=idx%2?"#fafafa":"#fff";
+    html+=`<tr style="background:${rowBg};-webkit-print-color-adjust:exact;print-color-adjust:exact">
+      <td class="name-col" style="font-size:10px">${escapeHtml(dr.name)}</td>
+      <td style="background:#e8f5e9!important;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact">${total||"-"}</td>
+      <td style="background:#fffde7!important;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact">${usedMonth||"-"}</td>
+      <td style="background:#fffde7!important;-webkit-print-color-adjust:exact;print-color-adjust:exact">${usedYearly}</td>
+      <td style="font-weight:800;color:${remCol};background:#c8e6c9!important;-webkit-print-color-adjust:exact;print-color-adjust:exact">${rem}</td>
+      <td style="background:#ffcdd2!important;-webkit-print-color-adjust:exact;print-color-adjust:exact">${kMonth||"-"}</td>
+      <td style="background:#ffcdd2!important;-webkit-print-color-adjust:exact;print-color-adjust:exact">${kYearly||"-"}</td>
+      <td style="background:#bbdefb!important;-webkit-print-color-adjust:exact;print-color-adjust:exact">${sMonth||"-"}</td>
+      <td style="background:#bbdefb!important;-webkit-print-color-adjust:exact;print-color-adjust:exact">${sYearly||"-"}</td>
     </tr>`;
   });
   html+=`</tbody></table></div>`;

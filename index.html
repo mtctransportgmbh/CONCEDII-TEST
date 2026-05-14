@@ -2853,8 +2853,8 @@ function tlDragEnd(){
   }
   tlDrag={active:false,driverId:null,startDay:null,endDay:null,removing:false};
 }
-document.addEventListener("mouseup",()=>{if(tlDrag.active)tlDragEnd();});
-document.addEventListener("mousemove",e=>{if(tlDrag.active&&e.buttons!==1)tlDragEnd();});
+document.addEventListener("mouseup",()=>{if(tlDrag.active)tlDragEnd(); if(_presDrag.active)presDragEnd();});
+document.addEventListener("mousemove",e=>{if(tlDrag.active&&e.buttons!==1)tlDragEnd(); if(_presDrag.active&&e.buttons===0)presDragEnd();});
 
 function renderTimeline(){
   const y=currentDate.getFullYear(),m=currentDate.getMonth(),daysInMonth=new Date(y,m+1,0).getDate(),today=new Date();
@@ -2919,14 +2919,25 @@ function renderTimeline(){
       const isOccupied=onLeave||onKrank||onUnpaid;
       const isBlocked=isSun||!!holiday;
       const canEditPres=!isBlocked&&["admin","tania","raluca","madalina","corina"].includes(window.activeUserKey||"");
-      const dragAttrs=isBlocked?"":(`onmousedown="if(event.button!==2)tlDragStart('${dr.id}',${dn},false,${isOccupied})" `+`onmousemove="if(event.buttons===1&&tlDrag.active)tlDragMove(${dn},event.pageX,event.pageY)" `);
       const safeName2=dr.name.replace(/"/g,"&quot;");
-      const rightClick=canEditPres?`oncontextmenu="event.preventDefault();togglePresenta('`+safeName2+`',${dn})" `:"";
+      // Drag pentru concedii (stânga pe celule libere) + drag prezență (dreapta sau pe celule ocupate)
+      let mousedown="";
+      if(!isBlocked){
+        if(canEditPres){
+          mousedown=`onmousedown="event.button===2?(event.preventDefault(),presDragStart('`+safeName2+`',${dn},true)):(tlDragStart('${dr.id}',${dn},false,${isOccupied}))" `;
+        } else {
+          mousedown=`onmousedown="if(event.button!==2)tlDragStart('${dr.id}',${dn},false,${isOccupied})" `;
+        }
+      }
+      const mousemoveAttr=isBlocked?"":
+        `onmousemove="if(event.buttons===1&&tlDrag.active)tlDragMove(${dn},event.pageX,event.pageY);`+
+        (canEditPres?`if(event.buttons>0&&_presDrag.active)presDragMove('`+safeName2+`',${dn})`:"")+`" `;
+      const rightClick=canEditPres?`oncontextmenu="event.preventDefault();presDragStart('`+safeName2+`',${dn},true)" `:"";
       const tipPres=isPresP?" · ✓Prezent":isPresA?" · ✗Absent":"";
       const tipLabel=onKrank?"Krank":onUnpaid?"Fără plată":onLeave?"Concediu":"";
-      const tipText=isBlocked?"Zi liberă":(isOccupied?"Drag=șterge ("+tipLabel+") · Click dr=prezență":"Drag=concediu · Click dr=prezență")+tipPres;
+      const tipText=isBlocked?"Zi liberă":(isOccupied?"Drag=șterge ("+tipLabel+") · Click dr=absent/prezent":"Drag/click=prezent · Click dr=absent")+tipPres;
       const cellLabel=isPresP?"✓":isPresA?"✗":onKrank?"K":onUnpaid?"S":onLeave?"U":"";
-      gridHtml+=`<div class='${cls.join(" ")}' ${dragAttrs}${rightClick}title="${escapeHtml(dr.name+" · "+formatDateRO(ds)+(holiday?" · "+holiday:"")+" — "+tipText)}" data-driver='${dr.id}' data-day='${dn}'>${cellLabel}</div>`;
+      gridHtml+=`<div class='${cls.join(" ")}' ${mousedown}${mousemoveAttr}${rightClick}title="${escapeHtml(dr.name+" · "+formatDateRO(ds)+(holiday?" · "+holiday:"")+" — "+tipText)}" data-driver='${dr.id}' data-day='${dn}'>${cellLabel}</div>`;
     }
     gridHtml+="</div>";
   });
@@ -3132,18 +3143,57 @@ function togglePresence(driverName, day, isRightClick){
   if(!sortState.presence[mk]) sortState.presence[mk] = {};
   if(!sortState.presence[mk][driverName]) sortState.presence[mk][driverName] = {};
   const cur = sortState.presence[mk][driverName][day];
+  let newVal = null;
   if(isRightClick){
-    // Click dreapta: absent toggle (absent <-> gol)
-    if(cur==="absent") delete sortState.presence[mk][driverName][day];
-    else sortState.presence[mk][driverName][day] = "absent";
+    if(cur==="absent"){ delete sortState.presence[mk][driverName][day]; newVal="șters(absent)"; }
+    else { sortState.presence[mk][driverName][day] = "absent"; newVal="absent"; }
   } else {
-    // Click stânga: prezent toggle (prezent <-> gol)
-    if(cur==="prezent") delete sortState.presence[mk][driverName][day];
-    else sortState.presence[mk][driverName][day] = "prezent";
+    if(cur==="prezent"){ delete sortState.presence[mk][driverName][day]; newVal="șters(prezent)"; }
+    else { sortState.presence[mk][driverName][day] = "prezent"; newVal="prezent"; }
   }
+  logActivity("✓ Prezență sortator", driverName, "ziua "+day+" — "+newVal+" ("+mk+")");
   renderSortatoriTimeline();
   saveSortState();
 }
+
+// ---- Drag prezență sortatori ----
+let _sortDrag = {active:false, driverName:null, mode:null}; // mode: "prezent"|"absent"|"clear"
+
+function sortDragStart(driverName, day, isRight){
+  if(!isAdminOrTania()) return;
+  const mk = getSortKey();
+  const cur = (sortState.presence[mk]&&sortState.presence[mk][driverName]&&sortState.presence[mk][driverName][String(day)]);
+  // Determinăm modul după butonul apăsat și starea curentă
+  if(isRight){ _sortDrag = {active:true, driverName, mode: cur==="absent"?"clear":"absent"}; }
+  else        { _sortDrag = {active:true, driverName, mode: cur==="prezent"?"clear":"prezent"}; }
+  sortDragApply(driverName, day);
+}
+
+function sortDragMove(driverName, day){
+  if(!_sortDrag.active) return;
+  // Permitem drag pe aceeași persoană
+  if(_sortDrag.driverName !== driverName) return;
+  sortDragApply(driverName, day);
+}
+
+function sortDragApply(driverName, day){
+  const mk = getSortKey();
+  if(!sortState.presence[mk]) sortState.presence[mk]={};
+  if(!sortState.presence[mk][driverName]) sortState.presence[mk][driverName]={};
+  const d = new Date(sortCurrentDate.getFullYear(), sortCurrentDate.getMonth(), parseInt(day));
+  if(isSunday(d)||getHoliday(d)) return;
+  if(_sortDrag.mode==="clear") delete sortState.presence[mk][driverName][String(day)];
+  else sortState.presence[mk][driverName][String(day)] = _sortDrag.mode;
+  renderSortatoriTimeline();
+}
+
+function sortDragEnd(){
+  if(!_sortDrag.active) return;
+  _sortDrag = {active:false, driverName:null, mode:null};
+  saveSortState();
+}
+document.addEventListener("mouseup", ()=>{ if(_sortDrag.active) sortDragEnd(); });
+document.addEventListener("mousemove", e=>{ if(_sortDrag.active && e.buttons===0) sortDragEnd(); });
 
 // ---- Adaugare sortatori ----
 let _pickAvail=[], _pickGroup="", _pickCat="";
@@ -3224,8 +3274,12 @@ function makeSortRow(dr, presence, daysInMonth, y, m, gridCols, canEdit){
     if(isP)cls.push("sort-p");
     if(isA)cls.push("sort-a");
     const _sn=dr.name.replace(/"/g,"&quot;");
-    const click=blocked?"":'data-n="'+_sn+'" data-d="'+dn+'" onclick="togglePresence(this.dataset.n,this.dataset.d,false)" oncontextmenu="event.preventDefault();togglePresence(this.dataset.n,this.dataset.d,true)"';
-    gRow+=`<div class='${cls.join(" ")}' ${click}>${isP?"✓":isA?"✗":""}</div>`;
+    const interactions = blocked ? "" :
+      `data-n="${_sn}" data-d="${dn}" `+
+      `onmousedown="event.preventDefault();sortDragStart(this.dataset.n,this.dataset.d,event.button===2)" `+
+      `onmousemove="if(event.buttons>0)sortDragMove(this.dataset.n,this.dataset.d)" `+
+      `oncontextmenu="event.preventDefault()"`;
+    gRow+=`<div class='${cls.join(" ")}' ${interactions}>${isP?"✓":isA?"✗":""}</div>`;
   }
   gRow+="</div>";
   return {dRow,gRow};
@@ -3400,22 +3454,39 @@ function processExcelWorkbook(wb, fileName){
     const ws = wb.Sheets[sheetName];
     if(!ws) return;
 
-    // Read name from F3, month from H3/I3 (or similar)
+    // Structura reală Excel:
+    // F3 = Nume persoană (dacă există), altfel folosim sheet name
+    // H3 = "Monat:" (label), I3 = luna (ex: "April")
+    // H4 = "Jahr:" (label),  I4 = anul (ex: 2026)
+    // B6:B36 = numărul zilei (1-31), D6:D36 = Kommt (sosire), H6:H36 = Abwesenheit
     const nameCell = ws["F3"];
-    const monthCell = ws["H3"];
-    const yearCell = ws["I3"] || ws["I4"];
-    if(!nameCell) return;
-
-    const personName = String(nameCell.v||"").trim();
+    const personName = (nameCell && String(nameCell.v||"").trim()) || sheetName;
     if(!personName) return;
 
-    // Month/year
-    const monthStr = monthCell ? String(monthCell.v||"").trim() : "";
-    const yearVal  = yearCell  ? parseInt(yearCell.v) : new Date().getFullYear();
+    // Luna din I3, anul din I4
+    const monthCell = ws["I3"];
+    const yearCell  = ws["I4"];
+    const monthStr  = monthCell ? String(monthCell.v||"").trim() : "";
+    const yearVal   = yearCell  ? parseInt(yearCell.v) : new Date().getFullYear();
 
-    // Parse month name to number (German months)
-    const DE_MONTHS = {januar:1,februar:2,märz:3,april:4,mai:5,juni:6,juli:7,august:8,september:9,oktober:10,november:11,dezember:12};
-    const monthNum = DE_MONTHS[monthStr.toLowerCase()] || (new Date().getMonth()+1);
+    // Parse month name to number (German + English months)
+    const MONTH_MAP = {
+      januar:1,february:1,januar:1,
+      februar:2,february:2,
+      märz:3,march:3,
+      april:4,
+      mai:5,may:5,
+      juni:6,june:6,
+      juli:7,july:7,
+      august:8,
+      september:9,
+      oktober:10,october:10,
+      november:11,
+      dezember:12,december:12,
+      // English
+      january:1,march:3,june:6,july:7,october:10
+    };
+    const monthNum = MONTH_MAP[monthStr.toLowerCase()] || (new Date().getMonth()+1);
 
     // *** Verifică dacă luna din Excel corespunde lunii vizualizate în HTML ***
     if(monthNum !== curM || yearVal !== curY){
@@ -3423,15 +3494,19 @@ function processExcelWorkbook(wb, fileName){
       return;
     }
 
-    // Read days D6:D36 (presence) and H6:H36 (status)
-    const excelData = {}; // day -> {present, status}
+    // Read days: col B = day number, col D = Kommt, col H = Abwesenheit
+    // Rows 6-36 (day 1 = row 6, day 31 = row 36)
+    const excelData = {}; // day -> {hasArrival, status}
     for(let row=6; row<=36; row++){
-      const day = row - 5; // day 1-31
-      const dCell = ws["D"+row]; // Kommt (arrival time)
+      const bCell = ws["B"+row]; // Tag (ziua ca număr)
+      const dCell = ws["D"+row]; // Kommt (ora sosirii)
       const hCell = ws["H"+row]; // Abwesenheit (Urlaub/Krank/X/Feiertag)
+      if(!bCell || bCell.v===null || bCell.v===undefined) continue;
+      const dayNum = parseInt(bCell.v);
+      if(isNaN(dayNum) || dayNum<1 || dayNum>31) continue;
       const status = hCell ? String(hCell.v||hCell.w||"").trim() : "";
       const hasArrival = dCell && dCell.v !== null && dCell.v !== undefined && dCell.v !== "";
-      excelData[day] = { hasArrival, status };
+      excelData[dayNum] = { hasArrival, status };
     }
 
     // Find driver in HTML state
@@ -3829,6 +3904,48 @@ function togglePresenta(driverName, day){
   else delete presState.presence[mk][driverName][String(day)];
   logActivity("✓ Prezență",driverName,"ziua "+day+" — "+(presState.presence[mk]&&presState.presence[mk][driverName]&&presState.presence[mk][driverName][String(day)]?"prezent":"șters"));
   renderTimeline();
+  savePresState();
+}
+
+// ---- Drag prezență concedii timeline ----
+let _presDrag = {active:false, driverName:null, mode:null}; // mode: "prezent"|"absent"|"clear"
+
+function presDragStart(driverName, day, isRight){
+  const mk=getPresMonthKey();
+  const cur=(presState.presence[mk]&&presState.presence[mk][driverName]&&presState.presence[mk][driverName][String(day)]);
+  if(isRight){ _presDrag={active:true, driverName, mode: cur==="absent"?"clear":"absent"}; }
+  else        { _presDrag={active:true, driverName, mode: cur==="prezent"?"clear":"prezent"}; }
+  presDragApply(driverName, day);
+}
+
+function presDragMove(driverName, day){
+  if(!_presDrag.active) return;
+  if(_presDrag.driverName !== driverName) return;
+  presDragApply(driverName, day);
+}
+
+function presDragApply(driverName, day){
+  const dr=state.drivers.find(d=>d.name===driverName);
+  if(dr){
+    const d=new Date(currentDate.getFullYear(),currentDate.getMonth(),parseInt(day));
+    if((dr.leaves||[]).some(l=>dateInLeave(d,l))) return;
+    if((dr.krankLeaves||[]).some(l=>dateInLeave(d,l))) return;
+    if((dr.unpaidLeaves||[]).some(l=>dateInLeave(d,l))) return;
+  }
+  const mk=getPresMonthKey();
+  if(!presState.presence[mk]) presState.presence[mk]={};
+  if(!presState.presence[mk][driverName]) presState.presence[mk][driverName]={};
+  if(_presDrag.mode==="clear") delete presState.presence[mk][driverName][String(day)];
+  else presState.presence[mk][driverName][String(day)]=_presDrag.mode;
+  renderTimeline();
+}
+
+function presDragEnd(){
+  if(!_presDrag.active) return;
+  const mk=getPresMonthKey();
+  const name=_presDrag.driverName;
+  _presDrag={active:false, driverName:null, mode:null};
+  logActivity("✓ Prezență drag",name,"lună "+mk);
   savePresState();
 }
 

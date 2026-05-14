@@ -421,7 +421,7 @@
   
   .stats {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
     gap: 10px;
     margin-bottom: 16px;
   }
@@ -897,6 +897,9 @@
     <button class="btn btn-secondary btn-small" id="addDriverBtn" onclick="openAddDriver()" style="width:100%; margin-bottom:6px">+ Persoană nouă</button>
     <button class="btn btn-secondary btn-small" id="pinMgrBtn" onclick="openPinAdmin()" style="width:100%; margin-bottom:6px; display:none">🔐 Coduri PIN</button>
     <button class="btn btn-secondary btn-small" id="loadBackupBtn" onclick="loadLastFirestoreBackup()" style="width:100%; margin-bottom:6px; display:none">🔄 Restaurează backup Firestore</button>
+    <button class="btn btn-secondary btn-small" id="actLogBtn" onclick="openActivityLog()" style="width:100%; margin-bottom:6px; display:none; border-color:#818cf8; color:#818cf8">📋 Istoric activitate</button>
+    <button class="btn btn-secondary btn-small" id="verifyExcelBtn" onclick="document.getElementById('verifyExcelFile').click()" style="width:100%; margin-bottom:6px; display:none; border-color:#a78bfa; color:#a78bfa">📊 Verifică Excel vs HTML</button>
+    <input type="file" id="verifyExcelFile" accept=".xlsx,.xlsm,.xls" style="display:none" onchange="verifyExcelFile(event)">
     <button class="btn btn-secondary btn-small" id="downloadBackupBtn" onclick="downloadBackupNow()" style="width:100%; margin-bottom:6px; display:none">💾 Descarcă backup acum</button>
     <button class="btn btn-secondary btn-small" id="uploadBackupBtn" onclick="document.getElementById('uploadBackupFile').click()" style="width:100%; margin-bottom:6px; display:none">📂 Încarcă backup fișier</button>
     <input type="file" id="uploadBackupFile" accept=".json" style="display:none" onchange="uploadLocalBackup(event)">
@@ -958,9 +961,9 @@
         <div class="stat-label">Vârf în lună</div>
         <div class="stat-value" id="statPeak">0</div>
       </div>
-      <div class="stat" id="statKrankBox" onclick="openStats('krank')" style="display:none;cursor:pointer;border-left-color:rgba(59,130,246,0.7)">
-        <div class="stat-label">🤒 Krank lună</div>
-        <div class="stat-value" id="statKrank">0</div>
+      <div class="stat" id="statKrankBox" onclick="openStats('krank')" style="display:none;cursor:pointer;border-left-color:rgba(59,130,246,0.7);min-width:0;overflow:hidden">
+        <div class="stat-label" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🤒 Krank lună</div>
+        <div class="stat-value" id="statKrank" style="font-size:22px;line-height:1.2">0</div>
       </div>
     </div>
     
@@ -1157,6 +1160,30 @@
   </div>
 </div>
 
+<!-- ACTIVITY LOG MODAL -->
+<div class="modal-bg" id="modalActivityLog">
+  <div class="modal" style="max-width:680px;max-height:90vh;overflow-y:auto">
+    <h3>📋 Istoricul activității</h3>
+    <div class="modal-sub">Ultimele 200 acțiuni ale tuturor userilor</div>
+    <div id="actLogContent" style="margin-top:12px;max-height:65vh;overflow-y:auto"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modalActivityLog')">Închide</button>
+    </div>
+  </div>
+</div>
+
+<!-- VERIFY EXCEL MODAL -->
+<div class="modal-bg" id="modalVerifyExcel">
+  <div class="modal" style="max-width:780px;max-height:90vh;overflow-y:auto">
+    <h3>📊 Verificare Excel vs HTML</h3>
+    <div class="modal-sub" id="verifyExcelSub">Încarcă un fișier Excel pentru verificare</div>
+    <div id="verifyExcelResults" style="margin-top:12px"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modalVerifyExcel')">Închide</button>
+    </div>
+  </div>
+</div>
+
 <!-- PRINT MODAL -->
 <div class="modal-bg" id="modalPrint">
   <div class="modal" style="max-width:98vw;width:98vw;max-height:95vh;overflow-y:auto;padding:16px">
@@ -1197,6 +1224,7 @@
 <div class="toast" id="toast"></div>
 
 <!-- Firebase SDKs (compat) -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -2268,6 +2296,7 @@ function addLeave(){
   }
   openLeaveModal(leaveDriverId,leaveType);
   renderMain();scheduleSave();
+  logActivity("➕ "+typeLabel+" adăugat",dr.name,start+" → "+end+" ("+newDays+"z)");
   toast("✓ "+newDays+" zile lucrătoare adăugate ("+
     (leaveType==="krank"?"krank":leaveType==="unpaid"?"fără plată":"concediu")+")");
 }
@@ -2759,7 +2788,7 @@ function tlDragEnd(){
   if(tlDrag.removing){
     const before=dr.leaves.length;
     dr.leaves=(dr.leaves||[]).filter(l=>!(l.start<=endStr&&l.end>=startStr));
-    if(dr.leaves.length<before){renderAll();scheduleSave();toast("🗑 Concediu șters pentru "+dr.name);}
+    if(dr.leaves.length<before){logActivity("🗑 Concediu șters",dr.name,startStr+" → "+endStr);renderAll();scheduleSave();toast("🗑 Concediu șters pentru "+dr.name);}
     else toast("Nicio perioadă de șters",true);
   } else {
     const newDays=countWorkdays(new Date(y,m,s),new Date(y,m,e));
@@ -2775,8 +2804,14 @@ function tlDragEnd(){
     // Check unpaid overlap
     const hasUnpaid2=(dr.unpaidLeaves||[]).some(l=>l.start<=endStr2&&l.end>=startStr2);
     if(hasUnpaid2){ toast("⛔ "+dr.name+" are zile fără plată în această perioadă!",true); return; }
+    // Check if any day in range has presence marked
+    const mk2=currentDate.getFullYear()+"-"+String(currentDate.getMonth()+1).padStart(2,"0");
+    const drPres2=(presState.presence&&presState.presence[mk2]&&presState.presence[mk2][dr.name])||{};
+    const hasPresence=filteredDays.some(dn=>drPres2[String(dn)]);
+    if(hasPresence){ toast("⛔ "+dr.name+" are prezență marcată în această perioadă. Șterge mai întâi prezența.",true); return; }
     if(!dr.leaves)dr.leaves=[];
     dr.leaves.push({start:startStr2,end:endStr2});
+    logActivity("➕ Concediu adăugat",dr.name,startStr2+" → "+endStr2+" ("+newDays+"z)");
     renderAll();scheduleSave();toast("✓ "+dr.name+": "+newDays+" zile lucrătoare");
   }
   tlDrag={active:false,driverId:null,startDay:null,endDay:null,removing:false};
@@ -3221,6 +3256,235 @@ function renderSortatoriTimeline(){
 
 
 
+
+
+// ============================================================
+// ACTIVITY LOG
+// ============================================================
+async function logActivity(action, person, details){
+  try{
+    const entry = {
+      user:      window.activeUserKey||"unknown",
+      action,
+      person:    person||"",
+      details:   details||"",
+      timestamp: new Date().toISOString(),
+      month:     currentDate.getFullYear()+"-"+String(currentDate.getMonth()+1).padStart(2,"0")
+    };
+    await db.collection("activity_log").add(entry);
+  }catch(e){ console.warn("log err",e); }
+}
+
+async function openActivityLog(){
+  if(!isAdmin()) return;
+  openModal("modalActivityLog");
+  document.getElementById("actLogContent").innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:20px">⏳ Se încarcă...</div>';
+  try{
+    const snap = await db.collection("activity_log")
+      .orderBy("timestamp","desc")
+      .limit(200)
+      .get();
+    if(snap.empty){
+      document.getElementById("actLogContent").innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:20px">Nicio activitate înregistrată</div>';
+      return;
+    }
+    const userColors = {
+      admin:"#f59e0b",tania:"#3b82f6",raluca:"#ec4899",
+      madalina:"#10b981",corina:"#f97316",mihaela:"#8b5cf6"
+    };
+    let html = '';
+    let lastDate = '';
+    snap.docs.forEach(doc=>{
+      const e = doc.data();
+      const dt = new Date(e.timestamp);
+      const dateStr = dt.toLocaleDateString("ro-RO",{day:"2-digit",month:"short",year:"numeric"});
+      const timeStr = dt.toLocaleTimeString("ro-RO",{hour:"2-digit",minute:"2-digit"});
+      if(dateStr!==lastDate){
+        html+=`<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-dim);letter-spacing:0.5px;margin:10px 0 4px;padding-top:8px;border-top:1px solid var(--border)">${dateStr}</div>`;
+        lastDate=dateStr;
+      }
+      const uc = userColors[e.user]||"var(--text-dim)";
+      html+=`<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);align-items:flex-start;font-size:12px">
+        <span style="color:${uc};font-weight:700;min-width:70px">${e.user}</span>
+        <span style="color:var(--text-dim);min-width:42px">${timeStr}</span>
+        <span style="flex:1">${escapeHtml(e.action)} <strong>${escapeHtml(e.person||"")}</strong>${e.details?" — "+escapeHtml(e.details):""}</span>
+      </div>`;
+    });
+    document.getElementById("actLogContent").innerHTML = html;
+  }catch(err){
+    document.getElementById("actLogContent").innerHTML = '<div style="color:var(--red)">Eroare: '+err.message+'</div>';
+  }
+}
+
+
+// ============================================================
+// EXCEL VERIFY MODULE
+// ============================================================
+function verifyExcelFile(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  e.target.value="";
+  document.getElementById("verifyExcelSub").textContent = "Se procesează: "+file.name+"...";
+  openModal("modalVerifyExcel");
+  document.getElementById("verifyExcelResults").innerHTML = '<div style="color:var(--text-dim);padding:20px;text-align:center">⏳ Se încarcă...</div>';
+
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    try{
+      // Use SheetJS
+      const data = new Uint8Array(ev.target.result);
+      const wb = XLSX.read(data, {type:"array", cellDates:true, cellNF:false, sheetStubs:false});
+      processExcelWorkbook(wb, file.name);
+    }catch(err){
+      document.getElementById("verifyExcelResults").innerHTML = '<div style="color:var(--red)">Eroare: '+err.message+'</div>';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function processExcelWorkbook(wb, fileName){
+  // Skip first 2 sheets (Angajati, Model) — rest are per-person sheets
+  const skipSheets = new Set(["Angajati","Model"]);
+  const results = [];
+
+  wb.SheetNames.forEach(sheetName=>{
+    if(skipSheets.has(sheetName)) return;
+    const ws = wb.Sheets[sheetName];
+    if(!ws) return;
+
+    // Read name from F3, month from H3/I3 (or similar)
+    const nameCell = ws["F3"];
+    const monthCell = ws["H3"];
+    const yearCell = ws["I3"] || ws["I4"];
+    if(!nameCell) return;
+
+    const personName = String(nameCell.v||"").trim();
+    if(!personName) return;
+
+    // Month/year
+    const monthStr = monthCell ? String(monthCell.v||"").trim() : "";
+    const yearVal  = yearCell  ? parseInt(yearCell.v) : new Date().getFullYear();
+
+    // Parse month name to number (German months)
+    const DE_MONTHS = {januar:1,februar:2,märz:3,april:4,mai:5,juni:6,juli:7,august:8,september:9,oktober:10,november:11,dezember:12};
+    const monthNum = DE_MONTHS[monthStr.toLowerCase()] || (new Date().getMonth()+1);
+
+    // Read days D6:D36 (presence) and H6:H36 (status)
+    const excelData = {}; // day -> {present, status}
+    for(let row=6; row<=36; row++){
+      const day = row - 5; // day 1-31
+      const dCell = ws["D"+row]; // Kommt (arrival time)
+      const hCell = ws["H"+row]; // Abwesenheit (Urlaub/Krank/X/Feiertag)
+      const status = hCell ? String(hCell.v||hCell.w||"").trim() : "";
+      const hasArrival = dCell && dCell.v !== null && dCell.v !== undefined && dCell.v !== "";
+      excelData[day] = { hasArrival, status };
+    }
+
+    // Find driver in HTML state
+    const dr = state.drivers.find(d=>
+      d.name.toLowerCase()===personName.toLowerCase() ||
+      normalizeForSearch(d.name)===normalizeForSearch(personName)
+    );
+
+    if(!dr){
+      results.push({name:personName, found:false, diffs:[]});
+      return;
+    }
+
+    // Compare with HTML data for that month/year
+    const diffs = [];
+    for(let day=1; day<=31; day++){
+      const d = new Date(yearVal, monthNum-1, day);
+      if(d.getMonth() !== monthNum-1) break; // day doesn't exist in month
+
+      const exc = excelData[day];
+      if(!exc) continue;
+
+      // What Excel says
+      const excStatus = exc.status.toLowerCase();
+      const excUrlaub  = excStatus==="urlaub";
+      const excKrank   = excStatus==="krank" || excStatus==="krankenstand";
+      const excPresent = exc.hasArrival;
+      const excFeiertag= excStatus==="feiertag";
+      const excSonder  = excStatus.includes("sonder") || excStatus.includes("sonderurlaub");
+
+      // What HTML says
+      const htmlLeave  = (dr.leaves||[]).some(l=>dateInLeave(d,l));
+      const htmlKrank  = (dr.krankLeaves||[]).some(l=>dateInLeave(d,l));
+      const htmlUnpaid = (dr.unpaidLeaves||[]).some(l=>dateInLeave(d,l));
+
+      // Skip sundays and holidays (Feiertag)
+      if(isSunday(d)||excFeiertag) continue;
+
+      // Check discrepancies
+      if(excUrlaub && !htmlLeave){
+        diffs.push({day, type:"⚠️", msg:"Excel: Urlaub → HTML: fără concediu"});
+      } else if(!excUrlaub && htmlLeave && !excPresent && !excKrank && !excSonder){
+        diffs.push({day, type:"⚠️", msg:"HTML: concediu → Excel: fără Urlaub"});
+      }
+      if(excKrank && !htmlKrank){
+        diffs.push({day, type:"🔴", msg:"Excel: Krank → HTML: fără krank"});
+      } else if(!excKrank && htmlKrank){
+        diffs.push({day, type:"🔴", msg:"HTML: krank → Excel: fără Krank"});
+      }
+      if(excSonder && !htmlUnpaid){
+        diffs.push({day, type:"🔵", msg:"Excel: Sonderurlaub → HTML: fără fără-plată"});
+      }
+    }
+
+    results.push({name:personName, found:true, diffs, monthStr, yearVal});
+  });
+
+  renderVerifyResults(results, fileName, wb.SheetNames.length - 2);
+}
+
+function renderVerifyResults(results, fileName, total){
+  const withDiffs = results.filter(r=>r.found && r.diffs.length>0);
+  const notFound  = results.filter(r=>!r.found);
+  const ok        = results.filter(r=>r.found && r.diffs.length===0);
+
+  document.getElementById("verifyExcelSub").textContent =
+    fileName+" · "+total+" persoane · "+withDiffs.length+" cu diferențe";
+
+  let html = "";
+
+  // Summary
+  html+=`<div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+    <div style="padding:8px 14px;background:rgba(16,185,129,0.15);border-radius:6px;font-size:13px">✅ OK: <strong>${ok.length}</strong></div>
+    <div style="padding:8px 14px;background:rgba(245,158,11,0.15);border-radius:6px;font-size:13px">⚠️ Diferențe: <strong>${withDiffs.length}</strong></div>
+    <div style="padding:8px 14px;background:rgba(239,68,68,0.15);border-radius:6px;font-size:13px">❓ Negăsiți: <strong>${notFound.length}</strong></div>
+  </div>`;
+
+  // Persons with differences
+  if(withDiffs.length>0){
+    html+=`<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:700;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px;letter-spacing:0.5px">Diferențe găsite</div>`;
+    withDiffs.forEach(r=>{
+      html+=`<div style="background:var(--bg-elev-2);border-radius:6px;padding:10px;margin-bottom:8px;border-left:3px solid var(--orange)">`;
+      html+=`<div style="font-weight:700;font-size:13px;margin-bottom:6px">${escapeHtml(r.name)} <span style="color:var(--text-dim);font-size:11px">${r.monthStr||""} ${r.yearVal||""}</span></div>`;
+      r.diffs.forEach(d=>{
+        html+=`<div style="font-size:12px;padding:2px 0">${d.type} <strong>Ziua ${d.day}</strong>: ${d.msg}</div>`;
+      });
+      html+=`</div>`;
+    });
+    html+=`</div>`;
+  }
+
+  // Not found
+  if(notFound.length>0){
+    html+=`<div style="background:var(--bg-elev-2);border-radius:6px;padding:10px;border-left:3px solid var(--red)">`;
+    html+=`<div style="font-size:12px;font-weight:700;color:var(--text-dim);margin-bottom:4px">Persoane din Excel negăsite în HTML:</div>`;
+    html+=notFound.map(r=>`<div style="font-size:12px;color:var(--text-dim)">• ${escapeHtml(r.name)}</div>`).join("");
+    html+=`</div>`;
+  }
+
+  if(withDiffs.length===0&&notFound.length===0){
+    html=`<div style="text-align:center;padding:30px;font-size:14px;color:var(--green)">✅ Totul corespunde! Nicio diferență găsită între Excel și HTML.</div>`;
+  }
+
+  document.getElementById("verifyExcelResults").innerHTML=html;
+}
+
+
 // ============================================================
 // PRINT MODULE
 // ============================================================
@@ -3454,13 +3718,21 @@ async function savePresState(){
 }
 
 function togglePresenta(driverName, day){
+  // Block presence on concediu days
+  const dr=state.drivers.find(d=>d.name===driverName);
+  if(dr){
+    const d=new Date(currentDate.getFullYear(),currentDate.getMonth(),parseInt(day));
+    const onLeave=(dr.leaves||[]).some(l=>dateInLeave(d,l));
+    if(onLeave){ toast("Nu se poate marca prezența în zilele de concediu (U)",true); return; }
+  }
   const mk=getPresMonthKey();
   if(!presState.presence[mk]) presState.presence[mk]={};
   if(!presState.presence[mk][driverName]) presState.presence[mk][driverName]={};
   const cur=presState.presence[mk][driverName][String(day)];
+  // Toggle: gol → prezent → gol (fără absent în timeline concedii)
   if(!cur) presState.presence[mk][driverName][String(day)]="prezent";
-  else if(cur==="prezent") presState.presence[mk][driverName][String(day)]="absent";
   else delete presState.presence[mk][driverName][String(day)];
+  logActivity("✓ Prezență",driverName,"ziua "+day+" — "+(presState.presence[mk]&&presState.presence[mk][driverName]&&presState.presence[mk][driverName][String(day)]?"prezent":"șters"));
   renderTimeline();
   savePresState();
 }

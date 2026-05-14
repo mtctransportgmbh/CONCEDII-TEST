@@ -2233,12 +2233,24 @@ function addLeave(){
     }
   }
 
-  // Block leave if unpaid period exists for that date range
+  // Block leave/krank/unpaid if presence exists
+  if(leaveType==="leaves"||leaveType==="krank"||leaveType==="unpaid"){
+    const mk0=currentDate.getFullYear()+"-"+String(currentDate.getMonth()+1).padStart(2,"0");
+    const drP0=(presState.presence&&presState.presence[mk0]&&presState.presence[mk0][dr.name])||{};
+    const startD=parseDate(start),endD=parseDate(end);
+    let presOverlap=false;
+    for(let dd=new Date(startD);dd<=endD;dd.setDate(dd.getDate()+1)){
+      if(drP0[String(dd.getDate())]){presOverlap=true;break;}
+    }
+    if(presOverlap){
+      toast("⛔ "+dr.name+" are prezență marcată în această perioadă.",true); return;
+    }
+  }
+  // Block leave if unpaid exists
   if(leaveType==="leaves"){
     const hasUnpaidOverlap=(dr.unpaidLeaves||[]).some(l=>l.start<=end&&l.end>=start);
     if(hasUnpaidOverlap){
-      toast("⛔ "+dr.name+" are zile fără plată în această perioadă. Nu se poate adăuga concediu.",true);
-      return;
+      toast("⛔ "+dr.name+" are zile fără plată în această perioadă.",true); return;
     }
   }
 
@@ -3723,7 +3735,11 @@ function togglePresenta(driverName, day){
   if(dr){
     const d=new Date(currentDate.getFullYear(),currentDate.getMonth(),parseInt(day));
     const onLeave=(dr.leaves||[]).some(l=>dateInLeave(d,l));
+    const onKrankDay=(dr.krankLeaves||[]).some(l=>dateInLeave(d,l));
+    const onUnpaidDay=(dr.unpaidLeaves||[]).some(l=>dateInLeave(d,l));
     if(onLeave){ toast("Nu se poate marca prezența în zilele de concediu (U)",true); return; }
+    if(onKrankDay){ toast("Nu se poate marca prezența în zilele de krank (K)",true); return; }
+    if(onUnpaidDay){ toast("Nu se poate marca prezența în zilele fără plată (S)",true); return; }
   }
   const mk=getPresMonthKey();
   if(!presState.presence[mk]) presState.presence[mk]={};

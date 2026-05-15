@@ -3194,7 +3194,7 @@ function togglePresence(driverName, day, isRightClick){
 let _sortDrag = {active:false, driverName:null, mode:null}; // mode: "prezent"|"absent"|"clear"
 
 function sortDragStart(driverName, day, isRight){
-  if(!isAdminOrTania()) return;
+  if(!isAdminOrTania() && window.activeUserKey!=="mihaela") return;
   const mk = getSortKey();
   const cur = (sortState.presence[mk]&&sortState.presence[mk][driverName]&&sortState.presence[mk][driverName][String(day)]);
   // Determinăm modul după butonul apăsat și starea curentă
@@ -3360,7 +3360,7 @@ function renderSortatoriTimeline(){
   const mk=getSortKey();
   const presence=(sortState.presence&&sortState.presence[mk])||{};
   const colW=34, gridCols=`repeat(${days},${colW}px)`;
-  const canEdit=isAdminOrTania();
+  const canEdit=isAdminOrTania()||window.activeUserKey==="mihaela";
 
   const perm   =drivers.filter(d=>!d.category||d.category==="permanent");
   const rotatie=drivers.filter(d=>d.category==="rotatie");

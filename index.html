@@ -1364,6 +1364,14 @@ function finishInit(){
   lastSavedAt = new Date();
   saveLocalBackup();
   setSaveStatus("ok","Date încărcate ✓");
+  // Notificare login — acum datele sunt gata
+  try{
+    if(window._pendingLoginNotif){
+      const uk = window._pendingLoginNotif;
+      window._pendingLoginNotif = null;
+      setTimeout(()=>showLoginNotification(uk), 400);
+    }
+  }catch(e){ console.warn("notif err",e); }
   // Backup automat zilnic pentru admin
   setTimeout(()=>autoSaveDailyBackup(), 3000);
   // Load prezente state
@@ -1851,12 +1859,8 @@ function enterApp(userKey){
   const sortAdm = document.getElementById("sortAdminControls");
   if(sortAdm) sortAdm.style.display = isTaniaAdm?"inline":"none";
 
-  // Notificare la login pentru useri obișnuiți (nu tania/admin)
-  if(!isTaniaAdm && !isMihaela && userKey!=="mihaela"){
-    setTimeout(()=>showLoginNotification(userKey), 1200);
-  }
-
-
+  // Notificare la login — setăm flag, se afișează după ce datele sunt încărcate din Firebase
+  window._pendingLoginNotif = (!isTaniaAdm && !isMihaela) ? userKey : null;
 
   // Load sortatori — onSnapshot va re-renderi automat la orice schimbare
   loadSortState();
@@ -1872,12 +1876,31 @@ function enterApp(userKey){
       if(e.key==="Escape")document.querySelectorAll(".modal-bg.show").forEach(m=>m.classList.remove("show"));
     });
     setSaveStatus("ok","Bine ai venit, Mihaela!");
-    // Force render sortatori after short delay to ensure DOM is ready
-    setTimeout(()=>{
-      if(sortState.drivers && sortState.drivers.length>0){
-        renderSortatoriTimeline();
-      }
-    }, 800);
+    // Mihaela are nevoie de datele de concedii ca să vadă U în sortatori
+    // Ascultăm toate doc-urile de concedii (la fel ca Tania)
+    const docKeys = ["raluca","madalina","corina","tania"];
+    const cache = {}; let loaded = 0;
+    const rebuild = () => {
+      const byName = {};
+      docKeys.forEach(dk=>{
+        if(cache[dk])(cache[dk].drivers||[]).forEach(d=>{byName[d.name]=d;});
+      });
+      state = {drivers:Object.values(byName), thresholds:{warn:3,crit:5}};
+      (state.drivers||[]).forEach(dr=>{
+        if(!dr.krankLeaves)  dr.krankLeaves  = [];
+        if(!dr.unpaidLeaves) dr.unpaidLeaves = [];
+        if(!dr.leaves)       dr.leaves       = [];
+      });
+      renderSortatoriTimeline();
+    };
+    docKeys.forEach(dk=>{
+      const unsub = db.collection("concedii").doc(dk).onSnapshot(snap=>{
+        cache[dk] = snap.exists ? snap.data() : {drivers:[],thresholds:{warn:3,crit:5}};
+        loaded = Math.min(loaded+1, docKeys.length);
+        if(loaded>=docKeys.length) rebuild();
+      }, err=>console.error("mihaela snap",dk,err));
+      unsubListeners.push(unsub);
+    });
   }
 }
 

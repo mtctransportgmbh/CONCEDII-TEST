@@ -4006,6 +4006,16 @@ function presDragEnd(){
   savePresState();
 }
 
+function renderAll(includeDrivers=true){
+  const uk = window.activeUserKey;
+  if(uk && uk!=="mihaela"){
+    const sc = document.getElementById("sidebarCollapsible");
+    if(sc && sc.style.display==="none") sc.style.display="";
+  }
+  if(includeDrivers)renderDrivers();
+  renderMain();
+}
+
 // ============================================================
 // LOGIN NOTIFICATION
 // ============================================================
@@ -4161,6 +4171,7 @@ function openSortPrintModal(){
 }
 
 
+function renderAll(includeDrivers=true){
   const uk = window.activeUserKey;
   if(uk && uk!=="mihaela"){
     const sc = document.getElementById("sidebarCollapsible");

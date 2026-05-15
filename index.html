@@ -640,9 +640,9 @@
   .tl-cell.sort-cell { font-size:13px; font-weight:900; }
   .tl-cell.pres-concediu { background: rgba(99,102,241,0.35); color: rgba(165,180,252,0.9); font-size:12px; font-weight:900; }
   .tl-cell.pres-concediu:hover { background: rgba(99,102,241,0.5); }
-  .tl-cell.pres-p { background: #16a34a !important; color:#fff !important; font-size:11px; font-weight:900; }
+  .tl-cell.pres-p { background: #16a34a !important; color:#fff !important; font-size:12px; font-weight:900; }
   .tl-cell.pres-p.in-leave { background: #15803d !important; }
-  .tl-cell.pres-a { background: #dc2626 !important; color:#fff !important; font-size:11px; font-weight:900; }
+  .tl-cell.pres-a { background: #dc2626 !important; color:#fff !important; font-size:12px; font-weight:900; }
   .tl-cell.pres-a.in-leave { background: #b91c1c !important; }
   .tl-cell.in-leave:not(.pres-p):not(.pres-a) { background: rgba(255,255,0,0.25) !important; color:#ffff00 !important; font-weight:900; }
   .tl-cell.sort-p { background: var(--green) !important; color: #fff !important; }
@@ -961,14 +961,14 @@
         <div class="stat-label">Vârf în lună</div>
         <div class="stat-value" id="statPeak">0</div>
       </div>
-      <div class="stat" id="statKrankBox" onclick="openStats('krank')" style="display:none;cursor:pointer;border-left-color:rgba(59,130,246,0.7);min-width:0;overflow:hidden">
-        <div class="stat-label" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🤒 Krank lună</div>
-        <div class="stat-value" id="statKrank" style="font-size:22px;line-height:1.2">0</div>
+      <div class="stat" id="statKrankBox" onclick="openStats('krank')" style="display:none;cursor:pointer;border-left-color:rgba(59,130,246,0.7)">
+        <div class="stat-label">🤒 Krank lună</div>
+        <div class="stat-value" id="statKrank">0</div>
       </div>
     </div>
     
     <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
-      <button id="printBtn" onclick="openPrintModal()" style="display:none;padding:6px 14px;font-size:12px;font-weight:600;background:var(--bg-elev-2);border:1px solid var(--border);border-radius:6px;color:var(--text);cursor:pointer">🖨️ Print / Export PDF</button>
+      <button id="printBtn" onclick="openPrintModal()" style="display:none;padding:8px 20px;font-size:13px;font-weight:700;background:var(--accent);color:#000;border:none;border-radius:7px;cursor:pointer;box-shadow:0 2px 8px rgba(251,191,36,0.35)">🖨️ Print / Export PDF</button>
     </div>
     <div id="holidayBanner" class="holiday-banner" style="display:none"></div>
     
@@ -1012,9 +1012,12 @@
           <button id="sortTabRuhstorf" class="group-tab" onclick="setSortView('ruhstorf')">&#128205; Ruhstorf</button>
         </div>
       </div>
-      <div style="margin-bottom:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-        <span style="font-size:12px;color:var(--text-dim)">&#9989; = prezent | gol = absent</span>
-        <span id="sortAdminControls" style="display:none"><button class="btn btn-secondary btn-small" onclick="openAddSortator()">+ Sortator nou</button></span>
+      <div style="margin-bottom:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between">
+        <span style="font-size:12px;color:var(--text-dim)">✓ = prezent &nbsp;|&nbsp; ✗ = absent &nbsp;|&nbsp; gol = necunoscut</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span id="sortAdminControls" style="display:none"><button class="btn btn-secondary btn-small" onclick="openAddSortator()">+ Sortator nou</button></span>
+          <button id="sortPrintBtn" onclick="openSortPrintModal()" style="display:none;padding:8px 20px;font-size:13px;font-weight:700;background:var(--accent);color:#000;border:none;border-radius:7px;cursor:pointer;box-shadow:0 2px 8px rgba(251,191,36,0.35)">🖨️ Print / Export PDF</button>
+        </div>
       </div>
       <div class="timeline-wrap">
         <div class="timeline" id="sortatoriTimeline"></div>
@@ -1843,8 +1846,15 @@ function enterApp(userKey){
   if(statKrankBox) statKrankBox.style.display = isTaniaAdm?"flex":"none";
   const printBtn = document.getElementById("printBtn");
   if(printBtn) printBtn.style.display = isTaniaAdm?"block":"none";
+  const sortPrintBtn = document.getElementById("sortPrintBtn");
+  if(sortPrintBtn) sortPrintBtn.style.display = isTaniaAdm?"block":"none";
   const sortAdm = document.getElementById("sortAdminControls");
   if(sortAdm) sortAdm.style.display = isTaniaAdm?"inline":"none";
+
+  // Notificare la login pentru useri obișnuiți (nu tania/admin)
+  if(!isTaniaAdm && !isMihaela && userKey!=="mihaela"){
+    setTimeout(()=>showLoginNotification(userKey), 1200);
+  }
 
 
 
@@ -2920,23 +2930,24 @@ function renderTimeline(){
       const isBlocked=isSun||!!holiday;
       const canEditPres=!isBlocked&&["admin","tania","raluca","madalina","corina"].includes(window.activeUserKey||"");
       const safeName2=dr.name.replace(/"/g,"&quot;");
-      // Drag pentru concedii (stânga pe celule libere) + drag prezență (dreapta sau pe celule ocupate)
+      // Concedii timeline: stânga=drag concediu(U), dreapta=prezent(✓)
       let mousedown="";
       if(!isBlocked){
         if(canEditPres){
-          mousedown=`onmousedown="event.button===2?(event.preventDefault(),presDragStart('`+safeName2+`',${dn},true)):(tlDragStart('${dr.id}',${dn},false,${isOccupied}))" `;
+          // stânga: drag concediu normal; dreapta: drag prezent
+          mousedown=`onmousedown="if(event.button===2){event.preventDefault();presDragStart('`+safeName2+`',${dn})}else{tlDragStart('${dr.id}',${dn},false,${isOccupied})}" `;
         } else {
           mousedown=`onmousedown="if(event.button!==2)tlDragStart('${dr.id}',${dn},false,${isOccupied})" `;
         }
       }
       const mousemoveAttr=isBlocked?"":
         `onmousemove="if(event.buttons===1&&tlDrag.active)tlDragMove(${dn},event.pageX,event.pageY);`+
-        (canEditPres?`if(event.buttons>0&&_presDrag.active)presDragMove('`+safeName2+`',${dn})`:"")+`" `;
-      const rightClick=canEditPres?`oncontextmenu="event.preventDefault();presDragStart('`+safeName2+`',${dn},true)" `:"";
-      const tipPres=isPresP?" · ✓Prezent":isPresA?" · ✗Absent":"";
+        (canEditPres?`if(event.buttons===2&&_presDrag.active)presDragMove('`+safeName2+`',${dn})`:"")+`" `;
+      const rightClick=canEditPres?`oncontextmenu="event.preventDefault()" `:"";
+      const tipPres=isPresP?" · ✗Prezent":isPresA?" · ✗Absent":"";
       const tipLabel=onKrank?"Krank":onUnpaid?"Fără plată":onLeave?"Concediu":"";
-      const tipText=isBlocked?"Zi liberă":(isOccupied?"Drag=șterge ("+tipLabel+") · Click dr=absent/prezent":"Drag/click=prezent · Click dr=absent")+tipPres;
-      const cellLabel=isPresP?"✓":isPresA?"✗":onKrank?"K":onUnpaid?"S":onLeave?"U":"";
+      const tipText=isBlocked?"Zi liberă":(isOccupied?"Drag stânga=șterge ("+tipLabel+") · Click/drag dreapta=prezent":"Drag stânga=concediu (U) · Click/drag dreapta=prezent")+tipPres;
+      const cellLabel=isPresP?"✗":isPresA?"✗":onKrank?"K":onUnpaid?"S":onLeave?"U":"";
       gridHtml+=`<div class='${cls.join(" ")}' ${mousedown}${mousemoveAttr}${rightClick}title="${escapeHtml(dr.name+" · "+formatDateRO(ds)+(holiday?" · "+holiday:"")+" — "+tipText)}" data-driver='${dr.id}' data-day='${dn}'>${cellLabel}</div>`;
     }
     gridHtml+="</div>";
@@ -3182,6 +3193,13 @@ function sortDragApply(driverName, day){
   if(!sortState.presence[mk][driverName]) sortState.presence[mk][driverName]={};
   const d = new Date(sortCurrentDate.getFullYear(), sortCurrentDate.getMonth(), parseInt(day));
   if(isSunday(d)||getHoliday(d)) return;
+  // Blochează dacă persoana e în concediu/krank/unpaid
+  const concediuDr = state.drivers.find(dr=>dr.name===driverName);
+  if(concediuDr){
+    if((concediuDr.leaves||[]).some(l=>dateInLeave(d,l))) return;
+    if((concediuDr.krankLeaves||[]).some(l=>dateInLeave(d,l))) return;
+    if((concediuDr.unpaidLeaves||[]).some(l=>dateInLeave(d,l))) return;
+  }
   if(_sortDrag.mode==="clear") delete sortState.presence[mk][driverName][String(day)];
   else sortState.presence[mk][driverName][String(day)] = _sortDrag.mode;
   renderSortatoriTimeline();
@@ -3264,6 +3282,10 @@ function makeSortRow(dr, presence, daysInMonth, y, m, gridCols, canEdit){
   const delBtn = canEdit ? `<span onclick="deleteSortator('${dr.id}')" style="color:var(--red);cursor:pointer;font-size:10px;margin-left:4px" title="Șterge">✕</span>` : "";
   let dRow = `<div class='tl-driver-row' style='font-size:12px'>${escapeHtml(dr.name)}${delBtn}</div>`;
   let gRow = `<div class='tl-row' style='grid-template-columns:${gridCols}'>`;
+
+  // Găsim persoana în modulul concedii pentru a prelua zilele de concediu
+  const concediuDr = state.drivers.find(d=>d.name===dr.name);
+
   for(let dn=1;dn<=daysInMonth;dn++){
     const d=new Date(y,m,dn), blocked=isSunday(d)||!!getHoliday(d);
     const val=dp[String(dn)];
@@ -3271,15 +3293,27 @@ function makeSortRow(dr, presence, daysInMonth, y, m, gridCols, canEdit){
     const cls=["tl-cell","sort-cell"];
     if(isSunday(d))cls.push("sunday");
     if(getHoliday(d))cls.push("holiday");
-    if(isP)cls.push("sort-p");
-    if(isA)cls.push("sort-a");
+
+    // Verifică dacă persoana este în concediu/krank/unpaid în această zi
+    const onLeave  = concediuDr && !blocked && (concediuDr.leaves||[]).some(l=>dateInLeave(d,l));
+    const onKrank  = concediuDr && !blocked && (concediuDr.krankLeaves||[]).some(l=>dateInLeave(d,l));
+    const onUnpaid = concediuDr && !blocked && (concediuDr.unpaidLeaves||[]).some(l=>dateInLeave(d,l));
+    const onAbsent = onLeave||onKrank||onUnpaid;
+
+    if(isP) cls.push("sort-p");
+    else if(isA) cls.push("sort-a");
+    else if(onAbsent) cls.push("in-leave"); // U galben din concedii
+
+    const cellBlocked = blocked || onAbsent; // nu se poate bifa peste concediu
     const _sn=dr.name.replace(/"/g,"&quot;");
-    const interactions = blocked ? "" :
+    const interactions = cellBlocked ? "" :
       `data-n="${_sn}" data-d="${dn}" `+
       `onmousedown="event.preventDefault();sortDragStart(this.dataset.n,this.dataset.d,event.button===2)" `+
       `onmousemove="if(event.buttons>0)sortDragMove(this.dataset.n,this.dataset.d)" `+
       `oncontextmenu="event.preventDefault()"`;
-    gRow+=`<div class='${cls.join(" ")}' ${interactions}>${isP?"✓":isA?"✗":""}</div>`;
+
+    const label = isP?"✓":isA?"✗":onLeave?"U":onKrank?"K":onUnpaid?"S":"";
+    gRow+=`<div class='${cls.join(" ")}' ${interactions}>${label}</div>`;
   }
   gRow+="</div>";
   return {dRow,gRow};
@@ -3677,7 +3711,7 @@ function buildPrintHTML(group){
   const presence=(presState.presence&&presState.presence[monthKey])||{};
   const groupLabel={total:"Total",eiselfing:"Eiselfing",ruhstorf:"Ruhstorf",camion:"Camion"}[group];
   const DOW_RO=["D","L","M","M","J","V","S"];
-  const ROWS_PER_PAGE=20;
+  const ROWS_PER_PAGE=28;
 
   let html=`<style>
     *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}
@@ -3743,8 +3777,8 @@ function buildPrintHTML(group){
         const pv=dp[String(dn)];
         const isP=pv==="prezent",isA=pv==="absent";
         let cls="day-cell",lb="";
-        if(isP){cls+=" c-p";lb="&#10003;";}
-        else if(isA){cls+=" c-a";lb="&#10007;";}
+        if(isP){cls+=" c-p";lb="&#10007;";}  // prezent = X verde
+        else if(isA){cls+=" c-a";lb="&#10007;";}  // absent = X rosu (backward compat)
         else if(ok){cls+=" c-k";lb="K";}
         else if(ou){cls+=" c-s";lb="S";}
         else if(ol){cls+=" c-u";lb="U";}
@@ -3757,8 +3791,7 @@ function buildPrintHTML(group){
       <span><span class="lb" style="background:#fffde7"></span>U = Concediu</span>
       <span><span class="lb" style="background:#ffcdd2"></span>K = Krank (medical)</span>
       <span><span class="lb" style="background:#bbdefb"></span>S = Fără plată</span>
-      <span><span class="lb" style="background:#c8e6c9"></span>&#10003; = Prezent</span>
-      <span><span class="lb" style="background:#ffcdd2;color:#7f0000"></span>&#10007; = Absent</span>
+      <span><span class="lb" style="background:#c8e6c9;color:#1b5e20">&#10007;</span> X = Prezent</span>
       <span><span class="lb" style="background:#eee"></span>Duminică / Sărbătoare</span>
     </div></div>`;
   }
@@ -3908,13 +3941,14 @@ function togglePresenta(driverName, day){
 }
 
 // ---- Drag prezență concedii timeline ----
-let _presDrag = {active:false, driverName:null, mode:null}; // mode: "prezent"|"absent"|"clear"
+// Concedii: dreapta = prezent/șterge (fără absent în acest tab)
+let _presDrag = {active:false, driverName:null, mode:null};
 
-function presDragStart(driverName, day, isRight){
+function presDragStart(driverName, day){
   const mk=getPresMonthKey();
   const cur=(presState.presence[mk]&&presState.presence[mk][driverName]&&presState.presence[mk][driverName][String(day)]);
-  if(isRight){ _presDrag={active:true, driverName, mode: cur==="absent"?"clear":"absent"}; }
-  else        { _presDrag={active:true, driverName, mode: cur==="prezent"?"clear":"prezent"}; }
+  // Dreapta în concedii = prezent toggle (prezent↔gol, fără absent)
+  _presDrag={active:true, driverName, mode: cur==="prezent"?"clear":"prezent"};
   presDragApply(driverName, day);
 }
 
@@ -3949,7 +3983,161 @@ function presDragEnd(){
   savePresState();
 }
 
-function renderAll(includeDrivers=true){
+// ============================================================
+// LOGIN NOTIFICATION
+// ============================================================
+function showLoginNotification(userKey){
+  const today = new Date();
+  const dayNames = ["Duminică","Luni","Marți","Miercuri","Joi","Vineri","Sâmbătă"];
+  const monthNames = ["Ianuarie","Februarie","Martie","Aprilie","Mai","Iunie","Iulie","August","Septembrie","Octombrie","Noiembrie","Decembrie"];
+  const dateStr = dayNames[today.getDay()]+", "+today.getDate()+" "+monthNames[today.getMonth()]+" "+today.getFullYear();
+  const userName = USERS[userKey]?.name || userKey;
+
+  // Find drivers on leave today visible to this user
+  const visibleDrivers = (state.drivers||[]).filter(d=>{
+    const vis = d.visibleTo||[];
+    return vis.includes(userKey)||vis.includes("tania");
+  });
+  const onLeaveToday = visibleDrivers.filter(d=>{
+    return (d.leaves||[]).some(l=>dateInLeave(today,l));
+  });
+
+  // Build notification modal
+  let existingNotif = document.getElementById("loginNotifModal");
+  if(existingNotif) existingNotif.remove();
+
+  const namesHtml = onLeaveToday.length>0
+    ? onLeaveToday.map(d=>`<span style="display:inline-block;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);border-radius:4px;padding:2px 8px;margin:2px;font-size:13px;color:var(--accent)">${escapeHtml(d.name)}</span>`).join("")
+    : `<span style="color:var(--text-dim);font-size:13px">Nicio persoană în concediu astăzi ✅</span>`;
+
+  const modal = document.createElement("div");
+  modal.id = "loginNotifModal";
+  modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.25s ease";
+  modal.innerHTML = `
+    <div style="background:var(--bg-elev);border:1px solid var(--border);border-radius:14px;padding:28px 32px;max-width:480px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.5);text-align:center">
+      <div style="font-size:36px;margin-bottom:8px">☀️</div>
+      <div style="font-size:20px;font-weight:800;color:var(--accent);margin-bottom:4px">Bună ziua, ${escapeHtml(userName)}!</div>
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:16px">${escapeHtml(dateStr)}</div>
+      <div style="font-size:14px;color:var(--text);margin-bottom:10px">
+        Astăzi sunt <strong style="color:var(--accent)">${onLeaveToday.length}</strong> ${onLeaveToday.length===1?"persoană":"persoane"} în concediu.
+      </div>
+      ${onLeaveToday.length>0?`<div style="margin-bottom:16px;padding:10px;background:var(--bg-elev-2);border-radius:8px;line-height:1.8">${namesHtml}</div>`:"<div style='margin-bottom:16px'></div>"}
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:20px;font-style:italic">O zi bună în continuare! 😊</div>
+      <button onclick="document.getElementById('loginNotifModal').remove()" style="padding:10px 32px;background:var(--accent);color:#000;font-weight:700;font-size:14px;border:none;border-radius:8px;cursor:pointer">Mulțumesc! →</button>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener("click", e=>{ if(e.target===modal) modal.remove(); });
+}
+
+// ============================================================
+// SORTATORI PRINT MODULE
+// ============================================================
+function openSortPrintModal(){
+  if(!isAdminOrTania()) return;
+  const y=sortCurrentDate.getFullYear(), m=sortCurrentDate.getMonth();
+  const days=new Date(y,m+1,0).getDate();
+  const mk=getSortKey();
+  const presence=(sortState.presence&&sortState.presence[mk])||{};
+  const groupLabel = sortView==="eiselfing"?"Eiselfing":"Ruhstorf";
+  const drivers = getSortDrivers();
+  const today = new Date();
+  const DOW_RO=["D","L","M","M","J","V","S"];
+  const ROWS_PER_PAGE=28;
+
+  let html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Sortatori ${MONTHS[m]} ${y} ${groupLabel}</title><style>
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    body{font-family:Arial,sans-serif;font-size:9px;color:#000;background:#fff}
+    h1{font-size:12px;font-weight:700;text-align:center;margin-bottom:2px}
+    h2{font-size:10px;font-weight:600;text-align:center;margin-bottom:4px;color:#444}
+    .page{page-break-after:always;padding:5mm}
+    .page:last-child{page-break-after:avoid}
+    table{border-collapse:collapse;width:100%}
+    th,td{border:1px solid #bbb;text-align:center;padding:0}
+    .name-col{text-align:left!important;padding:2px 6px!important;white-space:nowrap;font-size:9px;width:1%;font-weight:500}
+    .day-hdr{width:22px;min-width:22px;max-width:22px;font-size:8px;line-height:1.3;padding:1px 0;background:#e8e8e8;font-weight:700}
+    .day-hdr.sun{background:#b0b0b0!important}
+    .day-hdr.tod{background:#fff3cd!important;font-weight:700}
+    .sun{background:#b0b0b0!important}
+    .c-p{background:#c8e6c9!important;color:#1b5e20!important;font-weight:700}
+    .c-a{background:#ffcdd2!important;color:#7f0000!important;font-weight:700}
+    .c-lv{background:#fffde7!important;color:#e65100!important}
+    .cat-hdr td{background:#f0f0f0!important;font-weight:700;font-size:8px;text-transform:uppercase;letter-spacing:0.5px;color:#555;text-align:left;padding:2px 6px}
+    .legend{display:flex;gap:10px;margin-top:3mm;flex-wrap:wrap;font-size:8px;align-items:center}
+    .lb{width:13px;height:13px;border:1px solid #999;display:inline-block;vertical-align:middle;margin-right:2px}
+    @page{size:A4 landscape;margin:5mm}
+    @media print{*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important} body{margin:0}}
+  </style></head><body>`;
+
+  const cats = [
+    {label:"Permanenți", key:"permanent", color:"#10b981"},
+    {label:"Rotații",    key:"rotatie",   color:"#f59e0b"},
+    {label:"Camion",     key:"camion",    color:"#8b5cf6"},
+    {label:"Urgențe",    key:"urgenta",   color:"#ef4444"},
+  ];
+
+  // Collect all rows: header + driver rows per category
+  const allRows=[];
+  cats.forEach(cat=>{
+    const catDrivers=drivers.filter(d=>(!d.category||d.category==="permanent")?cat.key==="permanent":d.category===cat.key);
+    if(catDrivers.length===0) return;
+    allRows.push({type:"cat", label:cat.label, color:cat.color});
+    catDrivers.forEach(dr=>allRows.push({type:"dr", dr}));
+  });
+
+  for(let ps=0; ps<allRows.length; ps+=ROWS_PER_PAGE){
+    const pageRows=allRows.slice(ps,ps+ROWS_PER_PAGE);
+    html+=`<div class="page">`;
+    html+=`<h1>MTC Transport — SORTATORI</h1>`;
+    html+=`<h2>${MONTHS[m]} ${y} · ${groupLabel}</h2>`;
+    html+=`<table><thead><tr><th class="name-col">Sortator</th>`;
+    for(let dn=1;dn<=days;dn++){
+      const d=new Date(y,m,dn);
+      const isSun=isSunday(d),isTd=sameDay(d,today);
+      html+=`<th class="day-hdr${isSun?" sun":""}${isTd?" tod":""}">${dn}<br>${DOW_RO[d.getDay()]}</th>`;
+    }
+    html+=`</tr></thead><tbody>`;
+    pageRows.forEach(row=>{
+      if(row.type==="cat"){
+        html+=`<tr class="cat-hdr"><td colspan="${days+1}" style="border-left:3px solid ${row.color}">${row.label}</td></tr>`;
+      } else {
+        const dr=row.dr;
+        const dp=(presence[dr.name])||{};
+        const concediuDr=state.drivers.find(d=>d.name===dr.name);
+        html+=`<tr><td class="name-col">${escapeHtml(dr.name)}</td>`;
+        for(let dn=1;dn<=days;dn++){
+          const d=new Date(y,m,dn);
+          if(isSunday(d)||getHoliday(d)){html+=`<td class="sun"></td>`;continue;}
+          const val=dp[String(dn)];
+          const onLeave=concediuDr&&(concediuDr.leaves||[]).some(l=>dateInLeave(d,l));
+          const onKrank=concediuDr&&(concediuDr.krankLeaves||[]).some(l=>dateInLeave(d,l));
+          const onUnpaid=concediuDr&&(concediuDr.unpaidLeaves||[]).some(l=>dateInLeave(d,l));
+          if(val==="prezent")      html+=`<td class="c-p">✓</td>`;
+          else if(val==="absent")  html+=`<td class="c-a">✗</td>`;
+          else if(onLeave)         html+=`<td class="c-lv">U</td>`;
+          else if(onKrank)         html+=`<td class="c-lv">K</td>`;
+          else if(onUnpaid)        html+=`<td class="c-lv">S</td>`;
+          else                     html+=`<td></td>`;
+        }
+        html+=`</tr>`;
+      }
+    });
+    html+=`</tbody></table>`;
+    html+=`<div class="legend">
+      <span><span class="lb" style="background:#c8e6c9"></span>✓ = Prezent</span>
+      <span><span class="lb" style="background:#ffcdd2;color:#7f0000">✗</span> ✗ = Absent</span>
+      <span><span class="lb" style="background:#fffde7"></span>U/K/S = Concediu/Krank/Fără plată</span>
+      <span><span class="lb" style="background:#b0b0b0"></span>Duminică / Sărbătoare</span>
+    </div></div>`;
+  }
+  html+=`</body></html>`;
+
+  const w=window.open("","_blank","width=1400,height=900");
+  w.document.write(html);
+  w.document.close();
+  setTimeout(()=>{w.focus();w.print();},600);
+}
+
+
   const uk = window.activeUserKey;
   if(uk && uk!=="mihaela"){
     const sc = document.getElementById("sidebarCollapsible");

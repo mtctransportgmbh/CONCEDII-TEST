@@ -961,14 +961,10 @@
         <div class="stat-label">Vârf în lună</div>
         <div class="stat-value" id="statPeak">0</div>
       </div>
-      <div class="stat" id="statKrankBox" onclick="openStats('krank')" style="display:none;cursor:pointer;border-left-color:rgba(59,130,246,0.7)">
-        <div class="stat-label">🤒 Krank lună</div>
-        <div class="stat-value" id="statKrank">0</div>
+      <div id="statKrankBox" style="display:none"><div id="statKrank" style="display:none">0</div></div>
+      <div style="margin-left:auto;display:flex;align-items:center">
+        <button id="printBtn" onclick="openPrintModal()" style="display:none;padding:10px 24px;font-size:14px;font-weight:700;background:var(--accent);color:#000;border:none;border-radius:8px;cursor:pointer;box-shadow:0 2px 10px rgba(251,191,36,0.4)">🖨️ Print / Export PDF</button>
       </div>
-    </div>
-    
-    <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
-      <button id="printBtn" onclick="openPrintModal()" style="display:none;padding:8px 20px;font-size:13px;font-weight:700;background:var(--accent);color:#000;border:none;border-radius:7px;cursor:pointer;box-shadow:0 2px 8px rgba(251,191,36,0.35)">🖨️ Print / Export PDF</button>
     </div>
     <div id="holidayBanner" class="holiday-banner" style="display:none"></div>
     
@@ -1390,6 +1386,12 @@ function scheduleSave(){
   saveTimer = setTimeout(async()=>{
     try{
       isSaving = true;
+      // Protecție anti-ștergere accidentală: nu salva dacă lista e goală
+      if(!state.drivers || state.drivers.length === 0){
+        console.warn("scheduleSave: drivers is empty — save aborted");
+        setSaveStatus("error","⚠️ Salvare anulată (listă goală!)");
+        return;
+      }
       const uk = window.activeUserKey||"tania";
       if(uk==="tania"||uk==="admin"){
         const byDoc = {raluca:[],madalina:[],corina:[],tania:[]};
@@ -3139,6 +3141,11 @@ function goSortToday(){ sortCurrentDate = new Date(); renderSortatoriTimeline();
 // ---- Firestore ----
 async function saveSortState(){
   try{
+    // Protecție: nu salva dacă lista sortatori e goală
+    if(!sortState.drivers || sortState.drivers.length === 0){
+      console.warn("saveSortState: drivers empty — aborted");
+      return;
+    }
     await db.collection("sortatori").doc("state").set(JSON.parse(JSON.stringify(sortState)));
     console.log("Sortatori saved:", sortState.drivers.length, "drivers");
   }catch(e){ console.error("sort save",e); }
@@ -3194,7 +3201,8 @@ function togglePresence(driverName, day, isRightClick){
 let _sortDrag = {active:false, driverName:null, mode:null}; // mode: "prezent"|"absent"|"clear"
 
 function sortDragStart(driverName, day, isRight){
-  if(!isAdminOrTania() && window.activeUserKey!=="mihaela") return;
+  const _uk=window.activeUserKey||"";
+  if(!isAdminOrTania() && _uk!=="mihaela" && _uk!=="madalina") return;
   const mk = getSortKey();
   const cur = (sortState.presence[mk]&&sortState.presence[mk][driverName]&&sortState.presence[mk][driverName][String(day)]);
   // Determinăm modul după butonul apăsat și starea curentă
@@ -3284,6 +3292,8 @@ function confirmSortPick(){
     const dr = _pickAvail[parseInt(cb.value)];
     if(dr) sortState.drivers.push({id:uid(),name:dr.name,group:_pickGroup,category:_pickCat});
   });
+  // Sortare alfabetică după adăugare
+  sortState.drivers.sort((a,b)=>a.name.localeCompare(b.name,"ro"));
   renderSortatoriTimeline(); // render imediat
   saveSortState();           // salveaza in Firestore
   closeModal("modalDay");
@@ -3300,9 +3310,10 @@ function deleteSortator(id){
 }
 
 // ---- Render ----
-function makeSortRow(dr, presence, daysInMonth, y, m, gridCols, canEdit){
+function makeSortRow(dr, presence, daysInMonth, y, m, gridCols, canAdd, canEdit){
+  if(canEdit===undefined) canEdit=canAdd; // backward compat
   const dp = presence[dr.name]||{};
-  const delBtn = canEdit ? `<span onclick="deleteSortator('${dr.id}')" style="color:var(--red);cursor:pointer;font-size:10px;margin-left:4px" title="Șterge">✕</span>` : "";
+  const delBtn = canAdd ? `<span onclick="deleteSortator('${dr.id}')" style="color:var(--red);cursor:pointer;font-size:10px;margin-left:4px" title="Șterge">✕</span>` : "";
   let dRow = `<div class='tl-driver-row' style='font-size:12px'>${escapeHtml(dr.name)}${delBtn}</div>`;
   let gRow = `<div class='tl-row' style='grid-template-columns:${gridCols}'>`;
 
@@ -3360,7 +3371,9 @@ function renderSortatoriTimeline(){
   const mk=getSortKey();
   const presence=(sortState.presence&&sortState.presence[mk])||{};
   const colW=34, gridCols=`repeat(${days},${colW}px)`;
-  const canEdit=isAdminOrTania()||window.activeUserKey==="mihaela";
+  const uk=window.activeUserKey||"";
+  const canEdit=isAdminOrTania()||uk==="mihaela"||uk==="madalina";
+  const canAdd=isAdminOrTania(); // doar admin/tania pot adăuga/șterge persoane
 
   const perm   =drivers.filter(d=>!d.category||d.category==="permanent");
   const rotatie=drivers.filter(d=>d.category==="rotatie");
@@ -3381,27 +3394,27 @@ function renderSortatoriTimeline(){
   gH+="</div>";
 
   // Permanenți
-  const hP=makeCatHeader("Permanenți","#10b981",perm.length,gridCols,canEdit,group,"permanent",days);
+  const hP=makeCatHeader("Permanenți","#10b981",perm.length,gridCols,canAdd,group,"permanent",days);
   dH+=hP.dRow; gH+=hP.gRow;
-  perm.forEach(dr=>{ const r=makeSortRow(dr,presence,days,y,m,gridCols,canEdit); dH+=r.dRow; gH+=r.gRow; });
+  perm.forEach(dr=>{ const r=makeSortRow(dr,presence,days,y,m,gridCols,canAdd,canEdit); dH+=r.dRow; gH+=r.gRow; });
   if(!perm.length){ dH+=`<div class='tl-driver-row' style='color:var(--text-dim);font-style:italic;font-size:11px'>—</div>`; gH+=`<div class='tl-row' style='grid-template-columns:${gridCols}'></div>`; }
 
   // Rotații
-  const hR=makeCatHeader("Rotații","#f59e0b",rotatie.length,gridCols,canEdit,group,"rotatie",days);
+  const hR=makeCatHeader("Rotații","#f59e0b",rotatie.length,gridCols,canAdd,group,"rotatie",days);
   dH+=hR.dRow; gH+=hR.gRow;
-  rotatie.forEach(dr=>{ const r=makeSortRow(dr,presence,days,y,m,gridCols,canEdit); dH+=r.dRow; gH+=r.gRow; });
+  rotatie.forEach(dr=>{ const r=makeSortRow(dr,presence,days,y,m,gridCols,canAdd,canEdit); dH+=r.dRow; gH+=r.gRow; });
   if(!rotatie.length){ dH+=`<div class='tl-driver-row' style='color:var(--text-dim);font-style:italic;font-size:11px'>—</div>`; gH+=`<div class='tl-row' style='grid-template-columns:${gridCols}'></div>`; }
 
   // Camion
-  const hC=makeCatHeader("Camion","#8b5cf6",camion.length,gridCols,canEdit,group,"camion",days);
+  const hC=makeCatHeader("Camion","#8b5cf6",camion.length,gridCols,canAdd,group,"camion",days);
   dH+=hC.dRow; gH+=hC.gRow;
-  camion.forEach(dr=>{ const r=makeSortRow(dr,presence,days,y,m,gridCols,canEdit); dH+=r.dRow; gH+=r.gRow; });
+  camion.forEach(dr=>{ const r=makeSortRow(dr,presence,days,y,m,gridCols,canAdd,canEdit); dH+=r.dRow; gH+=r.gRow; });
   if(!camion.length){ dH+=`<div class='tl-driver-row' style='color:var(--text-dim);font-style:italic;font-size:11px'>—</div>`; gH+=`<div class='tl-row' style='grid-template-columns:${gridCols}'></div>`; }
 
   // Urgențe
-  const hU=makeCatHeader("Urgențe","#ef4444",urgenta.length,gridCols,canEdit,group,"urgenta",days);
+  const hU=makeCatHeader("Urgențe","#ef4444",urgenta.length,gridCols,canAdd,group,"urgenta",days);
   dH+=hU.dRow; gH+=hU.gRow;
-  urgenta.forEach(dr=>{ const r=makeSortRow(dr,presence,days,y,m,gridCols,canEdit); dH+=r.dRow; gH+=r.gRow; });
+  urgenta.forEach(dr=>{ const r=makeSortRow(dr,presence,days,y,m,gridCols,canAdd,canEdit); dH+=r.dRow; gH+=r.gRow; });
   if(!urgenta.length){ dH+=`<div class='tl-driver-row' style='color:var(--text-dim);font-style:italic;font-size:11px'>—</div>`; gH+=`<div class='tl-row' style='grid-template-columns:${gridCols}'></div>`; }
 
   dH+="</div>"; gH+="</div>";
@@ -4006,16 +4019,6 @@ function presDragEnd(){
   savePresState();
 }
 
-function renderAll(includeDrivers=true){
-  const uk = window.activeUserKey;
-  if(uk && uk!=="mihaela"){
-    const sc = document.getElementById("sidebarCollapsible");
-    if(sc && sc.style.display==="none") sc.style.display="";
-  }
-  if(includeDrivers)renderDrivers();
-  renderMain();
-}
-
 // ============================================================
 // LOGIN NOTIFICATION
 // ============================================================
@@ -4128,6 +4131,7 @@ function openSortPrintModal(){
       const isSun=isSunday(d),isTd=sameDay(d,today);
       html+=`<th class="day-hdr${isSun?" sun":""}${isTd?" tod":""}">${dn}<br>${DOW_RO[d.getDay()]}</th>`;
     }
+    html+=`<th style="min-width:36px;background:#e8f5e9;font-size:9px;padding:2px">Prez.</th>`;
     html+=`</tr></thead><tbody>`;
     pageRows.forEach(row=>{
       if(row.type==="cat"){
@@ -4136,6 +4140,7 @@ function openSortPrintModal(){
         const dr=row.dr;
         const dp=(presence[dr.name])||{};
         const concediuDr=state.drivers.find(d=>d.name===dr.name);
+        let prezCount=0;
         html+=`<tr><td class="name-col">${escapeHtml(dr.name)}</td>`;
         for(let dn=1;dn<=days;dn++){
           const d=new Date(y,m,dn);
@@ -4144,13 +4149,14 @@ function openSortPrintModal(){
           const onLeave=concediuDr&&(concediuDr.leaves||[]).some(l=>dateInLeave(d,l));
           const onKrank=concediuDr&&(concediuDr.krankLeaves||[]).some(l=>dateInLeave(d,l));
           const onUnpaid=concediuDr&&(concediuDr.unpaidLeaves||[]).some(l=>dateInLeave(d,l));
-          if(val==="prezent")      html+=`<td class="c-p">✓</td>`;
+          if(val==="prezent"){      html+=`<td class="c-p">✓</td>`; prezCount++; }
           else if(val==="absent")  html+=`<td class="c-a">✗</td>`;
           else if(onLeave)         html+=`<td class="c-lv">U</td>`;
           else if(onKrank)         html+=`<td class="c-lv">K</td>`;
           else if(onUnpaid)        html+=`<td class="c-lv">S</td>`;
           else                     html+=`<td></td>`;
         }
+        html+=`<td style="background:#c8e6c9;font-weight:800;font-size:11px;text-align:center">${prezCount||""}</td>`;
         html+=`</tr>`;
       }
     });

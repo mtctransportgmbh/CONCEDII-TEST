@@ -32,6 +32,71 @@
     --holiday: #a855f7;
     --holiday-bg: rgba(168,85,247,0.15);
   }
+
+  [data-theme="light"] {
+    --bg: #f0f2f5;
+    --bg-elev: #ffffff;
+    --bg-elev-2: #e8ecf1;
+    --border: #c8d0db;
+    --text: #1a2028;
+    --text-dim: #5a6a7e;
+    --accent: #d97706;
+    --accent-2: #2563eb;
+    --green: #059669;
+    --yellow: #ca8a04;
+    --orange: #ea580c;
+    --red: #dc2626;
+    --holiday: #7c3aed;
+    --holiday-bg: rgba(124,58,237,0.1);
+  }
+
+  [data-theme="light"] body { background: var(--bg); }
+  [data-theme="light"] .sidebar { background: var(--bg-elev); border-right-color: var(--border); box-shadow: 2px 0 8px rgba(0,0,0,0.08); }
+  [data-theme="light"] .modal { box-shadow: 0 20px 60px rgba(0,0,0,0.18); }
+  [data-theme="light"] .tl-cell:not(.sunday):not(.in-leave):not(.in-krank):not(.in-unpaid):not(.pres-p):not(.pres-a):hover { background: rgba(217,119,6,0.12); }
+  [data-theme="light"] .tl-day-header { background: var(--bg-elev-2); color: var(--text); border-bottom-color: var(--border); }
+  [data-theme="light"] .tl-driver-row { background: var(--bg-elev); border-bottom-color: var(--border); color: var(--text); }
+  [data-theme="light"] .tl-row { background: var(--bg-elev); border-bottom-color: var(--border); }
+  [data-theme="light"] .tl-cell { border-right-color: var(--border); }
+  [data-theme="light"] .tl-cell:not(.in-leave):not(.in-krank):not(.in-unpaid):not(.sort-p):not(.sort-a):not(.pres-p):not(.pres-a):not(.sunday):not(.holiday):not(.in-leave) { color: var(--text-dim); }
+  [data-theme="light"] .stat { background: var(--bg-elev); border-color: var(--border); }
+  [data-theme="light"] .driver-card { background: var(--bg-elev); border-color: var(--border); }
+  [data-theme="light"] .driver-card:hover { border-color: var(--accent); }
+  [data-theme="light"] .driver-card.selected { background: rgba(217,119,6,0.08); }
+  [data-theme="light"] input, [data-theme="light"] select, [data-theme="light"] textarea { background: var(--bg-elev-2); border-color: var(--border); color: var(--text); }
+  [data-theme="light"] .btn-secondary { background: var(--bg-elev-2); border-color: var(--border); color: var(--text); }
+  [data-theme="light"] .btn-secondary:hover { border-color: var(--accent); }
+  [data-theme="light"] .cal-day { background: var(--bg-elev); border-color: var(--border); }
+  [data-theme="light"] .cal-day:hover { border-color: var(--accent); }
+  [data-theme="light"] .tl-total { background: var(--bg-elev-2); color: var(--text); border-color: var(--border); }
+  [data-theme="light"] .tl-cell.sunday { background: repeating-linear-gradient(45deg,rgba(220,38,38,0.05),rgba(220,38,38,0.05) 4px,rgba(220,38,38,0.1) 4px,rgba(220,38,38,0.1) 8px); }
+  [data-theme="light"] .mod-tab { background: var(--bg-elev-2); border-color: var(--border); color: var(--text-dim); }
+  [data-theme="light"] .mod-tab.active, [data-theme="light"] .mod-tab-active { background: var(--accent); color: #000; border-color: var(--accent); }
+  [data-theme="light"] .save-status { background: var(--bg-elev-2); border-color: var(--border); color: var(--text-dim); }
+  [data-theme="light"] .modal-bg { background: rgba(0,0,0,0.35); }
+  [data-theme="light"] .sort-view-btn { background: var(--bg-elev-2); border-color: var(--border); color: var(--text-dim); }
+  [data-theme="light"] .sort-view-btn.active { background: var(--accent); color: #000; }
+
+  .theme-toggle-btn {
+    position: fixed;
+    bottom: 18px;
+    right: 18px;
+    z-index: 1000;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: var(--bg-elev);
+    color: var(--text);
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .theme-toggle-btn:hover { transform: scale(1.1); box-shadow: 0 6px 20px rgba(0,0,0,0.3); }
   
   body {
     font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
@@ -900,8 +965,6 @@
     <button class="btn btn-secondary btn-small" id="actLogBtn" onclick="openActivityLog()" style="width:100%; margin-bottom:6px; display:none; border-color:#818cf8; color:#818cf8">📋 Istoric activitate</button>
     <button class="btn btn-secondary btn-small" id="verifyExcelBtn" onclick="document.getElementById('verifyExcelFile').click()" style="width:100%; margin-bottom:6px; display:none; border-color:#a78bfa; color:#a78bfa">📊 Verifică Excel vs HTML</button>
     <input type="file" id="verifyExcelFile" accept=".xlsx,.xlsm,.xls" style="display:none" onchange="verifyExcelFile(event)">
-    <button class="btn btn-secondary btn-small" id="importExcelBtn" onclick="document.getElementById('importExcelFile').click()" style="width:100%; margin-bottom:6px; display:none; border-color:#34d399; color:#34d399">📥 Import Excel → HTML</button>
-    <input type="file" id="importExcelFile" accept=".xlsx,.xlsm,.xls" style="display:none" multiple onchange="importExcelFile(event)">
     <button class="btn btn-secondary btn-small" id="downloadBackupBtn" onclick="downloadBackupNow()" style="width:100%; margin-bottom:6px; display:none">💾 Descarcă backup acum</button>
     <button class="btn btn-secondary btn-small" id="uploadBackupBtn" onclick="document.getElementById('uploadBackupFile').click()" style="width:100%; margin-bottom:6px; display:none">📂 Încarcă backup fișier</button>
     <input type="file" id="uploadBackupFile" accept=".json" style="display:none" onchange="uploadLocalBackup(event)">
@@ -1185,19 +1248,6 @@
     <div id="verifyExcelResults" style="margin-top:12px"></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('modalVerifyExcel')">Închide</button>
-    </div>
-  </div>
-</div>
-
-<!-- IMPORT EXCEL MODAL -->
-<div class="modal-bg" id="modalImportExcel">
-  <div class="modal" style="max-width:820px;max-height:92vh;overflow-y:auto">
-    <h3>📥 Import Excel → HTML</h3>
-    <div class="modal-sub" id="importExcelSub">Selectează fișierele Excel (Jan, Feb, Mar, Apr) — poți selecta mai multe odată</div>
-    <div id="importExcelResults" style="margin-top:12px"></div>
-    <div class="modal-actions" style="gap:8px">
-      <button class="btn btn-secondary" onclick="closeModal('modalImportExcel')">Închide</button>
-      <button class="btn" id="importExcelConfirmBtn" onclick="confirmImportExcel()" style="display:none;background:#10b981;border-color:#10b981">✅ Importă tot</button>
     </div>
   </div>
 </div>
@@ -1857,8 +1907,6 @@ function enterApp(userKey){
   if(actLogBtn2) actLogBtn2.style.display = isAdm?"block":"none";
   const verifyExcelBtn2 = document.getElementById("verifyExcelBtn");
   if(verifyExcelBtn2) verifyExcelBtn2.style.display = isAdm?"block":"none";
-  const importExcelBtn2 = document.getElementById("importExcelBtn");
-  if(importExcelBtn2) importExcelBtn2.style.display = isAdm?"block":"none";
   const uploadBackupBtn = document.getElementById("uploadBackupBtn");
   if(uploadBackupBtn) uploadBackupBtn.style.display = isAdm?"block":"none";
 
@@ -4024,258 +4072,8 @@ function presDragEnd(){
 }
 
 // ============================================================
-// IMPORT EXCEL → HTML
+// LOGIN NOTIFICATION
 // ============================================================
-let _importPending = []; // lista de modificări pregătite pentru confirmare
-
-function importExcelFile(e){
-  const files = [...e.target.files];
-  e.target.value = "";
-  if(!files.length) return;
-
-  _importPending = [];
-  document.getElementById("importExcelSub").textContent = "Se procesează "+files.length+" fișier(e)...";
-  document.getElementById("importExcelResults").innerHTML = '<div style="color:var(--text-dim);padding:20px;text-align:center">⏳ Se încarcă...</div>';
-  document.getElementById("importExcelConfirmBtn").style.display = "none";
-  openModal("modalImportExcel");
-
-  let done = 0;
-  const allResults = [];
-
-  files.forEach(file=>{
-    const reader = new FileReader();
-    reader.onload = function(ev){
-      try{
-        const data = new Uint8Array(ev.target.result);
-        const wb = XLSX.read(data, {type:"array", cellDates:true, cellNF:false});
-        const res = parseExcelForImport(wb, file.name);
-        allResults.push(...res);
-      }catch(err){
-        allResults.push({error: file.name+": "+err.message});
-      }
-      done++;
-      if(done===files.length) renderImportPreview(allResults);
-    };
-    reader.readAsArrayBuffer(file);
-  });
-}
-
-function parseExcelForImport(wb, fileName){
-  const skipSheets = new Set(["Angajati","Model"]);
-  const results = [];
-  const MONTH_MAP = {
-    januar:1,february:1,januar:1,februari:2,february:2,
-    märz:3,march:3,april:4,mai:5,may:5,
-    juni:6,june:6,juli:7,july:7,august:8,
-    september:9,oktober:10,october:10,november:11,
-    dezember:12,december:12,january:1,march:3,june:6,july:7,october:10
-  };
-
-  wb.SheetNames.forEach(sheetName=>{
-    if(skipSheets.has(sheetName)) return;
-    const ws = wb.Sheets[sheetName];
-    if(!ws) return;
-
-    const nameCell = ws["F3"];
-    const personName = (nameCell && String(nameCell.v||"").trim()) || sheetName;
-    if(!personName) return;
-
-    const monthCell = ws["I3"];
-    const yearCell  = ws["I4"];
-    const monthStr  = monthCell ? String(monthCell.v||"").trim() : "";
-    const yearVal   = yearCell  ? parseInt(yearCell.v) : 0;
-    const monthNum  = MONTH_MAP[monthStr.toLowerCase()] || 0;
-    if(!monthNum || !yearVal){ results.push({name:personName, skip:"lună necunoscută ("+monthStr+")"}); return; }
-
-    // Găsim persoana în state
-    const dr = state.drivers.find(d=>
-      d.name.toLowerCase()===personName.toLowerCase()||
-      normalizeForSearch(d.name)===normalizeForSearch(personName)
-    );
-    if(!dr){ results.push({name:personName, monthNum, yearVal, monthStr, skip:"persoană negăsită în HTML"}); return; }
-
-    // Citim zilele
-    const changes = {leaves:[], krank:[], unpaid:[], prezente:[]};
-    // Colectăm run-uri consecutive pentru fiecare tip
-    let runType = null, runStart = null;
-
-    const flush = (type, startDay, endDay)=>{
-      const y=yearVal, m=monthNum-1;
-      const startStr = fmtDate(new Date(y,m,startDay));
-      const endStr   = fmtDate(new Date(y,m,endDay));
-      if(type==="urlaub")   changes.leaves.push({start:startStr, end:endStr});
-      else if(type==="krank") changes.krank.push({start:startStr, end:endStr});
-      else if(type==="unpaid") changes.unpaid.push({start:startStr, end:endStr});
-    };
-
-    for(let row=6; row<=36; row++){
-      const bCell = ws["B"+row];
-      if(!bCell||bCell.v===null||bCell.v===undefined) continue;
-      const dayNum = parseInt(bCell.v);
-      if(isNaN(dayNum)||dayNum<1||dayNum>31) continue;
-
-      const d = new Date(yearVal, monthNum-1, dayNum);
-      if(d.getMonth()!==monthNum-1) continue; // zi inexistentă în lună
-
-      const dCell = ws["D"+row]; // Kommt
-      const hCell = ws["H"+row]; // Abwesenheit
-      const rawStatus = hCell ? String(hCell.v||hCell.w||"").trim() : "";
-      const status = rawStatus.toLowerCase();
-      const hasArrival = dCell && dCell.v!==null && dCell.v!==undefined && dCell.v!=="";
-
-      // Determină tipul zilei
-      let dayType = null;
-      if(status==="urlaub" || status==="u") dayType="urlaub";
-      else if(status==="krank" || status==="krankenstand" || status==="k") dayType="krank";
-      else if(status.includes("sonder") || status==="s" || status==="sonderurlaub") dayType="unpaid";
-      else if(status==="feiertag" || status==="x" || status==="f") dayType="feiertag";
-      else if(hasArrival) dayType="prezent";
-
-      // Acumulează run-uri pentru concedii
-      if(dayType==="urlaub"||dayType==="krank"||dayType==="unpaid"){
-        if(runType===dayType){ /* continuă run-ul */ }
-        else {
-          if(runType) flush(runType, runStart, dayNum-1);
-          runType=dayType; runStart=dayNum;
-        }
-      } else {
-        if(runType){ flush(runType, runStart, dayNum-1); runType=null; runStart=null; }
-      }
-
-      // Prezențe individuale
-      if(dayType==="prezent") changes.prezente.push(dayNum);
-    }
-    // Flush ultimul run
-    if(runType) flush(runType, runStart, new Date(yearVal,monthNum,0).getDate());
-
-    // Calculează zile noi (care nu există deja)
-    const existing = {
-      leaves:  (dr.leaves||[]),
-      krank:   (dr.krankLeaves||[]),
-      unpaid:  (dr.unpaidLeaves||[])
-    };
-    const isNewLeave  = (l,arr)=>!arr.some(e=>e.start===l.start&&e.end===l.end);
-
-    const newLeaves = changes.leaves.filter(l=>isNewLeave(l,existing.leaves));
-    const newKrank  = changes.krank.filter(l=>isNewLeave(l,existing.krank));
-    const newUnpaid = changes.unpaid.filter(l=>isNewLeave(l,existing.unpaid));
-
-    // Prezențe noi
-    const mk = yearVal+"-"+String(monthNum).padStart(2,"0");
-    const existingPres = (presState.presence&&presState.presence[mk]&&presState.presence[mk][dr.name])||{};
-    const newPrezente  = changes.prezente.filter(d=>existingPres[String(d)]!=="prezent");
-
-    results.push({
-      name:personName, drId:dr.id, drName:dr.name,
-      monthNum, yearVal, monthStr, fileName,
-      newLeaves, newKrank, newUnpaid, newPrezente,
-      totalNew: newLeaves.length+newKrank.length+newUnpaid.length+newPrezente.length
-    });
-  });
-  return results;
-}
-
-function renderImportPreview(results){
-  _importPending = results.filter(r=>!r.error&&!r.skip&&r.totalNew>0);
-  const errors   = results.filter(r=>r.error);
-  const skipped  = results.filter(r=>r.skip);
-  const empty    = results.filter(r=>!r.error&&!r.skip&&r.totalNew===0);
-  const MONTHS_RO=["","Ianuarie","Februarie","Martie","Aprilie","Mai","Iunie","Iulie","August","Septembrie","Octombrie","Noiembrie","Decembrie"];
-
-  document.getElementById("importExcelSub").textContent =
-    results.length+" persoane procesate · "+_importPending.length+" cu date noi";
-  document.getElementById("importExcelConfirmBtn").style.display = _importPending.length>0?"inline-flex":"none";
-
-  let html="";
-
-  // Summary
-  html+=`<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
-    <div style="padding:7px 14px;background:rgba(16,185,129,0.15);border-radius:6px;font-size:13px">📥 De importat: <strong>${_importPending.length}</strong></div>
-    <div style="padding:7px 14px;background:rgba(100,100,100,0.1);border-radius:6px;font-size:13px">✅ Deja OK: <strong>${empty.length}</strong></div>
-    ${skipped.length?`<div style="padding:7px 14px;background:rgba(100,100,100,0.1);border-radius:6px;font-size:13px">⏭ Sărite: <strong>${skipped.length}</strong></div>`:""}
-    ${errors.length?`<div style="padding:7px 14px;background:rgba(239,68,68,0.15);border-radius:6px;font-size:13px">❌ Erori: <strong>${errors.length}</strong></div>`:""}
-  </div>`;
-
-  if(_importPending.length===0){
-    html+=`<div style="text-align:center;padding:30px;color:var(--text-dim)">Nimic de importat — toate datele există deja în HTML.</div>`;
-  } else {
-    html+=`<div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;padding:8px 12px;background:var(--bg-elev-2);border-radius:6px">
-      ⚠️ Verifică lista de mai jos înainte de import. Datele existente <strong>nu se șterg</strong> — se adaugă doar ce lipsește.
-    </div>`;
-    _importPending.forEach(r=>{
-      html+=`<div style="background:var(--bg-elev-2);border-radius:7px;padding:10px 14px;margin-bottom:8px;border-left:3px solid #10b981">`;
-      html+=`<div style="font-weight:700;font-size:13px;margin-bottom:6px">${escapeHtml(r.drName||r.name)} <span style="color:var(--text-dim);font-size:11px;font-weight:400">${MONTHS_RO[r.monthNum]||""} ${r.yearVal}</span></div>`;
-      if(r.newLeaves.length)  html+=r.newLeaves.map(l=>`<div style="font-size:12px;padding:1px 0">🟡 Concediu: ${l.start} → ${l.end}</div>`).join("");
-      if(r.newKrank.length)   html+=r.newKrank.map(l=>`<div style="font-size:12px;padding:1px 0">🔵 Krank: ${l.start} → ${l.end}</div>`).join("");
-      if(r.newUnpaid.length)  html+=r.newUnpaid.map(l=>`<div style="font-size:12px;padding:1px 0">🟣 Fără plată (S): ${l.start} → ${l.end}</div>`).join("");
-      if(r.newPrezente.length)html+=`<div style="font-size:12px;padding:1px 0">✅ Prezențe: ziua ${r.newPrezente.join(", ")}</div>`;
-      html+=`</div>`;
-    });
-  }
-
-  if(skipped.length){
-    html+=`<div style="background:var(--bg-elev-2);border-radius:6px;padding:8px 12px;margin-top:8px;border-left:3px solid #666">`;
-    html+=`<div style="font-size:12px;font-weight:700;color:var(--text-dim);margin-bottom:4px">Sărite:</div>`;
-    html+=skipped.map(r=>`<div style="font-size:12px;color:var(--text-dim)">• ${escapeHtml(r.name)} — ${r.skip}</div>`).join("");
-    html+=`</div>`;
-  }
-
-  document.getElementById("importExcelResults").innerHTML = html;
-}
-
-async function confirmImportExcel(){
-  if(!_importPending.length) return;
-  const btn = document.getElementById("importExcelConfirmBtn");
-  btn.disabled=true; btn.textContent="⏳ Se importă...";
-
-  let importedCount=0;
-  const MONTHS_RO=["","Ian","Feb","Mar","Apr","Mai","Iun","Iul","Aug","Sep","Oct","Nov","Dec"];
-
-  _importPending.forEach(r=>{
-    const dr = state.drivers.find(d=>d.id===r.drId);
-    if(!dr) return;
-
-    // Adaugă concedii noi
-    r.newLeaves.forEach(l=>{
-      if(!dr.leaves) dr.leaves=[];
-      dr.leaves.push({start:l.start, end:l.end});
-      logActivity("📥 Import concediu", dr.name, l.start+" → "+l.end+" ("+MONTHS_RO[r.monthNum]+" "+r.yearVal+")");
-    });
-    r.newKrank.forEach(l=>{
-      if(!dr.krankLeaves) dr.krankLeaves=[];
-      dr.krankLeaves.push({start:l.start, end:l.end});
-      logActivity("📥 Import krank", dr.name, l.start+" → "+l.end+" ("+MONTHS_RO[r.monthNum]+" "+r.yearVal+")");
-    });
-    r.newUnpaid.forEach(l=>{
-      if(!dr.unpaidLeaves) dr.unpaidLeaves=[];
-      dr.unpaidLeaves.push({start:l.start, end:l.end});
-      logActivity("📥 Import fără plată", dr.name, l.start+" → "+l.end+" ("+MONTHS_RO[r.monthNum]+" "+r.yearVal+")");
-    });
-
-    // Adaugă prezențe noi
-    if(r.newPrezente.length){
-      const mk = r.yearVal+"-"+String(r.monthNum).padStart(2,"0");
-      if(!presState.presence[mk]) presState.presence[mk]={};
-      if(!presState.presence[mk][dr.name]) presState.presence[mk][dr.name]={};
-      r.newPrezente.forEach(d=>{
-        presState.presence[mk][dr.name][String(d)]="prezent";
-      });
-      logActivity("📥 Import prezențe", dr.name, r.newPrezente.length+"z ("+MONTHS_RO[r.monthNum]+" "+r.yearVal+")");
-    }
-
-    importedCount++;
-  });
-
-  // Salvează tot
-  renderAll();
-  scheduleSave();
-  await savePresState();
-
-  toast("✅ Import complet: "+importedCount+" persoane actualizate");
-  btn.disabled=false; btn.textContent="✅ Importă tot";
-  _importPending=[];
-  closeModal("modalImportExcel");
-}
 function showLoginNotification(userKey){
   const today = new Date();
   const dayNames = ["Duminică","Luni","Marți","Miercuri","Joi","Vineri","Sâmbătă"];
@@ -4579,6 +4377,39 @@ function toggleSidebar(){
   const cnt=getVisibleDrivers().length;
   btn.textContent=open?"▲ Ascunde persoanele ("+cnt+")":"▼ Arată persoanele ("+cnt+")";
 }
+
+// ============================================================
+// THEME TOGGLE (Dark / Light)
+// ============================================================
+function toggleTheme(){
+  const isLight = document.documentElement.getAttribute("data-theme")==="light";
+  const newTheme = isLight ? "dark" : "light";
+  applyTheme(newTheme);
+  try{ localStorage.setItem("mtc-theme", newTheme); }catch(e){}
+}
+
+function applyTheme(theme){
+  if(theme==="light"){
+    document.documentElement.setAttribute("data-theme","light");
+    const btn=document.getElementById("themeToggleBtn");
+    if(btn){ btn.textContent="☀️"; btn.title="Schimbă la Dark"; }
+  } else {
+    document.documentElement.removeAttribute("data-theme");
+    const btn=document.getElementById("themeToggleBtn");
+    if(btn){ btn.textContent="🌙"; btn.title="Schimbă la Light"; }
+  }
+}
+
+// Aplică tema salvată la încărcare
+(function(){
+  try{
+    const saved = localStorage.getItem("mtc-theme");
+    if(saved) applyTheme(saved);
+  }catch(e){}
+})();
 </script>
+
+<button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema (Dark/Light)">🌙</button>
+
 </body>
 </html>

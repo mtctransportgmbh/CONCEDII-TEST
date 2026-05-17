@@ -995,6 +995,8 @@
     <button class="btn btn-secondary btn-small" id="actLogBtn" onclick="openActivityLog()" style="width:100%; margin-bottom:6px; display:none; border-color:#818cf8; color:#818cf8">📋 Istoric activitate</button>
     <button class="btn btn-secondary btn-small" id="verifyExcelBtn" onclick="document.getElementById('verifyExcelFile').click()" style="width:100%; margin-bottom:6px; display:none; border-color:#a78bfa; color:#a78bfa">📊 Verifică Excel vs HTML</button>
     <input type="file" id="verifyExcelFile" accept=".xlsx,.xlsm,.xls" style="display:none" onchange="verifyExcelFile(event)">
+    <button class="btn btn-secondary btn-small" id="importExcelBtn" onclick="document.getElementById('importExcelFile').click()" style="width:100%; margin-bottom:6px; display:none; border-color:#34d399; color:#34d399">📥 Import Excel → HTML</button>
+    <input type="file" id="importExcelFile" accept=".xlsx,.xlsm,.xls" style="display:none" multiple onchange="importExcelFile(event)">
     <button class="btn btn-secondary btn-small" id="downloadBackupBtn" onclick="downloadBackupNow()" style="width:100%; margin-bottom:6px; display:none">💾 Descarcă backup acum</button>
     <button class="btn btn-secondary btn-small" id="uploadBackupBtn" onclick="document.getElementById('uploadBackupFile').click()" style="width:100%; margin-bottom:6px; display:none">📂 Încarcă backup fișier</button>
     <input type="file" id="uploadBackupFile" accept=".json" style="display:none" onchange="uploadLocalBackup(event)">
@@ -1056,14 +1058,10 @@
         <div class="stat-label">Vârf în lună</div>
         <div class="stat-value" id="statPeak">0</div>
       </div>
-      <div class="stat" id="statKrankBox" onclick="openStats('krank')" style="display:none;cursor:pointer;border-left-color:rgba(59,130,246,0.7)">
-        <div class="stat-label">🤒 Krank lună</div>
-        <div class="stat-value" id="statKrank">0</div>
+      <div id="statKrankBox" style="display:none"><div id="statKrank" style="display:none">0</div></div>
+      <div style="margin-left:auto;display:flex;align-items:center">
+        <button id="printBtn" onclick="openPrintModal()" style="display:none;padding:10px 24px;font-size:14px;font-weight:700;background:var(--accent);color:#000;border:none;border-radius:8px;cursor:pointer;box-shadow:0 2px 10px rgba(251,191,36,0.4)">🖨️ Print / Export PDF</button>
       </div>
-    </div>
-    
-    <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
-      <button id="printBtn" onclick="openPrintModal()" style="display:none;padding:8px 20px;font-size:13px;font-weight:700;background:var(--accent);color:#000;border:none;border-radius:7px;cursor:pointer;box-shadow:0 2px 8px rgba(251,191,36,0.35)">🖨️ Print / Export PDF</button>
     </div>
     <div id="holidayBanner" class="holiday-banner" style="display:none"></div>
     
@@ -1278,6 +1276,19 @@
     <div id="verifyExcelResults" style="margin-top:12px"></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('modalVerifyExcel')">Închide</button>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORT EXCEL MODAL -->
+<div class="modal-bg" id="modalImportExcel">
+  <div class="modal" style="max-width:820px;max-height:92vh;overflow-y:auto">
+    <h3>📥 Import Excel → HTML</h3>
+    <div class="modal-sub" id="importExcelSub">Selectează fișierele Excel (Jan, Feb, Mar, Apr) — poți selecta mai multe odată</div>
+    <div id="importExcelResults" style="margin-top:12px"></div>
+    <div class="modal-actions" style="gap:8px">
+      <button class="btn btn-secondary" onclick="closeModal('modalImportExcel')">Închide</button>
+      <button class="btn" id="importExcelConfirmBtn" onclick="confirmImportExcel()" style="display:none;background:#10b981;border-color:#10b981">✅ Importă tot</button>
     </div>
   </div>
 </div>
@@ -1937,6 +1948,8 @@ function enterApp(userKey){
   if(actLogBtn2) actLogBtn2.style.display = isAdm?"block":"none";
   const verifyExcelBtn2 = document.getElementById("verifyExcelBtn");
   if(verifyExcelBtn2) verifyExcelBtn2.style.display = isAdm?"block":"none";
+  const importExcelBtn2 = document.getElementById("importExcelBtn");
+  if(importExcelBtn2) importExcelBtn2.style.display = isAdm?"block":"none";
   const uploadBackupBtn = document.getElementById("uploadBackupBtn");
   if(uploadBackupBtn) uploadBackupBtn.style.display = isAdm?"block":"none";
 
@@ -3289,7 +3302,8 @@ function togglePresence(driverName, day, isRightClick){
 let _sortDrag = {active:false, driverName:null, mode:null}; // mode: "prezent"|"absent"|"clear"
 
 function sortDragStart(driverName, day, isRight){
-  if(!isAdminOrTania()) return;
+  const _uk=window.activeUserKey||"";
+  if(!isAdminOrTania() && _uk!=="mihaela" && _uk!=="madalina") return;
   const mk = getSortKey();
   const cur = (sortState.presence[mk]&&sortState.presence[mk][driverName]&&sortState.presence[mk][driverName][String(day)]);
   // Determinăm modul după butonul apăsat și starea curentă
@@ -3395,9 +3409,10 @@ function deleteSortator(id){
 }
 
 // ---- Render ----
-function makeSortRow(dr, presence, daysInMonth, y, m, gridCols, canEdit){
+function makeSortRow(dr, presence, daysInMonth, y, m, gridCols, canAdd, canEdit){
+  if(canEdit===undefined) canEdit=canAdd;
   const dp = presence[dr.name]||{};
-  const delBtn = canEdit ? `<span onclick="deleteSortator('${dr.id}')" style="color:var(--red);cursor:pointer;font-size:10px;margin-left:4px" title="Șterge">✕</span>` : "";
+  const delBtn = canAdd ? `<span onclick="deleteSortator('${dr.id}')" style="color:var(--red);cursor:pointer;font-size:10px;margin-left:4px" title="Șterge">✕</span>` : "";
   let dRow = `<div class='tl-driver-row' style='font-size:12px'>${escapeHtml(dr.name)}${delBtn}</div>`;
   let gRow = `<div class='tl-row' style='grid-template-columns:${gridCols}'>`;
 
@@ -3455,7 +3470,9 @@ function renderSortatoriTimeline(){
   const mk=getSortKey();
   const presence=(sortState.presence&&sortState.presence[mk])||{};
   const colW=34, gridCols=`repeat(${days},${colW}px)`;
-  const canEdit=isAdminOrTania();
+  const _uk2=window.activeUserKey||"";
+  const canEdit=isAdminOrTania()||_uk2==="mihaela"||_uk2==="madalina";
+  const canAdd=isAdminOrTania();
 
   const perm   =drivers.filter(d=>!d.category||d.category==="permanent");
   const rotatie=drivers.filter(d=>d.category==="rotatie");
@@ -3476,27 +3493,27 @@ function renderSortatoriTimeline(){
   gH+="</div>";
 
   // Permanenți
-  const hP=makeCatHeader("Permanenți","#10b981",perm.length,gridCols,canEdit,group,"permanent",days);
+  const hP=makeCatHeader("Permanenți","#10b981",perm.length,gridCols,canAdd,group,"permanent",days);
   dH+=hP.dRow; gH+=hP.gRow;
-  perm.forEach(dr=>{ const r=makeSortRow(dr,presence,days,y,m,gridCols,canEdit); dH+=r.dRow; gH+=r.gRow; });
+  perm.forEach(dr=>{ const r=makeSortRow(dr,presence,days,y,m,gridCols,canAdd,canEdit); dH+=r.dRow; gH+=r.gRow; });
   if(!perm.length){ dH+=`<div class='tl-driver-row' style='color:var(--text-dim);font-style:italic;font-size:11px'>—</div>`; gH+=`<div class='tl-row' style='grid-template-columns:${gridCols}'></div>`; }
 
   // Rotații
-  const hR=makeCatHeader("Rotații","#f59e0b",rotatie.length,gridCols,canEdit,group,"rotatie",days);
+  const hR=makeCatHeader("Rotații","#f59e0b",rotatie.length,gridCols,canAdd,group,"rotatie",days);
   dH+=hR.dRow; gH+=hR.gRow;
-  rotatie.forEach(dr=>{ const r=makeSortRow(dr,presence,days,y,m,gridCols,canEdit); dH+=r.dRow; gH+=r.gRow; });
+  rotatie.forEach(dr=>{ const r=makeSortRow(dr,presence,days,y,m,gridCols,canAdd,canEdit); dH+=r.dRow; gH+=r.gRow; });
   if(!rotatie.length){ dH+=`<div class='tl-driver-row' style='color:var(--text-dim);font-style:italic;font-size:11px'>—</div>`; gH+=`<div class='tl-row' style='grid-template-columns:${gridCols}'></div>`; }
 
   // Camion
-  const hC=makeCatHeader("Camion","#8b5cf6",camion.length,gridCols,canEdit,group,"camion",days);
+  const hC=makeCatHeader("Camion","#8b5cf6",camion.length,gridCols,canAdd,group,"camion",days);
   dH+=hC.dRow; gH+=hC.gRow;
-  camion.forEach(dr=>{ const r=makeSortRow(dr,presence,days,y,m,gridCols,canEdit); dH+=r.dRow; gH+=r.gRow; });
+  camion.forEach(dr=>{ const r=makeSortRow(dr,presence,days,y,m,gridCols,canAdd,canEdit); dH+=r.dRow; gH+=r.gRow; });
   if(!camion.length){ dH+=`<div class='tl-driver-row' style='color:var(--text-dim);font-style:italic;font-size:11px'>—</div>`; gH+=`<div class='tl-row' style='grid-template-columns:${gridCols}'></div>`; }
 
   // Urgențe
-  const hU=makeCatHeader("Urgențe","#ef4444",urgenta.length,gridCols,canEdit,group,"urgenta",days);
+  const hU=makeCatHeader("Urgențe","#ef4444",urgenta.length,gridCols,canAdd,group,"urgenta",days);
   dH+=hU.dRow; gH+=hU.gRow;
-  urgenta.forEach(dr=>{ const r=makeSortRow(dr,presence,days,y,m,gridCols,canEdit); dH+=r.dRow; gH+=r.gRow; });
+  urgenta.forEach(dr=>{ const r=makeSortRow(dr,presence,days,y,m,gridCols,canAdd,canEdit); dH+=r.dRow; gH+=r.gRow; });
   if(!urgenta.length){ dH+=`<div class='tl-driver-row' style='color:var(--text-dim);font-style:italic;font-size:11px'>—</div>`; gH+=`<div class='tl-row' style='grid-template-columns:${gridCols}'></div>`; }
 
   dH+="</div>"; gH+="</div>";
@@ -4099,6 +4116,185 @@ function presDragEnd(){
   _presDrag={active:false, driverName:null, mode:null};
   logActivity("✓ Prezență drag",name,"lună "+mk);
   savePresState();
+}
+
+// ============================================================
+// IMPORT EXCEL → HTML
+// ============================================================
+let _importPending = [];
+
+function importExcelFile(e){
+  const files = [...e.target.files];
+  e.target.value = "";
+  if(!files.length) return;
+  _importPending = [];
+  document.getElementById("importExcelSub").textContent = "Se procesează "+files.length+" fișier(e)...";
+  document.getElementById("importExcelResults").innerHTML = '<div style="color:var(--text-dim);padding:20px;text-align:center">⏳ Se încarcă...</div>';
+  document.getElementById("importExcelConfirmBtn").style.display = "none";
+  openModal("modalImportExcel");
+  let done = 0;
+  const allResults = [];
+  files.forEach(file=>{
+    const reader = new FileReader();
+    reader.onload = function(ev){
+      try{
+        const data = new Uint8Array(ev.target.result);
+        const wb = XLSX.read(data, {type:"array", cellDates:true, cellNF:false});
+        const res = parseExcelForImport(wb, file.name);
+        allResults.push(...res);
+      }catch(err){ allResults.push({error: file.name+": "+err.message}); }
+      done++;
+      if(done===files.length) renderImportPreview(allResults);
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function parseExcelForImport(wb, fileName){
+  const skipSheets = new Set(["Angajati","Model"]);
+  const results = [];
+  const MONTH_MAP = {
+    januar:1,january:1,februar:2,february:2,märz:3,march:3,
+    april:4,mai:5,may:5,juni:6,june:6,juli:7,july:7,august:8,
+    september:9,oktober:10,october:10,november:11,dezember:12,december:12
+  };
+  wb.SheetNames.forEach(sheetName=>{
+    if(skipSheets.has(sheetName)) return;
+    const ws = wb.Sheets[sheetName];
+    if(!ws) return;
+    const nameCell = ws["F3"];
+    const personName = (nameCell && String(nameCell.v||"").trim()) || sheetName;
+    if(!personName) return;
+    const monthCell = ws["I3"], yearCell = ws["I4"];
+    const monthStr  = monthCell ? String(monthCell.v||"").trim() : "";
+    const yearVal   = yearCell  ? parseInt(yearCell.v) : 0;
+    const monthNum  = MONTH_MAP[monthStr.toLowerCase()] || 0;
+    if(!monthNum || !yearVal){ results.push({name:personName, skip:"lună necunoscută ("+monthStr+")"}); return; }
+    const dr = state.drivers.find(d=>
+      d.name.toLowerCase()===personName.toLowerCase()||
+      normalizeForSearch(d.name)===normalizeForSearch(personName)
+    );
+    if(!dr){ results.push({name:personName, monthNum, yearVal, monthStr, skip:"persoană negăsită în HTML"}); return; }
+
+    const changes = {leaves:[], krank:[], unpaid:[], prezente:[]};
+    let runType=null, runStart=null;
+    const flush=(type,startDay,endDay)=>{
+      const startStr=fmtDate(new Date(yearVal,monthNum-1,startDay));
+      const endStr=fmtDate(new Date(yearVal,monthNum-1,endDay));
+      if(type==="urlaub")   changes.leaves.push({start:startStr,end:endStr});
+      else if(type==="krank")  changes.krank.push({start:startStr,end:endStr});
+      else if(type==="unpaid") changes.unpaid.push({start:startStr,end:endStr});
+    };
+    for(let row=6; row<=36; row++){
+      const bCell=ws["B"+row];
+      if(!bCell||bCell.v===null||bCell.v===undefined) continue;
+      const dayNum=parseInt(bCell.v);
+      if(isNaN(dayNum)||dayNum<1||dayNum>31) continue;
+      const d=new Date(yearVal,monthNum-1,dayNum);
+      if(d.getMonth()!==monthNum-1) continue;
+      const dCell=ws["D"+row], hCell=ws["H"+row];
+      const rawStatus=hCell?String(hCell.v||hCell.w||"").trim():"";
+      const status=rawStatus.toLowerCase();
+      const hasArrival=dCell&&dCell.v!==null&&dCell.v!==undefined&&dCell.v!=="";
+      let dayType=null;
+      if(status==="urlaub"||status==="u") dayType="urlaub";
+      else if(status==="krank"||status==="krankenstand"||status==="k") dayType="krank";
+      else if(status.includes("sonder")||status==="s"||status==="sonderurlaub") dayType="unpaid";
+      else if(status==="feiertag"||status==="x"||status==="f") dayType="feiertag";
+      else if(hasArrival) dayType="prezent";
+      if(dayType==="urlaub"||dayType==="krank"||dayType==="unpaid"){
+        if(runType===dayType){}
+        else{ if(runType) flush(runType,runStart,dayNum-1); runType=dayType; runStart=dayNum; }
+      } else {
+        if(runType){ flush(runType,runStart,dayNum-1); runType=null; runStart=null; }
+      }
+      if(dayType==="prezent") changes.prezente.push(dayNum);
+    }
+    if(runType) flush(runType,runStart,new Date(yearVal,monthNum,0).getDate());
+
+    const existing={leaves:(dr.leaves||[]),krank:(dr.krankLeaves||[]),unpaid:(dr.unpaidLeaves||[])};
+    const isNew=(l,arr)=>!arr.some(e=>e.start===l.start&&e.end===l.end);
+    const newLeaves=changes.leaves.filter(l=>isNew(l,existing.leaves));
+    const newKrank=changes.krank.filter(l=>isNew(l,existing.krank));
+    const newUnpaid=changes.unpaid.filter(l=>isNew(l,existing.unpaid));
+    const mk=yearVal+"-"+String(monthNum).padStart(2,"0");
+    const existingPres=(presState.presence&&presState.presence[mk]&&presState.presence[mk][dr.name])||{};
+    const newPrezente=changes.prezente.filter(d=>existingPres[String(d)]!=="prezent");
+    results.push({
+      name:personName, drId:dr.id, drName:dr.name,
+      monthNum, yearVal, monthStr, fileName,
+      newLeaves, newKrank, newUnpaid, newPrezente,
+      totalNew: newLeaves.length+newKrank.length+newUnpaid.length+newPrezente.length
+    });
+  });
+  return results;
+}
+
+function renderImportPreview(results){
+  _importPending=results.filter(r=>!r.error&&!r.skip&&r.totalNew>0);
+  const errors=results.filter(r=>r.error);
+  const skipped=results.filter(r=>r.skip);
+  const empty=results.filter(r=>!r.error&&!r.skip&&r.totalNew===0);
+  const MRO=["","Ianuarie","Februarie","Martie","Aprilie","Mai","Iunie","Iulie","August","Septembrie","Octombrie","Noiembrie","Decembrie"];
+  document.getElementById("importExcelSub").textContent=results.length+" persoane · "+_importPending.length+" cu date noi";
+  document.getElementById("importExcelConfirmBtn").style.display=_importPending.length>0?"inline-flex":"none";
+  let html=`<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+    <div style="padding:7px 14px;background:rgba(16,185,129,0.15);border-radius:6px;font-size:13px">📥 De importat: <strong>${_importPending.length}</strong></div>
+    <div style="padding:7px 14px;background:rgba(100,100,100,0.1);border-radius:6px;font-size:13px">✅ Deja OK: <strong>${empty.length}</strong></div>
+    ${skipped.length?`<div style="padding:7px 14px;background:rgba(100,100,100,0.1);border-radius:6px;font-size:13px">⏭ Sărite: <strong>${skipped.length}</strong></div>`:""}
+    ${errors.length?`<div style="padding:7px 14px;background:rgba(239,68,68,0.15);border-radius:6px;font-size:13px">❌ Erori: <strong>${errors.length}</strong></div>`:""}
+  </div>`;
+  if(_importPending.length===0){
+    html+=`<div style="text-align:center;padding:30px;color:var(--text-dim)">Nimic de importat — toate datele există deja.</div>`;
+  } else {
+    html+=`<div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;padding:8px 12px;background:var(--bg-elev-2);border-radius:6px">⚠️ Datele existente <strong>nu se șterg</strong> — se adaugă doar ce lipsește.</div>`;
+    _importPending.forEach(r=>{
+      html+=`<div style="background:var(--bg-elev-2);border-radius:7px;padding:10px 14px;margin-bottom:8px;border-left:3px solid #10b981">`;
+      html+=`<div style="font-weight:700;font-size:13px;margin-bottom:6px">${escapeHtml(r.drName||r.name)} <span style="color:var(--text-dim);font-size:11px;font-weight:400">${MRO[r.monthNum]||""} ${r.yearVal}</span></div>`;
+      if(r.newLeaves.length)   html+=r.newLeaves.map(l=>`<div style="font-size:12px;padding:1px 0">🟡 Concediu: ${l.start} → ${l.end}</div>`).join("");
+      if(r.newKrank.length)    html+=r.newKrank.map(l=>`<div style="font-size:12px;padding:1px 0">🔵 Krank: ${l.start} → ${l.end}</div>`).join("");
+      if(r.newUnpaid.length)   html+=r.newUnpaid.map(l=>`<div style="font-size:12px;padding:1px 0">🟣 Fără plată (S): ${l.start} → ${l.end}</div>`).join("");
+      if(r.newPrezente.length) html+=`<div style="font-size:12px;padding:1px 0">✅ Prezențe: ziua ${r.newPrezente.join(", ")}</div>`;
+      html+=`</div>`;
+    });
+  }
+  if(skipped.length){
+    html+=`<div style="background:var(--bg-elev-2);border-radius:6px;padding:8px 12px;margin-top:8px;border-left:3px solid #666">`;
+    html+=`<div style="font-size:12px;font-weight:700;color:var(--text-dim);margin-bottom:4px">Sărite:</div>`;
+    html+=skipped.map(r=>`<div style="font-size:12px;color:var(--text-dim)">• ${escapeHtml(r.name)} — ${r.skip}</div>`).join("");
+    html+=`</div>`;
+  }
+  document.getElementById("importExcelResults").innerHTML=html;
+}
+
+async function confirmImportExcel(){
+  if(!_importPending.length) return;
+  const btn=document.getElementById("importExcelConfirmBtn");
+  btn.disabled=true; btn.textContent="⏳ Se importă...";
+  const MRO=["","Ian","Feb","Mar","Apr","Mai","Iun","Iul","Aug","Sep","Oct","Nov","Dec"];
+  let count=0;
+  _importPending.forEach(r=>{
+    const dr=state.drivers.find(d=>d.id===r.drId);
+    if(!dr) return;
+    r.newLeaves.forEach(l=>{ if(!dr.leaves)dr.leaves=[]; dr.leaves.push({start:l.start,end:l.end}); logActivity("📥 Import concediu",dr.name,l.start+"→"+l.end+" ("+MRO[r.monthNum]+" "+r.yearVal+")"); });
+    r.newKrank.forEach(l=>{ if(!dr.krankLeaves)dr.krankLeaves=[]; dr.krankLeaves.push({start:l.start,end:l.end}); logActivity("📥 Import krank",dr.name,l.start+"→"+l.end+" ("+MRO[r.monthNum]+" "+r.yearVal+")"); });
+    r.newUnpaid.forEach(l=>{ if(!dr.unpaidLeaves)dr.unpaidLeaves=[]; dr.unpaidLeaves.push({start:l.start,end:l.end}); logActivity("📥 Import S",dr.name,l.start+"→"+l.end+" ("+MRO[r.monthNum]+" "+r.yearVal+")"); });
+    if(r.newPrezente.length){
+      const mk=r.yearVal+"-"+String(r.monthNum).padStart(2,"0");
+      if(!presState.presence[mk]) presState.presence[mk]={};
+      if(!presState.presence[mk][dr.name]) presState.presence[mk][dr.name]={};
+      r.newPrezente.forEach(d=>{ presState.presence[mk][dr.name][String(d)]="prezent"; });
+      logActivity("📥 Import prezențe",dr.name,r.newPrezente.length+"z ("+MRO[r.monthNum]+" "+r.yearVal+")");
+    }
+    count++;
+  });
+  renderAll();
+  scheduleSave();
+  await savePresState();
+  toast("✅ Import complet: "+count+" persoane actualizate");
+  btn.disabled=false; btn.textContent="✅ Importă tot";
+  _importPending=[];
+  closeModal("modalImportExcel");
 }
 
 // ============================================================

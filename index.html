@@ -3349,7 +3349,6 @@ document.addEventListener("mousemove", e=>{ if(_sortDrag.active && e.buttons===0
 let _pickAvail=[], _pickGroup="", _pickCat="";
 
 function openAddSortatorCat(group, cat){
-  // Colecteaza driveri disponibili din modulul concedii
   const existingNames = new Set((sortState.drivers||[]).filter(d=>d.group===group).map(d=>d.name));
   const groupKey = group==="eiselfing"?"madalina":"raluca";
   const avail = (state.drivers||[]).filter(d=>{
@@ -3363,27 +3362,37 @@ function openAddSortatorCat(group, cat){
   _pickGroup = group;
   _pickCat   = cat;
   
-  const catLabel = cat==="permanent"?"Permanenți":cat==="rotatie"?"Rotații":"Urgențe";
+  const catLabel = cat==="permanent"?"Permanenți":cat==="rotatie"?"Rotații":cat==="camion"?"Camion":"Urgențe";
   const grpLabel = group==="eiselfing"?"Eiselfing":"Ruhstorf";
-  
+
+  const renderList = (filter)=>{
+    const filtered = filter ? avail.filter(d=>d.name.toLowerCase().includes(filter.toLowerCase())) : avail;
+    if(!filtered.length) return `<div style="padding:14px;text-align:center;color:var(--text-dim);font-size:13px">Niciun rezultat</div>`;
+    return filtered.map((dr,i)=>{
+      const origIdx = avail.indexOf(dr);
+      return `<label style="display:flex;align-items:center;gap:10px;padding:7px 4px;cursor:pointer;border-bottom:1px solid var(--border)">
+        <input type="checkbox" class="sort-pick-cb" value="${origIdx}" style="width:16px;height:16px;cursor:pointer">
+        <span style="font-size:13px">${escapeHtml(dr.name)}</span>
+      </label>`;
+    }).join("");
+  };
+
   let html = `<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Adaugă la ${catLabel} — ${grpLabel}</div>`;
-  html += '<div style="max-height:280px;overflow-y:auto">';
-  avail.forEach((dr,i)=>{
-    html += `<label style="display:flex;align-items:center;gap:10px;padding:7px 4px;cursor:pointer;border-bottom:1px solid var(--border)">
-      <input type="checkbox" class="sort-pick-cb" value="${i}" style="width:16px;height:16px;cursor:pointer">
-      <span style="font-size:13px">${escapeHtml(dr.name)}</span>
-    </label>`;
-  });
-  html += '</div>';
+  html += `<input type="text" id="sortPickSearch" placeholder="🔍 Caută persoană..." oninput="document.getElementById('sortPickList').innerHTML=window._sortRenderList(this.value)"
+    style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg-elev-2);color:var(--text);font-size:13px;margin-bottom:8px;box-sizing:border-box">`;
+  html += `<div id="sortPickList" style="max-height:260px;overflow-y:auto">${renderList("")}</div>`;
   html += `<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
     <button class="btn btn-secondary" onclick="closeModal('modalDay')">Anulează</button>
     <button class="btn" onclick="confirmSortPick()">+ Adaugă</button>
   </div>`;
+
+  window._sortRenderList = renderList;
   
   document.getElementById("modalDayTitle").textContent = catLabel+" — "+grpLabel;
   document.getElementById("modalDaySub").textContent   = avail.length+" persoane disponibile";
   document.getElementById("dayDriversList").innerHTML  = html;
   openModal("modalDay");
+  setTimeout(()=>{ const s=document.getElementById("sortPickSearch"); if(s)s.focus(); },150);
 }
 
 function confirmSortPick(){
@@ -3393,8 +3402,10 @@ function confirmSortPick(){
     const dr = _pickAvail[parseInt(cb.value)];
     if(dr) sortState.drivers.push({id:uid(),name:dr.name,group:_pickGroup,category:_pickCat});
   });
-  renderSortatoriTimeline(); // render imediat
-  saveSortState();           // salveaza in Firestore
+  // Sortare alfabetică după adăugare
+  sortState.drivers.sort((a,b)=>a.name.localeCompare(b.name,"ro"));
+  renderSortatoriTimeline();
+  saveSortState();
   closeModal("modalDay");
   toast("✓ "+checked.length+" sortator(i) adăugat(i)");
 }

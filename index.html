@@ -435,11 +435,17 @@
   }
   .nav button:hover { background: var(--bg-elev-2); }
   .nav h2 {
-    font-size: 20px;
-    font-weight: 600;
-    min-width: 200px;
+    font-size: 16px;
+    font-weight: 900;
+    min-width: 160px;
     text-align: center;
-    text-transform: capitalize;
+    text-transform: uppercase;
+    letter-spacing: 2.5px;
+    color: var(--accent);
+    background: var(--bg-elev-2);
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 18px;
   }
   
   .mod-tab {
@@ -3027,7 +3033,7 @@ function renderHolidayBanner(){
 
 function renderCalendar(){
   const y=currentDate.getFullYear(),m=currentDate.getMonth();
-  document.getElementById("monthLabel").textContent=MONTHS[m]+" "+y;
+  document.getElementById("monthLabel").textContent=MONTHS[m];
   const _yl=document.getElementById("yearLabel"); if(_yl)_yl.textContent=y;
   const today=new Date(),firstDay=new Date(y,m,1),lastDay=new Date(y,m+1,0);
   const startDow=(firstDay.getDay()+6)%7;
@@ -3238,7 +3244,7 @@ document.addEventListener("mousemove",e=>{if(tlDrag.active&&e.buttons!==1)tlDrag
 
 function renderTimeline(){
   const y=currentDate.getFullYear(),m=currentDate.getMonth(),daysInMonth=new Date(y,m+1,0).getDate(),today=new Date();
-  document.getElementById("monthLabel").textContent=MONTHS[m]+" "+y;
+  document.getElementById("monthLabel").textContent=MONTHS[m];
   const _yl2=document.getElementById("yearLabel"); if(_yl2)_yl2.textContent=y;
   const tl=document.getElementById("timeline");
   const visDrivers=getVisibleDrivers();

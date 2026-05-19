@@ -991,7 +991,7 @@
     </div>
     <button class="btn btn-secondary btn-small" id="addDriverBtn" onclick="openAddDriver()" style="width:100%; margin-bottom:6px">+ Persoană nouă</button>
     <button class="btn btn-secondary btn-small" id="pinMgrBtn" onclick="openPinAdmin()" style="width:100%; margin-bottom:6px; display:none">🔐 Coduri PIN</button>
-    <button class="btn btn-secondary btn-small" id="loadBackupBtn" onclick="loadLastFirestoreBackup()" style="width:100%; margin-bottom:6px; display:none">🔄 Restaurează backup Firestore</button>
+    <button class="btn btn-secondary btn-small" id="loadBackupBtn" onclick="openBackupManager()" style="width:100%; margin-bottom:6px; display:none">🔄 Manager Backup / Restaurare</button>
     <button class="btn btn-secondary btn-small" id="actLogBtn" onclick="openActivityLog()" style="width:100%; margin-bottom:6px; display:none; border-color:#818cf8; color:#818cf8">📋 Istoric activitate</button>
     <button class="btn btn-secondary btn-small" id="verifyExcelBtn" onclick="document.getElementById('verifyExcelFile').click()" style="width:100%; margin-bottom:6px; display:none; border-color:#a78bfa; color:#a78bfa">📊 Verifică Excel vs HTML</button>
     <input type="file" id="verifyExcelFile" accept=".xlsx,.xlsm,.xls" style="display:none" onchange="verifyExcelFile(event)">
@@ -1252,6 +1252,32 @@
     <div id="pinAdminList" style="margin-top:12px"></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('modalPinAdmin')">Închide</button>
+    </div>
+  </div>
+</div>
+
+<!-- BACKUP MANAGER MODAL -->
+<div class="modal-bg" id="modalBackupManager">
+  <div class="modal" style="max-width:860px;max-height:92vh;overflow-y:auto">
+    <h3>🔄 Manager Backup / Restaurare</h3>
+    <div class="modal-sub" id="backupManagerSub">Se încarcă backup-urile disponibile...</div>
+    <div id="backupManagerList" style="margin-top:12px"></div>
+    <div id="backupManagerPreview" style="margin-top:12px;display:none">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <button class="btn btn-secondary btn-small" onclick="document.getElementById('backupManagerPreview').style.display='none';document.getElementById('backupManagerList').style.display='block'">← Înapoi la listă</button>
+        <span id="backupPreviewTitle" style="font-size:13px;font-weight:700"></span>
+      </div>
+      <div id="backupPreviewContent"></div>
+      <div style="margin-top:14px;padding:10px;background:rgba(239,68,68,0.1);border-radius:6px;border:1px solid rgba(239,68,68,0.3);font-size:12px;color:var(--red)">
+        ⚠️ Restaurarea va înlocui datele curente cu cele din backup. Acțiunea nu poate fi anulată.
+      </div>
+      <div class="modal-actions" style="margin-top:10px">
+        <button class="btn btn-secondary" onclick="document.getElementById('backupManagerPreview').style.display='none';document.getElementById('backupManagerList').style.display='block'">Anulează</button>
+        <button class="btn" id="backupRestoreConfirmBtn" onclick="confirmRestoreBackup()" style="background:#ef4444;border-color:#ef4444">🔄 Restaurează acest backup</button>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modalBackupManager')">Închide</button>
     </div>
   </div>
 </div>
@@ -1544,19 +1570,26 @@ function scheduleSave(){
 
 function buildCompleteBackup(){
   const backup = {
-    version: 2,
+    version: 3,
     savedAt: new Date().toISOString(),
+    thresholds: state.thresholds||{warn:3,crit:5},
     drivers: (state.drivers||[]).map(dr=>({
-      id:            dr.id,
-      name:          dr.name,
-      visibleTo:     dr.visibleTo||[],
-      maxDays:       dr.maxDays||0,
-      carryOverDays: dr.carryOverDays||0,
-      carryOverByYear: dr.carryOverByYear||{},
-      leaves:        dr.leaves||[],
-      krankLeaves:   dr.krankLeaves||[],
-      unpaidLeaves:  dr.unpaidLeaves||[]
-    }))
+      id:             dr.id,
+      name:           dr.name,
+      visibleTo:      dr.visibleTo||[],
+      maxDays:        dr.maxDays||0,
+      carryOverDays:  dr.carryOverDays||0,
+      carryOverByYear:dr.carryOverByYear||{},
+      leaves:         dr.leaves||[],
+      krankLeaves:    dr.krankLeaves||[],
+      unpaidLeaves:   dr.unpaidLeaves||[]
+    })),
+    prezente: (presState.presence&&Object.keys(presState.presence).length>0)
+      ? JSON.parse(JSON.stringify(presState.presence))
+      : {},
+    sortatori: (sortState.drivers&&sortState.drivers.length>0)
+      ? { drivers: JSON.parse(JSON.stringify(sortState.drivers)), presence: JSON.parse(JSON.stringify(sortState.presence||{})) }
+      : null
   };
   return backup;
 }
@@ -2684,42 +2717,193 @@ function importBackup(e){
   reader.readAsText(file);e.target.value="";
 }
 
-async function loadLastFirestoreBackup(){
+let _backupDocs = []; // cache backup docs
+let _selectedBackupIdx = -1;
+
+async function openBackupManager(){
   if(!isAdminOrTania()){toast("Doar Admin sau Tania",true);return;}
+  openModal("modalBackupManager");
+  document.getElementById("backupManagerPreview").style.display="none";
+  document.getElementById("backupManagerList").style.display="block";
+  document.getElementById("backupManagerSub").textContent="Se încarcă backup-urile...";
+  document.getElementById("backupManagerList").innerHTML='<div style="color:var(--text-dim);padding:20px;text-align:center">⏳ Se încarcă...</div>';
   try{
-    setSaveStatus("saving","Se încarcă lista backup-uri...");
-    const snap = await db.collection("daily_backup").orderBy("savedAt","desc").limit(9).get();
-    if(snap.empty){toast("Nu există backup în Firestore",true);setSaveStatus("ok","Gata");return;}
-    // Show list of available backups
-    const list = snap.docs.map((d,i)=>{
-      const bd=d.data();
-      return {id:d.id, date:bd.date||d.id, time:bd.time||"?", count:bd.count||0, savedBy:bd.savedBy||"?", leaves:bd.leaves};
+    const snap = await db.collection("daily_backup").orderBy("savedAt","desc").limit(20).get();
+    if(snap.empty){
+      document.getElementById("backupManagerList").innerHTML='<div style="color:var(--text-dim);padding:20px;text-align:center">Nu există backup-uri în Firestore</div>';
+      document.getElementById("backupManagerSub").textContent="0 backup-uri găsite";
+      return;
+    }
+    _backupDocs = snap.docs.map(d=>({id:d.id, ...d.data()}));
+    document.getElementById("backupManagerSub").textContent=_backupDocs.length+" backup-uri disponibile";
+    renderBackupList();
+  }catch(e){
+    document.getElementById("backupManagerList").innerHTML='<div style="color:var(--red);padding:20px">Eroare: '+e.message+'</div>';
+  }
+}
+
+function renderBackupList(){
+  const MONTHS_RO=["","Ian","Feb","Mar","Apr","Mai","Iun","Iul","Aug","Sep","Oct","Nov","Dec"];
+  let html="";
+  _backupDocs.forEach((bd,i)=>{
+    const ver = bd.version||1;
+    const driverCount = bd.driverCount || (bd.drivers?Object.keys(bd.drivers).length:0) || bd.count || 0;
+    const hasPrezente = !!(bd.prezente && Object.keys(bd.prezente).length>0);
+    const hasSortatori = !!(bd.sortatori && bd.sortatori.drivers && bd.sortatori.drivers.length>0);
+    const savedAt = bd.savedAt ? new Date(bd.savedAt) : null;
+    const dateStr = savedAt ? savedAt.toLocaleDateString("ro-RO",{weekday:"short",day:"2-digit",month:"short",year:"numeric"}) : (bd.date||bd.id);
+    const timeStr = savedAt ? savedAt.toLocaleTimeString("ro-RO",{hour:"2-digit",minute:"2-digit"}) : (bd.time||"?");
+    const byUser = bd.savedBy||"?";
+    const isLatest = i===0;
+
+    html+=`<div style="background:var(--bg-elev-2);border-radius:8px;padding:12px 14px;margin-bottom:8px;border:1px solid ${isLatest?"var(--accent)":"var(--border)"};cursor:pointer;transition:border-color 0.2s" onclick="previewBackup(${i})">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+        <div>
+          <div style="font-weight:700;font-size:13px;margin-bottom:4px">
+            ${isLatest?'<span style="background:var(--accent);color:#000;font-size:10px;font-weight:800;border-radius:3px;padding:1px 5px;margin-right:6px">ULTIMUL</span>':""}
+            ${escapeHtml(dateStr)} · ${timeStr}
+          </div>
+          <div style="font-size:12px;color:var(--text-dim);display:flex;gap:10px;flex-wrap:wrap">
+            <span>👤 ${driverCount} persoane</span>
+            ${hasPrezente?'<span style="color:var(--green)">✓ Prezențe</span>':""}
+            ${hasSortatori?'<span style="color:var(--accent)">✓ Sortatori</span>':""}
+            <span>💾 v${ver}</span>
+            <span>de: ${escapeHtml(byUser)}</span>
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-small" style="white-space:nowrap" onclick="event.stopPropagation();previewBackup(${i})">👁 Previzualizare</button>
+      </div>
+    </div>`;
+  });
+  document.getElementById("backupManagerList").innerHTML=html;
+}
+
+function previewBackup(idx){
+  _selectedBackupIdx=idx;
+  const bd=_backupDocs[idx];
+  const savedAt=bd.savedAt?new Date(bd.savedAt):null;
+  const dateStr=savedAt?savedAt.toLocaleString("ro-RO"):(bd.date||bd.id)+" "+bd.time;
+  document.getElementById("backupPreviewTitle").textContent="Backup din: "+dateStr;
+
+  // Build preview
+  const MONTHS_RO=["","Ian","Feb","Mar","Apr","Mai","Iun","Iul","Aug","Sep","Oct","Nov","Dec"];
+  let html="";
+
+  // Drivers section
+  const driversObj = bd.drivers||{};
+  const driversArr = Array.isArray(driversObj)?driversObj:Object.values(driversObj);
+  html+=`<div style="font-size:12px;font-weight:700;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">👥 Persoane (${driversArr.length})</div>`;
+  html+=`<div style="background:var(--bg-elev-2);border-radius:6px;padding:8px;margin-bottom:10px;max-height:180px;overflow-y:auto">`;
+  if(driversArr.length===0){
+    // Format vechi cu leaves
+    const leavesObj=bd.leaves||{};
+    const names=Object.keys(leavesObj);
+    html+=names.map(n=>{
+      const d=leavesObj[n];
+      const parts=[];
+      if(d.leaves&&d.leaves.length)parts.push((d.leaves.length)+"U");
+      if(d.krankLeaves&&d.krankLeaves.length)parts.push(d.krankLeaves.length+"K");
+      if(d.unpaidLeaves&&d.unpaidLeaves.length)parts.push(d.unpaidLeaves.length+"S");
+      return `<div style="font-size:12px;padding:2px 0;border-bottom:1px solid var(--border)">${escapeHtml(n)} ${parts.length?"("+parts.join(", ")+")":""}</div>`;
+    }).join("");
+  } else {
+    html+=driversArr.map(d=>{
+      const lv=(d.leaves||[]).length, kr=(d.krankLeaves||[]).length, up=(d.unpaidLeaves||[]).length;
+      const parts=[];
+      if(lv)parts.push(lv+" concedii");if(kr)parts.push(kr+" krank");if(up)parts.push(up+" S");
+      return `<div style="font-size:12px;padding:2px 0;border-bottom:1px solid var(--border)">${escapeHtml(d.name||"?")} <span style="color:var(--text-dim)">${parts.length?"("+parts.join(", ")+")":" — fără absențe"}</span></div>`;
+    }).join("");
+  }
+  html+=`</div>`;
+
+  // Prezente
+  if(bd.prezente&&Object.keys(bd.prezente).length>0){
+    const luni=Object.keys(bd.prezente).sort();
+    html+=`<div style="font-size:12px;font-weight:700;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">✓ Prezențe salvate</div>`;
+    html+=`<div style="background:var(--bg-elev-2);border-radius:6px;padding:8px;margin-bottom:10px;font-size:12px">`;
+    luni.forEach(mk=>{
+      const persoane=Object.keys(bd.prezente[mk]||{});
+      html+=`<div style="padding:2px 0"><strong>${mk}</strong>: ${persoane.length} persoane cu prezențe</div>`;
     });
-    // Build selection dialog
-    const opts = list.map((b,i)=>`${i+1}. ${b.date} ora ${b.time} (${b.count} soferi, de ${b.savedBy})`).join("\n");
-    const choice = prompt("Alege backup-ul de restaurat (scrie numărul 1-"+list.length+"):\n\n"+opts);
-    if(!choice) return;
-    const idx = parseInt(choice)-1;
-    if(idx<0||idx>=list.length){toast("Număr invalid",true);return;}
-    const selected = list[idx];
-    if(!selected.drivers && !selected.leaves){toast("Backup fără date utilizabile",true);return;}
-    if(!confirm("Restaurezi backup-ul din "+selected.date+" ora "+selected.time+"?\nConcedii, krank, fără plată, zile disponibile și reportate vor fi înlocuite."))return;
+    html+=`</div>`;
+  }
+
+  // Sortatori
+  if(bd.sortatori&&bd.sortatori.drivers&&bd.sortatori.drivers.length>0){
+    html+=`<div style="font-size:12px;font-weight:700;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">📋 Sortatori (${bd.sortatori.drivers.length})</div>`;
+    html+=`<div style="background:var(--bg-elev-2);border-radius:6px;padding:8px;margin-bottom:10px;font-size:12px;max-height:100px;overflow-y:auto">`;
+    html+=bd.sortatori.drivers.map(d=>`<span style="margin-right:8px">${escapeHtml(d.name)}</span>`).join("");
+    html+=`</div>`;
+  }
+
+  document.getElementById("backupPreviewContent").innerHTML=html;
+  document.getElementById("backupManagerList").style.display="none";
+  document.getElementById("backupManagerPreview").style.display="block";
+}
+
+async function confirmRestoreBackup(){
+  if(_selectedBackupIdx<0||_selectedBackupIdx>=_backupDocs.length) return;
+  const bd=_backupDocs[_selectedBackupIdx];
+  const btn=document.getElementById("backupRestoreConfirmBtn");
+  btn.disabled=true; btn.textContent="⏳ Se restaurează...";
+
+  try{
     let restored=0;
-    if(selected.drivers){
-      restored=restoreCompleteBackup(selected);
-    } else if(selected.leaves){
+
+    // Restaurează persoane + concedii
+    const driversObj=bd.drivers||{};
+    const driversArr=Array.isArray(driversObj)?driversObj:Object.values(driversObj);
+
+    if(driversArr.length>0){
+      driversArr.forEach(bkDr=>{
+        const dr=state.drivers.find(d=>d.id===bkDr.id||d.name===bkDr.name);
+        if(dr){
+          dr.leaves        = bkDr.leaves||[];
+          dr.krankLeaves   = bkDr.krankLeaves||[];
+          dr.unpaidLeaves  = bkDr.unpaidLeaves||[];
+          if(bkDr.maxDays!==undefined)       dr.maxDays=bkDr.maxDays;
+          if(bkDr.carryOverDays!==undefined) dr.carryOverDays=bkDr.carryOverDays;
+          if(bkDr.carryOverByYear)           dr.carryOverByYear=bkDr.carryOverByYear;
+          restored++;
+        }
+      });
+    } else if(bd.leaves){
+      // Format vechi
       state.drivers.forEach(dr=>{
-        if(selected.leaves[dr.name]){
-          const bk=selected.leaves[dr.name];
+        if(bd.leaves[dr.name]){
+          const bk=bd.leaves[dr.name];
           dr.leaves=bk.leaves||[];dr.krankLeaves=bk.krankLeaves||[];dr.unpaidLeaves=bk.unpaidLeaves||[];
           restored++;
         }
       });
     }
-    scheduleSave(); renderAll();
-    setSaveStatus("ok","Backup restaurat ✓");
-    toast("✓ Backup din "+selected.date+" ("+selected.time+"): "+restored+" persoane restaurate");
-  }catch(e){toast("Eroare: "+e.message,true);setSaveStatus("error","Eroare backup");}
+
+    // Restaurează prezențe
+    if(bd.prezente&&Object.keys(bd.prezente).length>0){
+      Object.assign(presState.presence, bd.prezente);
+      await savePresState();
+    }
+
+    // Restaurează sortatori
+    if(bd.sortatori&&bd.sortatori.drivers&&bd.sortatori.drivers.length>0){
+      sortState.drivers=bd.sortatori.drivers;
+      sortState.presence=bd.sortatori.presence||sortState.presence||{};
+      await saveSortState();
+    }
+
+    if(bd.thresholds) state.thresholds=bd.thresholds;
+
+    scheduleSave();
+    renderAll();
+    if(document.getElementById("sortatoriTimeline")) renderSortatoriTimeline();
+    logActivity("🔄 Backup restaurat","—","backup din "+(bd.date||bd.savedAt||bd.id)+", "+restored+" persoane");
+    toast("✅ Restaurat: "+restored+" persoane, prezențe și sortatori");
+    closeModal("modalBackupManager");
+  }catch(e){
+    toast("Eroare restaurare: "+e.message,true);
+    console.error(e);
+  }
+  btn.disabled=false; btn.textContent="🔄 Restaurează acest backup";
 }
 
 // Manual download of current leaves data
@@ -2733,7 +2917,6 @@ function uploadLocalBackup(e){
       const bk=JSON.parse(ev.target.result);
       let restored=0;
       if(bk.drivers && bk.drivers.length>0){
-        // Format nou — înlocuiește complet lista de persoane
         state.drivers = bk.drivers.map(d=>({
           id:             d.id||uid(),
           name:           d.name,
@@ -2747,21 +2930,32 @@ function uploadLocalBackup(e){
         }));
         restored = state.drivers.length;
       } else if(bk.leaves){
-        // Format vechi — creează persoane dacă nu există
         Object.entries(bk.leaves).forEach(([name,data])=>{
           let dr=state.drivers.find(d=>d.name===name);
-          if(!dr){
-            dr={id:uid(),name,visibleTo:["tania"],maxDays:0,carryOverDays:0,carryOverByYear:{},leaves:[],krankLeaves:[],unpaidLeaves:[]};
-            state.drivers.push(dr);
-          }
-          dr.leaves=data.leaves||[];
-          dr.krankLeaves=data.krankLeaves||[];
-          dr.unpaidLeaves=data.unpaidLeaves||[];
+          if(!dr){ dr={id:uid(),name,visibleTo:["tania"],maxDays:0,carryOverDays:0,carryOverByYear:{},leaves:[],krankLeaves:[],unpaidLeaves:[]}; state.drivers.push(dr); }
+          dr.leaves=data.leaves||[]; dr.krankLeaves=data.krankLeaves||[]; dr.unpaidLeaves=data.unpaidLeaves||[];
           restored++;
         });
       } else throw new Error("Format necunoscut");
-      scheduleSave();renderAll();
-      toast("✓ Restaurat complet: "+restored+" persoane");
+
+      if(bk.thresholds) state.thresholds=bk.thresholds;
+
+      // Restaurează prezențe
+      if(bk.prezente && Object.keys(bk.prezente).length>0){
+        Object.assign(presState.presence, bk.prezente);
+        savePresState();
+      }
+      // Restaurează sortatori
+      if(bk.sortatori && bk.sortatori.drivers && bk.sortatori.drivers.length>0){
+        sortState.drivers  = bk.sortatori.drivers;
+        sortState.presence = bk.sortatori.presence||sortState.presence||{};
+        saveSortState();
+      }
+
+      scheduleSave(); renderAll();
+      if(document.getElementById("sortatoriTimeline")) renderSortatoriTimeline();
+      logActivity("📂 Backup fișier restaurat","—",restored+" persoane");
+      toast("✓ Restaurat complet: "+restored+" persoane + prezențe + sortatori");
     }catch(err){toast("Eroare: "+err.message,true);console.error(err);}
   };
   reader.readAsText(file);e.target.value="";

@@ -1496,6 +1496,12 @@ function scheduleSave(){
   saveTimer = setTimeout(async()=>{
     try{
       isSaving = true;
+      // PROTECȚIE: nu salva niciodată dacă lista de persoane e goală
+      if(!state.drivers || state.drivers.length === 0){
+        console.warn("scheduleSave: drivers empty — ABORTED");
+        setSaveStatus("error","⚠️ Salvare anulată — listă goală!");
+        return;
+      }
       const uk = window.activeUserKey||"tania";
       if(uk==="tania"||uk==="admin"){
         const byDoc = {raluca:[],madalina:[],corina:[],tania:[]};
@@ -1577,28 +1583,54 @@ async function triggerAutoBackup(time){
   try{
     const now = new Date();
     const today = fmtDate(now);
-    const hour = String(now.getHours()).padStart(2,"0");
-    // Slot: morning(0-8), midday(8-16), evening(16-24)
     const slot = now.getHours()<8?"A":now.getHours()<16?"B":"C";
-    const docId = today+"_"+slot; // max 3 versions per day
-    // Salvează DOAR concedii/krank/unpaid per sofer
-    const leavesOnly = {};
+    const docId = today+"_"+slot;
+
+    // PROTECȚIE: nu salva dacă datele sunt goale
+    if(!state.drivers || state.drivers.length === 0){
+      console.warn("triggerAutoBackup: drivers empty — ABORTED");
+      return;
+    }
+
+    // Backup complet: concedii + maxDays + carryOver + prezente + sortatori + thresholds
+    const driversData = {};
     (state.drivers||[]).forEach(dr=>{
-      leavesOnly[dr.name]={
-        leaves:      (dr.leaves||[]),
-        krankLeaves: (dr.krankLeaves||[]),
-        unpaidLeaves:(dr.unpaidLeaves||[])
+      driversData[dr.id||dr.name] = {
+        name:           dr.name,
+        visibleTo:      dr.visibleTo||[],
+        maxDays:        dr.maxDays||0,
+        carryOverDays:  dr.carryOverDays||0,
+        carryOverByYear:dr.carryOverByYear||{},
+        leaves:         dr.leaves||[],
+        krankLeaves:    dr.krankLeaves||[],
+        unpaidLeaves:   dr.unpaidLeaves||[]
       };
     });
-    await db.collection("daily_backup").doc(docId).set({
-      leaves:    leavesOnly,
+
+    // Sortatori — salvează doar dacă nu e goală
+    const sortatoriSnap = (sortState.drivers&&sortState.drivers.length>0)
+      ? { drivers: sortState.drivers, presence: sortState.presence||{} }
+      : null;
+
+    // Prezențe
+    const prezenteSnap = (presState.presence && Object.keys(presState.presence).length>0)
+      ? presState.presence : null;
+
+    const backupDoc = {
+      version:   3,
       savedAt:   now.toISOString(),
-      time:      time,
+      time,
       date:      today,
-      slot:      slot,
-      count:     Object.keys(leavesOnly).length,
-      savedBy:   window.activeUserKey||"unknown"
-    });
+      slot,
+      savedBy:   window.activeUserKey||"unknown",
+      driverCount: state.drivers.length,
+      thresholds: state.thresholds||{warn:3,crit:5},
+      drivers:   driversData,
+      ...(sortatoriSnap ? {sortatori: sortatoriSnap} : {}),
+      ...(prezenteSnap  ? {prezente:  prezenteSnap}  : {})
+    };
+
+    await db.collection("daily_backup").doc(docId).set(backupDoc);
     localStorage.setItem("mtc_last_backup_time", time);
     localStorage.setItem("mtc_last_backup_date", today);
     updateBackupInfoLine(today, time);
@@ -3247,8 +3279,12 @@ function goSortToday(){ sortCurrentDate = new Date(); renderSortatoriTimeline();
 // ---- Firestore ----
 async function saveSortState(){
   try{
+    // PROTECȚIE: nu salva dacă sortatori e goală
+    if(!sortState.drivers || sortState.drivers.length === 0){
+      console.warn("saveSortState: empty — ABORTED");
+      return;
+    }
     await db.collection("sortatori").doc("state").set(JSON.parse(JSON.stringify(sortState)));
-    console.log("Sortatori saved:", sortState.drivers.length, "drivers");
   }catch(e){ console.error("sort save",e); }
 }
 
@@ -3339,7 +3375,19 @@ function sortDragApply(driverName, day){
 
 function sortDragEnd(){
   if(!_sortDrag.active) return;
+  const name = _sortDrag.driverName;
+  const mode = _sortDrag.mode;
+  const mk = getSortKey();
   _sortDrag = {active:false, driverName:null, mode:null};
+  // Numărăm zilele marcate în luna curentă
+  const dp = (sortState.presence[mk]&&sortState.presence[mk][name])||{};
+  const pCount = Object.values(dp).filter(v=>v==="prezent").length;
+  const aCount = Object.values(dp).filter(v=>v==="absent").length;
+  logActivity(
+    mode==="prezent"?"✓ Prezență sortator":mode==="absent"?"✗ Absență sortator":"🗑 Ștergere sortator",
+    name,
+    "drag — "+mk+" (prezent:"+pCount+", absent:"+aCount+")"
+  );
   saveSortState();
 }
 document.addEventListener("mouseup", ()=>{ if(_sortDrag.active) sortDragEnd(); });
@@ -3398,12 +3446,13 @@ function openAddSortatorCat(group, cat){
 function confirmSortPick(){
   const checked = [...document.querySelectorAll(".sort-pick-cb:checked")];
   if(!checked.length){ toast("Selectează cel puțin o persoană",true); return; }
+  const names = [];
   checked.forEach(cb=>{
     const dr = _pickAvail[parseInt(cb.value)];
-    if(dr) sortState.drivers.push({id:uid(),name:dr.name,group:_pickGroup,category:_pickCat});
+    if(dr){ sortState.drivers.push({id:uid(),name:dr.name,group:_pickGroup,category:_pickCat}); names.push(dr.name); }
   });
-  // Sortare alfabetică după adăugare
   sortState.drivers.sort((a,b)=>a.name.localeCompare(b.name,"ro"));
+  names.forEach(n=>logActivity("➕ Sortator adăugat", n, _pickCat+" — "+_pickGroup));
   renderSortatoriTimeline();
   saveSortState();
   closeModal("modalDay");
@@ -3414,6 +3463,7 @@ function deleteSortator(id){
   const dr = (sortState.drivers||[]).find(d=>d.id===id);
   if(!dr||!confirm("Ștergi "+dr.name+" din sortatori?")) return;
   sortState.drivers = sortState.drivers.filter(d=>d.id!==id);
+  logActivity("🗑 Sortator șters", dr.name, dr.category+" — "+dr.group);
   renderSortatoriTimeline();
   saveSortState();
   toast("🗑 "+dr.name+" șters");
@@ -4428,7 +4478,13 @@ function openSortPrintModal(){
         const dr=row.dr;
         const dp=(presence[dr.name])||{};
         const concediuDr=state.drivers.find(d=>d.name===dr.name);
-        html+=`<tr><td class="name-col">${escapeHtml(dr.name)}</td>`;
+        // Numără prezențele din luna curentă
+        let prez=0;
+        for(let dn=1;dn<=days;dn++){ if(dp[String(dn)]==="prezent") prez++; }
+        const badge = prez>0
+          ? `<span style="display:inline-block;min-width:16px;height:16px;line-height:16px;background:#2e7d32;color:#fff;font-size:8px;font-weight:900;border-radius:3px;text-align:center;padding:0 2px;margin-right:5px;vertical-align:middle">${prez}</span>`
+          : `<span style="display:inline-block;width:16px;height:16px;border:1px solid #ccc;border-radius:3px;margin-right:5px;vertical-align:middle"></span>`;
+        html+=`<tr><td class="name-col">${badge}${escapeHtml(dr.name)}</td>`;
         for(let dn=1;dn<=days;dn++){
           const d=new Date(y,m,dn);
           if(isSunday(d)||getHoliday(d)){html+=`<td class="sun"></td>`;continue;}

@@ -1706,7 +1706,7 @@ function loadBackupInfoFromStorage(){
 // ============================================================
 // PIN SYSTEM — stored in Firestore doc "pins"
 // ============================================================
-const PIN_SESSION_MINS = 10;
+const PIN_SESSION_MINS = 1; // 1 minut inactivitate = deconectare automată
 let pinState = {userKey:null, mode:"enter", entered:"", firstPin:"", attempts:0};
 let autoLogoutTimer = null;
 
@@ -1723,23 +1723,46 @@ function clearSession(uk){ localStorage.removeItem("mtc_s_"+uk); }
 // Clear all sessions on page load — always ask PIN
 ["raluca","tania","madalina","corina"].forEach(uk=>clearSession(uk));
 
+// Reset complet al memoriei aplicației — folosit la logout și auto-logout
+function fullReset(){
+  // Oprim toți listenerii Firestore
+  unsubAll();
+  if(_sortUnsub){ try{_sortUnsub();}catch(e){} _sortUnsub=null; }
+  if(_presUnsub){ try{_presUnsub();}catch(e){} _presUnsub=null; }
+  // Reset complet state în memorie
+  state      = {drivers:[], thresholds:{warn:3,crit:5}};
+  presState  = {presence:{}};
+  sortState  = {drivers:[], presence:{}};
+  // Curăță timere
+  if(autoLogoutTimer){ clearTimeout(autoLogoutTimer); autoLogoutTimer=null; }
+  if(saveTimer){ clearTimeout(saveTimer); saveTimer=null; }
+  // Curăță orice date vizuale sensibile
+  try{
+    const tl=document.getElementById("timeline"); if(tl) tl.innerHTML="";
+    const st=document.getElementById("sortatoriTimeline"); if(st) st.innerHTML="";
+    const dl=document.getElementById("driversList"); if(dl) dl.innerHTML="";
+    const cal=document.getElementById("calendarGrid"); if(cal) cal.innerHTML="";
+  }catch(e){}
+}
+
 function resetAutoLogout(){
   if(autoLogoutTimer) clearTimeout(autoLogoutTimer);
   autoLogoutTimer = setTimeout(()=>{
     const uk = window.activeUserKey;
-    if(uk&&uk!=="admin"){
+    if(uk && uk!=="admin"){
       clearSession(uk);
+      const prevUser = uk;
       window.activeUserKey = null;
-      state = {drivers:[],thresholds:{warn:3,crit:5}};
-      unsubAll();
+      fullReset();
       document.getElementById("appRoot").style.display = "none";
-      setTimeout(()=>showPinScreen(uk),100);
       document.getElementById("authScreen").style.display = "flex";
+      // Arată ecranul de PIN al utilizatorului curent (nu cel anterior)
+      setTimeout(()=>showPinScreen(prevUser), 150);
     }
   }, PIN_SESSION_MINS*60*1000);
 }
-["click","keydown","touchstart"].forEach(ev=>
-  document.addEventListener(ev,()=>{ if(window.activeUserKey&&window.activeUserKey!=="admin") resetAutoLogout(); },{passive:true})
+["click","keydown","touchstart","mousemove","scroll"].forEach(ev=>
+  document.addEventListener(ev,()=>{ if(window.activeUserKey && window.activeUserKey!=="admin") resetAutoLogout(); },{passive:true})
 );
 
 async function getPinFromFirestore(uk){
@@ -1784,7 +1807,15 @@ async function clearPinFromFirestore(uk){
 
 window.loginAsUser = function(userKey){
   if(typeof enterApp !== "function"){ setTimeout(()=>window.loginAsUser(userKey),100); return; }
-  if(getSession(userKey)){ window.activeUserKey=userKey; resetAutoLogout(); enterApp(userKey); return; }
+  // Reset complet înainte de orice login — nicio urmă din sesiunea anterioară
+  fullReset();
+  if(getSession(userKey)){
+    window.activeUserKey = userKey;
+    resetAutoLogout();
+    // Chiar dacă sesiunea e validă, reîncărcăm datele fresh din Firestore
+    enterApp(userKey);
+    return;
+  }
   showPinScreen(userKey);
 };
 
@@ -1931,12 +1962,11 @@ auth.onAuthStateChanged(user=>{
   else if(!user&&window.activeUserKey==="admin"){ window.activeUserKey=null; document.getElementById("authScreen").style.display="flex"; document.getElementById("appRoot").style.display="none"; }
 });
 window.doLogout = async function(){
-  unsubAll();
-  if(_sortUnsub){ try{_sortUnsub();}catch(e){} _sortUnsub=null; }
-  clearSession(window.activeUserKey);
-  if(window.activeUserKey==="admin") await auth.signOut();
+  const prevUser = window.activeUserKey;
+  clearSession(prevUser);
+  if(prevUser==="admin") await auth.signOut().catch(()=>{});
   window.activeUserKey = null;
-  state = {drivers:[],thresholds:{warn:3,crit:5}};
+  fullReset();
   document.getElementById("appRoot").style.display = "none";
   document.getElementById("authScreen").style.display = "flex";
 };

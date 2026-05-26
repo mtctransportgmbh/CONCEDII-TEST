@@ -1006,6 +1006,7 @@
     <input type="file" id="importExcelFile" accept=".xlsx,.xlsm,.xls" style="display:none" multiple onchange="importExcelFile(event)">
     <button class="btn btn-secondary btn-small" id="downloadBackupBtn" onclick="downloadBackupNow()" style="width:100%; margin-bottom:6px; display:none">💾 Descarcă backup acum</button>
     <button class="btn btn-secondary btn-small" id="uploadBackupBtn" onclick="document.getElementById('uploadBackupFile').click()" style="width:100%; margin-bottom:6px; display:none">📂 Încarcă backup fișier</button>
+    <button class="btn btn-secondary btn-small" id="publishVersionBtn" onclick="publishNewVersion()" style="width:100%; margin-bottom:6px; display:none; border-color:#6366f1; color:#6366f1">🚀 Publică versiune nouă</button>
     <input type="file" id="uploadBackupFile" accept=".json" style="display:none" onchange="uploadLocalBackup(event)">
 
     <div style="position:relative;margin-bottom:8px">
@@ -1542,9 +1543,23 @@ function finishInit(){
 function scheduleSave(){
   if(saveTimer)clearTimeout(saveTimer);
   setSaveStatus("saving","Se salvează...");
+  // Capturăm anul și userul LA MOMENTUL APELULUI — nu la momentul execuției
+  const savedYear = activeYear;
+  const savedUser = window.activeUserKey;
   saveTimer = setTimeout(async()=>{
     try{
       isSaving = true;
+      // GUARD: dacă între timp s-a schimbat anul sau userul, anulăm
+      if(activeYear !== savedYear){
+        console.warn("scheduleSave: year changed from",savedYear,"to",activeYear,"— ABORTED");
+        setSaveStatus("ok","");
+        return;
+      }
+      if(window.activeUserKey !== savedUser){
+        console.warn("scheduleSave: user changed — ABORTED");
+        setSaveStatus("ok","");
+        return;
+      }
       // PROTECȚIE: nu salva niciodată dacă lista de persoane e goală
       if(!state.drivers || state.drivers.length === 0){
         console.warn("scheduleSave: drivers empty — ABORTED");
@@ -1637,16 +1652,21 @@ function restoreCompleteBackup(bk){
 }
 
 async function triggerAutoBackup(time){
+  // Guard: capturăm anul la apel
+  const snapshotYear = activeYear;
+  const snapshotUser = window.activeUserKey;
   try{
     const now = new Date();
     const today = fmtDate(now);
     const slot = now.getHours()<8?"A":now.getHours()<16?"B":"C";
-    const docId = today+"_"+slot; // per colecție per an — deci unic
+    const docId = today+"_"+slot;
 
-    // PROTECȚIE: nu salva dacă datele sunt goale
+    // PROTECȚIE: nu salva dacă datele sunt goale sau dacă s-a schimbat contextul
     if(!state.drivers || state.drivers.length === 0){
-      console.warn("triggerAutoBackup: drivers empty — ABORTED");
-      return;
+      console.warn("triggerAutoBackup: drivers empty — ABORTED"); return;
+    }
+    if(activeYear !== snapshotYear){
+      console.warn("triggerAutoBackup: year changed — ABORTED"); return;
     }
 
     const driversData = {};
@@ -2063,6 +2083,11 @@ function enterApp(userKey){
   if(importExcelBtn2) importExcelBtn2.style.display = isAdm?"block":"none";
   const uploadBackupBtn = document.getElementById("uploadBackupBtn");
   if(uploadBackupBtn) uploadBackupBtn.style.display = isAdm?"block":"none";
+  const publishVersionBtn = document.getElementById("publishVersionBtn");
+  if(publishVersionBtn) publishVersionBtn.style.display = isAdm?"block":"none";
+
+  // Pornim ascultătorul de versiune pentru toți userii
+  startVersionWatch();
 
   const legendUnpaid = document.getElementById("legendUnpaid");
   if(legendUnpaid) legendUnpaid.style.display = isTaniaAdm?"flex":"none";
@@ -3425,24 +3450,17 @@ async function switchYear(year){
   const lbl = document.getElementById("yearLabel");
   if(lbl) lbl.textContent="...";
 
-  // Unsub toate listener-ele active
-  unsubAll();
+  // Reset complet — curăță tot ca la logout
+  fullReset();
 
   activeYear = year;
-  // Pune data la prima lună a anului dacă suntem pe un an diferit
   currentDate = new Date(year, currentDate.getMonth(), 1);
   if(lbl) lbl.textContent=year;
-
-  // Reset complet state în memorie
-  state = {drivers:[], thresholds:{warn:3,crit:5}};
-  presState = {presence:{}};
-  // sortState.presence se resetează, sortState.drivers se reîncarcă din Firestore
 
   const uk = window.activeUserKey||"tania";
   setSaveStatus("saving","Se încarcă "+year+"...");
 
   try{
-    // Verificăm dacă există date pentru acest an
     const testSnap = await db.collection(concediiColl()).doc(uk==="admin"?"tania":uk).get();
     if(!testSnap.exists){
       await initYearFromBase(uk, year);
@@ -3453,13 +3471,9 @@ async function switchYear(year){
     await initYearFromBase(uk, year);
   }
 
-  // Reload prezente și sortatori pentru noul an
   loadPresState();
   loadSortState();
-
-  // Reload backup info pentru noul an
   loadBackupInfoFromStorage();
-
   toast("📅 Schimbat la "+year);
 }
 
@@ -3610,12 +3624,13 @@ function goSortToday(){ sortCurrentDate = new Date(); renderSortatoriTimeline();
 // ---- Firestore ----
 async function saveSortState(){
   try{
-    // PROTECȚIE: nu salva dacă sortatori e goală
     if(!sortState.drivers || sortState.drivers.length === 0){
-      console.warn("saveSortState: empty — ABORTED");
-      return;
+      console.warn("saveSortState: empty — ABORTED"); return;
     }
+    // Guard anti-cross-year
+    const yr = activeYear;
     await db.collection(sortatoriColl()).doc("state").set(JSON.parse(JSON.stringify(sortState)));
+    if(activeYear !== yr) console.warn("saveSortState: year changed mid-save (harmless, saved to correct coll)");
   }catch(e){ console.error("sort save",e); }
 }
 
@@ -4440,6 +4455,8 @@ function loadPresState(){
 
 async function savePresState(){
   try{
+    // Guard: prezenteColl() folosește activeYear curent — safe dacă nu s-a schimbat
+    if(!presState.presence || Object.keys(presState.presence).length === 0) return;
     await db.collection(prezenteColl()).doc("state").set(JSON.parse(JSON.stringify(presState)));
   }catch(e){ console.error("pres save",e); }
 }
@@ -4688,6 +4705,50 @@ async function confirmImportExcel(){
   btn.disabled=false; btn.textContent="✅ Importă tot";
   _importPending=[];
   closeModal("modalImportExcel");
+}
+
+// ============================================================
+// VERSION UPDATE NOTIFICATION
+// ============================================================
+const APP_VERSION = "2026.06.01"; // actualizează la fiecare upload nou
+let _versionUnsub = null;
+
+function startVersionWatch(){
+  if(_versionUnsub) return;
+  _versionUnsub = db.collection("app_meta").doc("version").onSnapshot(snap=>{
+    if(!snap.exists) return;
+    const data = snap.data();
+    const latestVersion = data.version||"";
+    const latestMsg = data.message||"";
+    if(latestVersion && latestVersion !== APP_VERSION){
+      showVersionBanner(latestVersion, latestMsg);
+    }
+  }, err=>console.warn("version watch err",err));
+}
+
+function showVersionBanner(newVersion, msg){
+  // Nu afișa de două ori
+  if(document.getElementById("versionBanner")) return;
+  const banner = document.createElement("div");
+  banner.id = "versionBanner";
+  banner.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(90deg,#6366f1,#8b5cf6);color:#fff;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(99,102,241,0.4)";
+  banner.innerHTML = `
+    <span>🚀 Versiune nouă disponibilă! ${msg||""}</span>
+    <button onclick="window.location.reload(true)" style="background:#fff;color:#6366f1;border:none;border-radius:6px;padding:6px 16px;font-weight:700;cursor:pointer;font-size:13px">↻ Actualizează acum</button>
+  `;
+  document.body.prepend(banner);
+}
+
+// Admin poate publica o versiune nouă din sidebar
+async function publishNewVersion(){
+  if(!isAdmin()) return;
+  const msg = prompt("Mesaj pentru utilizatori (opțional):", "Funcționalități noi disponibile");
+  if(msg===null) return;
+  const version = new Date().toISOString().slice(0,10).replace(/-/g,".")+"."+Date.now().toString().slice(-4);
+  try{
+    await db.collection("app_meta").doc("version").set({version, message:msg, publishedAt:new Date().toISOString(), publishedBy:"admin"});
+    toast("✅ Versiune nouă publicată — toți userii vor vedea notificarea");
+  }catch(e){ toast("Eroare: "+e.message,true); }
 }
 
 // ============================================================

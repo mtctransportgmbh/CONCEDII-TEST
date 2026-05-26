@@ -4711,6 +4711,11 @@ async function confirmImportExcel(){
 // VERSION UPDATE NOTIFICATION
 // ============================================================
 const APP_VERSION = "2026.06.01"; // actualizează la fiecare upload nou
+
+// La pornire, salvăm versiunea curentă ca "văzută" în localStorage
+// Asta oprește bucla infinită după reload
+try{ localStorage.setItem("mtc_app_version_seen", APP_VERSION); }catch(e){}
+
 let _versionUnsub = null;
 
 function startVersionWatch(){
@@ -4720,9 +4725,18 @@ function startVersionWatch(){
     const data = snap.data();
     const latestVersion = data.version||"";
     const latestMsg = data.message||"";
-    if(latestVersion && latestVersion !== APP_VERSION){
-      showVersionBanner(latestVersion, latestMsg);
-    }
+    if(!latestVersion) return;
+
+    // Nu afișa dacă versiunea din Firestore e aceeași cu ce avem în cod
+    if(latestVersion === APP_VERSION) return;
+
+    // Nu afișa dacă userul a reîncărcat deja pentru această versiune
+    try{
+      const seenVersion = localStorage.getItem("mtc_app_version_seen");
+      if(seenVersion === latestVersion) return;
+    }catch(e){}
+
+    showVersionBanner(latestVersion, latestMsg);
   }, err=>console.warn("version watch err",err));
 }
 
@@ -4753,7 +4767,7 @@ function showVersionBanner(newVersion, msg){
       <div style="font-size:13px;color:rgba(255,255,255,0.65);margin-bottom:28px">
         Aplicația a fost actualizată.<br>Trebuie să reîncarci pagina pentru a continua.
       </div>
-      <button onclick="window.location.reload(true)" 
+      <button onclick="try{localStorage.setItem('mtc_app_version_seen','${newVersion}');}catch(e){}window.location.reload(true)" 
         style="background:#fff;color:#4f46e5;border:none;border-radius:10px;padding:14px 40px;font-size:16px;font-weight:800;cursor:pointer;width:100%;margin-bottom:10px;box-shadow:0 4px 14px rgba(0,0,0,0.2)">
         ↻ Actualizează acum
       </button>

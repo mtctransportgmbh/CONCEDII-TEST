@@ -4710,12 +4710,10 @@ async function confirmImportExcel(){
 // ============================================================
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.06.01"; // actualizează la fiecare upload nou
+const APP_VERSION = "2026.06.01";
 
-// La pornire, salvăm versiunea curentă ca "văzută" în localStorage
-// Asta oprește bucla infinită după reload
-try{ localStorage.setItem("mtc_app_version_seen", APP_VERSION); }catch(e){}
-
+// La pornire salvăm că am văzut versiunea curentă din localStorage
+// (dacă nu există nimic în localStorage, nu facem nimic — prima rulare)
 let _versionUnsub = null;
 
 function startVersionWatch(){
@@ -4727,16 +4725,20 @@ function startVersionWatch(){
     const latestMsg = data.message||"";
     if(!latestVersion) return;
 
-    // Nu afișa dacă versiunea din Firestore e aceeași cu ce avem în cod
-    if(latestVersion === APP_VERSION) return;
+    // Compară cu ce avem salvat în localStorage — nu cu APP_VERSION din cod
+    let seenVersion = "";
+    try{ seenVersion = localStorage.getItem("mtc_version_current")||""; }catch(e){}
 
-    // Nu afișa dacă userul a reîncărcat deja pentru această versiune
-    try{
-      const seenVersion = localStorage.getItem("mtc_app_version_seen");
-      if(seenVersion === latestVersion) return;
-    }catch(e){}
+    // Dacă nu am văzut niciodată nimic, salvăm versiunea curentă și nu afișăm nimic
+    if(!seenVersion){
+      try{ localStorage.setItem("mtc_version_current", latestVersion); }catch(e){}
+      return;
+    }
 
-    showVersionBanner(latestVersion, latestMsg);
+    // Afișăm bannerul doar dacă versiunea din Firestore e DIFERITĂ de cea salvată
+    if(latestVersion !== seenVersion){
+      showVersionBanner(latestVersion, latestMsg);
+    }
   }, err=>console.warn("version watch err",err));
 }
 
@@ -4753,7 +4755,7 @@ function showVersionBanner(newVersion, msg){
   
   const isAdminUser = isAdmin();
   const dismissBtn = isAdminUser
-    ? `<button onclick="localStorage.setItem('mtc_version_dismissed_${newVersion}','1');document.getElementById('versionBanner').remove()" 
+    ? `<button onclick="try{localStorage.setItem('mtc_version_current','${newVersion}');}catch(e){}document.getElementById('versionBanner').remove()" 
          style="background:transparent;border:1px solid rgba(255,255,255,0.3);color:rgba(255,255,255,0.6);border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px">
          Ignoră (doar admin)
        </button>`
@@ -4767,7 +4769,7 @@ function showVersionBanner(newVersion, msg){
       <div style="font-size:13px;color:rgba(255,255,255,0.65);margin-bottom:28px">
         Aplicația a fost actualizată.<br>Trebuie să reîncarci pagina pentru a continua.
       </div>
-      <button onclick="try{localStorage.setItem('mtc_app_version_seen','${newVersion}');}catch(e){}window.location.reload(true)" 
+      <button onclick="try{localStorage.setItem('mtc_version_current','${newVersion}');}catch(e){}window.location.reload(true)" 
         style="background:#fff;color:#4f46e5;border:none;border-radius:10px;padding:14px 40px;font-size:16px;font-weight:800;cursor:pointer;width:100%;margin-bottom:10px;box-shadow:0 4px 14px rgba(0,0,0,0.2)">
         ↻ Actualizează acum
       </button>
@@ -4793,13 +4795,24 @@ function showVersionBanner(newVersion, msg){
 // Admin poate publica o versiune nouă din sidebar
 async function publishNewVersion(){
   if(!isAdmin()) return;
-  const msg = prompt("Mesaj pentru utilizatori (opțional):", "Funcționalități noi disponibile");
-  if(msg===null) return;
-  const version = new Date().toISOString().slice(0,10).replace(/-/g,".")+"."+Date.now().toString().slice(-4);
-  try{
-    await db.collection("app_meta").doc("version").set({version, message:msg, publishedAt:new Date().toISOString(), publishedBy:"admin"});
-    toast("✅ Versiune nouă publicată — toți userii vor vedea notificarea");
-  }catch(e){ toast("Eroare: "+e.message,true); }
+  const action = confirm("Publică versiune nouă?\n\nOK = publică (toți userii vor vedea notificarea)\nCancel = resetează (oprește notificarea curentă)");
+  if(action){
+    const msg = prompt("Mesaj pentru utilizatori:", "Funcționalități noi disponibile");
+    if(msg===null) return;
+    const version = new Date().toISOString().slice(0,10).replace(/-/g,".")+"."+Date.now().toString().slice(-4);
+    try{
+      await db.collection("app_meta").doc("version").set({version, message:msg, publishedAt:new Date().toISOString(), publishedBy:"admin"});
+      // Admin vede deja noua versiune — o salvăm ca "curentă" pentru el
+      try{ localStorage.setItem("mtc_version_current", version); }catch(e){}
+      toast("✅ Versiune "+version+" publicată — toți userii vor vedea notificarea");
+    }catch(e){ toast("Eroare: "+e.message,true); }
+  } else {
+    // Resetează — șterge documentul din Firestore
+    try{
+      await db.collection("app_meta").doc("version").delete();
+      toast("✅ Notificarea de versiune a fost oprită");
+    }catch(e){ toast("Eroare: "+e.message,true); }
+  }
 }
 
 // ============================================================

@@ -3685,6 +3685,15 @@ let _sortDrag = {active:false, driverName:null, mode:null}; // mode: "prezent"|"
 
 function sortDragStart(driverName, day, isRight){
   const _uk=window.activeUserKey||"";
+  const isMih = _uk==="mihaela";
+  if(isMih){
+    // Mihaela poate edita doar luna curentă
+    const now=new Date();
+    if(sortCurrentDate.getFullYear()!==now.getFullYear()||sortCurrentDate.getMonth()!==now.getMonth()){
+      toast("Poți marca prezența doar în luna curentă",true);
+      return;
+    }
+  }
   if(!isAdminOrTania() && _uk!=="mihaela" && _uk!=="madalina") return;
   const mk = getSortKey();
   const cur = (sortState.presence[mk]&&sortState.presence[mk][driverName]&&sortState.presence[mk][driverName][String(day)]);
@@ -3878,7 +3887,11 @@ function renderSortatoriTimeline(){
   const presence=(sortState.presence&&sortState.presence[mk])||{};
   const colW=34, gridCols=`repeat(${days},${colW}px)`;
   const _uk2=window.activeUserKey||"";
-  const canEdit=isAdminOrTania()||_uk2==="mihaela"||_uk2==="madalina";
+  const isMihaela2 = _uk2==="mihaela";
+  const today2 = new Date();
+  // Mihaela poate edita doar luna curentă
+  const mihaelaCurMonth = isMihaela2 && (sortCurrentDate.getFullYear()===today2.getFullYear() && sortCurrentDate.getMonth()===today2.getMonth());
+  const canEdit=isAdminOrTania()||(!isMihaela2&&_uk2==="madalina")||(isMihaela2&&mihaelaCurMonth);
   const canAdd=isAdminOrTania();
 
   const perm   =drivers.filter(d=>!d.category||d.category==="permanent");
@@ -4112,11 +4125,11 @@ function processExcelWorkbook(wb, fileName){
 
       // What Excel says
       const excStatus = exc.status.toLowerCase();
-      const excUrlaub  = excStatus==="urlaub";
-      const excKrank   = excStatus==="krank" || excStatus==="krankenstand";
-      const excPresent = exc.hasArrival;
-      const excFeiertag= excStatus==="feiertag";
-      const excSonder  = excStatus.includes("sonder") || excStatus.includes("sonderurlaub");
+      const excUrlaub   = excStatus==="urlaub";
+      const excKrank    = excStatus==="krank" || excStatus==="krankenstand";
+      const excPresent  = excStatus==="x" || exc.hasArrival; // X în H = prezent
+      const excFeiertag = excStatus==="feiertag" || excStatus==="f";
+      const excSonder   = excStatus.includes("sonder") || excStatus==="sonderurlaub";
 
       // What HTML says
       const htmlLeave  = (dr.leaves||[]).some(l=>dateInLeave(d,l));
@@ -4606,12 +4619,18 @@ function parseExcelForImport(wb, fileName){
       const rawStatus=hCell?String(hCell.v||hCell.w||"").trim():"";
       const status=rawStatus.toLowerCase();
       const hasArrival=dCell&&dCell.v!==null&&dCell.v!==undefined&&dCell.v!=="";
+
+      // Determină tipul zilei
+      // X în coloana H = prezent (marcat explicit ca prezent/sortat)
+      // Ora în coloana D fără altceva în H = de asemenea prezent
       let dayType=null;
       if(status==="urlaub"||status==="u") dayType="urlaub";
       else if(status==="krank"||status==="krankenstand"||status==="k") dayType="krank";
-      else if(status.includes("sonder")||status==="s"||status==="sonderurlaub") dayType="unpaid";
-      else if(status==="feiertag"||status==="x"||status==="f") dayType="feiertag";
-      else if(hasArrival) dayType="prezent";
+      else if(status.includes("sonder")||status==="sonderurlaub") dayType="unpaid";
+      else if(status==="feiertag"||status==="f") dayType="feiertag";
+      else if(status==="x") dayType="prezent";           // X explicit = prezent
+      else if(status==="prezent"||status==="p") dayType="prezent"; // dacă scrie "Prezent"
+      else if(hasArrival) dayType="prezent";              // oră în D fără altceva = prezent
       if(dayType==="urlaub"||dayType==="krank"||dayType==="unpaid"){
         if(runType===dayType){}
         else{ if(runType) flush(runType,runStart,dayNum-1); runType=dayType; runStart=dayNum; }
@@ -4718,28 +4737,30 @@ let _versionUnsub = null;
 
 function startVersionWatch(){
   if(_versionUnsub) return;
-  _versionUnsub = db.collection("app_meta").doc("version").onSnapshot(snap=>{
-    if(!snap.exists) return;
-    const data = snap.data();
-    const latestVersion = data.version||"";
-    const latestMsg = data.message||"";
-    if(!latestVersion) return;
-
-    // Compară cu ce avem salvat în localStorage — nu cu APP_VERSION din cod
-    let seenVersion = "";
-    try{ seenVersion = localStorage.getItem("mtc_version_current")||""; }catch(e){}
-
-    // Dacă nu am văzut niciodată nimic, salvăm versiunea curentă și nu afișăm nimic
-    if(!seenVersion){
-      try{ localStorage.setItem("mtc_version_current", latestVersion); }catch(e){}
-      return;
-    }
-
-    // Afișăm bannerul doar dacă versiunea din Firestore e DIFERITĂ de cea salvată
-    if(latestVersion !== seenVersion){
-      showVersionBanner(latestVersion, latestMsg);
-    }
-  }, err=>console.warn("version watch err",err));
+  try{
+    _versionUnsub = db.collection("app_meta").doc("version").onSnapshot(snap=>{
+      try{
+        if(!snap.exists) return;
+        const data = snap.data();
+        const latestVersion = data.version||"";
+        const latestMsg = data.message||"";
+        if(!latestVersion) return;
+        let seenVersion = "";
+        try{ seenVersion = localStorage.getItem("mtc_version_current")||""; }catch(e){}
+        if(!seenVersion){
+          try{ localStorage.setItem("mtc_version_current", latestVersion); }catch(e){}
+          return;
+        }
+        if(latestVersion !== seenVersion) showVersionBanner(latestVersion, latestMsg);
+      }catch(e){ console.warn("version snap handler err",e); }
+    }, err=>{
+      // Permisiune refuzată sau colecție inexistentă — ignorăm silențios
+      console.warn("version watch disabled (no permission or collection):", err.code||err.message);
+      _versionUnsub = null;
+    });
+  }catch(e){
+    console.warn("startVersionWatch failed:", e);
+  }
 }
 
 function showVersionBanner(newVersion, msg){

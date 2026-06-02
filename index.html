@@ -435,18 +435,11 @@
   }
   .nav button:hover { background: var(--bg-elev-2); }
   .nav h2 {
-    font-size: 15px;
-    font-weight: 900;
-    min-width: 160px;
+    font-size: 20px;
+    font-weight: 600;
+    min-width: 200px;
     text-align: center;
-    text-transform: uppercase;
-    letter-spacing: 3px;
-    color: #fff;
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
-    border: 2px solid rgba(255,255,255,0.25);
-    border-radius: 10px;
-    padding: 7px 20px;
-    box-shadow: 0 3px 12px rgba(99,102,241,0.45), inset 0 1px 0 rgba(255,255,255,0.15);
+    text-transform: capitalize;
   }
   
   .mod-tab {
@@ -998,15 +991,12 @@
     </div>
     <button class="btn btn-secondary btn-small" id="addDriverBtn" onclick="openAddDriver()" style="width:100%; margin-bottom:6px">+ Persoană nouă</button>
     <button class="btn btn-secondary btn-small" id="pinMgrBtn" onclick="openPinAdmin()" style="width:100%; margin-bottom:6px; display:none">🔐 Coduri PIN</button>
-    <button class="btn btn-secondary btn-small" id="loadBackupBtn" onclick="openBackupManager()" style="width:100%; margin-bottom:6px; display:none">🔄 Manager Backup / Restaurare</button>
+    <button class="btn btn-secondary btn-small" id="loadBackupBtn" onclick="loadLastFirestoreBackup()" style="width:100%; margin-bottom:6px; display:none">🔄 Restaurează backup Firestore</button>
     <button class="btn btn-secondary btn-small" id="actLogBtn" onclick="openActivityLog()" style="width:100%; margin-bottom:6px; display:none; border-color:#818cf8; color:#818cf8">📋 Istoric activitate</button>
     <button class="btn btn-secondary btn-small" id="verifyExcelBtn" onclick="document.getElementById('verifyExcelFile').click()" style="width:100%; margin-bottom:6px; display:none; border-color:#a78bfa; color:#a78bfa">📊 Verifică Excel vs HTML</button>
     <input type="file" id="verifyExcelFile" accept=".xlsx,.xlsm,.xls" style="display:none" onchange="verifyExcelFile(event)">
-    <button class="btn btn-secondary btn-small" id="importExcelBtn" onclick="document.getElementById('importExcelFile').click()" style="width:100%; margin-bottom:6px; display:none; border-color:#34d399; color:#34d399">📥 Import Excel → HTML</button>
-    <input type="file" id="importExcelFile" accept=".xlsx,.xlsm,.xls" style="display:none" multiple onchange="importExcelFile(event)">
     <button class="btn btn-secondary btn-small" id="downloadBackupBtn" onclick="downloadBackupNow()" style="width:100%; margin-bottom:6px; display:none">💾 Descarcă backup acum</button>
     <button class="btn btn-secondary btn-small" id="uploadBackupBtn" onclick="document.getElementById('uploadBackupFile').click()" style="width:100%; margin-bottom:6px; display:none">📂 Încarcă backup fișier</button>
-    <button class="btn btn-secondary btn-small" id="publishVersionBtn" onclick="publishNewVersion()" style="width:100%; margin-bottom:6px; display:none; border-color:#6366f1; color:#6366f1">🚀 Publică versiune nouă</button>
     <input type="file" id="uploadBackupFile" accept=".json" style="display:none" onchange="uploadLocalBackup(event)">
 
     <div style="position:relative;margin-bottom:8px">
@@ -1021,6 +1011,7 @@
     <div style="display:flex;gap:8px;margin-bottom:12px">
       <button id="modConcedii" class="mod-tab mod-tab-active" onclick="setAppMode('concedii')">📅 CONCEDII</button>
       <button id="modSortatori" class="mod-tab" onclick="setAppMode('sortatori')" style="display:none">📦 SORTATORI</button>
+      <button id="modPlanificare" class="mod-tab" onclick="setAppMode('planificare')" style="display:none">🗓️ PLANIFICARE</button>
     </div>
     <div id="concediiModule">
     <div class="header">
@@ -1029,11 +1020,6 @@
         <h2 id="monthLabel"></h2>
         <button onclick="changeMonth(1)">›</button>
         <button class="btn-small btn btn-secondary" onclick="goToday()" style="width:auto; margin-left:8px">Azi</button>
-        <div id="yearSelectorWrap" style="display:flex;align-items:center;gap:4px;margin-left:14px;background:var(--bg-elev-2);border:1px solid var(--border);border-radius:7px;padding:2px 4px">
-          <button onclick="switchYear(activeYear-1)" style="background:none;border:none;color:var(--text-dim);cursor:pointer;padding:2px 6px;font-size:14px;border-radius:4px" title="Anul anterior">‹</button>
-          <span id="yearLabel" style="font-size:14px;font-weight:700;color:var(--accent);min-width:36px;text-align:center">2026</span>
-          <button onclick="switchYear(activeYear+1)" style="background:none;border:none;color:var(--text-dim);cursor:pointer;padding:2px 6px;font-size:14px;border-radius:4px" title="Anul următor">›</button>
-        </div>
       </div>
       <div class="view-tabs">
         <button id="viewTabCalendar" class="view-tab active" onclick="setView('calendar')">📅 Calendar</button>
@@ -1071,10 +1057,14 @@
         <div class="stat-label">Vârf în lună</div>
         <div class="stat-value" id="statPeak">0</div>
       </div>
-      <div id="statKrankBox" style="display:none"><div id="statKrank" style="display:none">0</div></div>
-      <div style="margin-left:auto;display:flex;align-items:center">
-        <button id="printBtn" onclick="openPrintModal()" style="display:none;padding:10px 24px;font-size:14px;font-weight:700;background:var(--accent);color:#000;border:none;border-radius:8px;cursor:pointer;box-shadow:0 2px 10px rgba(251,191,36,0.4)">🖨️ Print / Export PDF</button>
+      <div class="stat" id="statKrankBox" onclick="openStats('krank')" style="display:none;cursor:pointer;border-left-color:rgba(59,130,246,0.7)">
+        <div class="stat-label">🤒 Krank lună</div>
+        <div class="stat-value" id="statKrank">0</div>
       </div>
+    </div>
+    
+    <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
+      <button id="printBtn" onclick="openPrintModal()" style="display:none;padding:8px 20px;font-size:13px;font-weight:700;background:var(--accent);color:#000;border:none;border-radius:7px;cursor:pointer;box-shadow:0 2px 8px rgba(251,191,36,0.35)">🖨️ Print / Export PDF</button>
     </div>
     <div id="holidayBanner" class="holiday-banner" style="display:none"></div>
     
@@ -1129,7 +1119,38 @@
         <div class="timeline" id="sortatoriTimeline"></div>
       </div>
     </div>
+
+    <!-- PLANIFICARE MODULE -->
+    <div id="planificareModule" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <button onclick="changePlanWeek(-1)" style="background:var(--bg-elev-2);border:1px solid var(--border);border-radius:6px;padding:4px 12px;cursor:pointer;color:var(--text);font-size:16px">‹</button>
+          <span id="planWeekLabel" style="font-size:14px;font-weight:700;color:var(--accent);min-width:200px;text-align:center"></span>
+          <button onclick="changePlanWeek(1)" style="background:var(--bg-elev-2);border:1px solid var(--border);border-radius:6px;padding:4px 12px;cursor:pointer;color:var(--text);font-size:16px">›</button>
+          <button onclick="goTodayPlan()" class="btn btn-secondary btn-small" style="width:auto">Azi</button>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button onclick="clearPlanWeek()" class="btn btn-secondary btn-small" style="width:auto;border-color:var(--red);color:var(--red)">🗑 Șterge săptămâna</button>
+          <button onclick="openWhatsAppExport()" class="btn btn-small" style="width:auto;background:#25d366;border-color:#25d366;color:#fff;font-weight:700">💬 Export WhatsApp</button>
+        </div>
+      </div>
+      <div id="planificareGrid" style="overflow-x:auto"></div>
+    </div>
+
   </main>
+</div>
+
+<!-- WHATSAPP EXPORT MODAL -->
+<div class="modal-bg" id="modalWhatsApp">
+  <div class="modal" style="max-width:640px">
+    <h3>💬 Export WhatsApp</h3>
+    <div class="modal-sub" id="waSubtitle"></div>
+    <textarea id="waText" style="width:100%;min-height:220px;background:var(--bg-elev-2);border:1px solid var(--border);border-radius:8px;padding:12px;color:var(--text);font-size:13px;line-height:1.6;resize:vertical;margin-top:10px;box-sizing:border-box" readonly></textarea>
+    <div class="modal-actions" style="margin-top:10px;gap:8px">
+      <button class="btn btn-secondary" onclick="closeModal('modalWhatsApp')">Închide</button>
+      <button class="btn" onclick="copyWaText()" style="background:#25d366;border-color:#25d366;color:#fff">📋 Copiază mesajul</button>
+    </div>
+  </div>
 </div>
 
 <!-- MODALS -->
@@ -1269,32 +1290,6 @@
   </div>
 </div>
 
-<!-- BACKUP MANAGER MODAL -->
-<div class="modal-bg" id="modalBackupManager">
-  <div class="modal" style="max-width:860px;max-height:92vh;overflow-y:auto">
-    <h3>🔄 Manager Backup / Restaurare</h3>
-    <div class="modal-sub" id="backupManagerSub">Se încarcă backup-urile disponibile...</div>
-    <div id="backupManagerList" style="margin-top:12px"></div>
-    <div id="backupManagerPreview" style="margin-top:12px;display:none">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-        <button class="btn btn-secondary btn-small" onclick="document.getElementById('backupManagerPreview').style.display='none';document.getElementById('backupManagerList').style.display='block'">← Înapoi la listă</button>
-        <span id="backupPreviewTitle" style="font-size:13px;font-weight:700"></span>
-      </div>
-      <div id="backupPreviewContent"></div>
-      <div style="margin-top:14px;padding:10px;background:rgba(239,68,68,0.1);border-radius:6px;border:1px solid rgba(239,68,68,0.3);font-size:12px;color:var(--red)">
-        ⚠️ Restaurarea va înlocui datele curente cu cele din backup. Acțiunea nu poate fi anulată.
-      </div>
-      <div class="modal-actions" style="margin-top:10px">
-        <button class="btn btn-secondary" onclick="document.getElementById('backupManagerPreview').style.display='none';document.getElementById('backupManagerList').style.display='block'">Anulează</button>
-        <button class="btn" id="backupRestoreConfirmBtn" onclick="confirmRestoreBackup()" style="background:#ef4444;border-color:#ef4444">🔄 Restaurează acest backup</button>
-      </div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal('modalBackupManager')">Închide</button>
-    </div>
-  </div>
-</div>
-
 <!-- ACTIVITY LOG MODAL -->
 <div class="modal-bg" id="modalActivityLog">
   <div class="modal" style="max-width:680px;max-height:90vh;overflow-y:auto">
@@ -1315,19 +1310,6 @@
     <div id="verifyExcelResults" style="margin-top:12px"></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('modalVerifyExcel')">Închide</button>
-    </div>
-  </div>
-</div>
-
-<!-- IMPORT EXCEL MODAL -->
-<div class="modal-bg" id="modalImportExcel">
-  <div class="modal" style="max-width:820px;max-height:92vh;overflow-y:auto">
-    <h3>📥 Import Excel → HTML</h3>
-    <div class="modal-sub" id="importExcelSub">Selectează fișierele Excel (Jan, Feb, Mar, Apr) — poți selecta mai multe odată</div>
-    <div id="importExcelResults" style="margin-top:12px"></div>
-    <div class="modal-actions" style="gap:8px">
-      <button class="btn btn-secondary" onclick="closeModal('modalImportExcel')">Închide</button>
-      <button class="btn" id="importExcelConfirmBtn" onclick="confirmImportExcel()" style="display:none;background:#10b981;border-color:#10b981">✅ Importă tot</button>
     </div>
   </div>
 </div>
@@ -1443,17 +1425,6 @@ let state = {drivers:[], thresholds:{warn:3,crit:5}};
 let activeGroup = "total"; // for tania/admin filter
 let view = "calendar";
 let currentDate = new Date();
-let activeYear = currentDate.getFullYear(); // anul activ selectat
-
-// Helpers colecții Firestore — izolate per an
-// 2026 (sau primul an) folosește colecțiile originale fără sufix
-// Anii următori: concedii_2027, sortatori_2027, prezente_2027 etc.
-const BASE_YEAR = 2026;
-function concediiColl(){ return activeYear===BASE_YEAR ? "concedii" : "concedii_"+activeYear; }
-function sortatoriColl(){ return activeYear===BASE_YEAR ? "sortatori" : "sortatori_"+activeYear; }
-function prezenteColl(){ return activeYear===BASE_YEAR ? "prezente" : "prezente_"+activeYear; }
-function backupColl(){   return activeYear===BASE_YEAR ? "daily_backup" : "daily_backup_"+activeYear; }
-function activityColl(){ return activeYear===BASE_YEAR ? "activity_log" : "activity_log_"+activeYear; }
 let editingDriverId = null;
 let leaveDriverId = null;
 let comboSelectedId = null, comboHighlightIdx = 0, comboFiltered = [];
@@ -1482,7 +1453,7 @@ function initApp(userKey){
       if(live){renderAll();saveLocalBackup();setSaveStatus("ok","Sincronizat ✓");}
     };
     docKeys.forEach(dk=>{
-      const unsub = db.collection(concediiColl()).doc(dk).onSnapshot(snap=>{
+      const unsub = db.collection("concedii").doc(dk).onSnapshot(snap=>{
         cache[dk] = snap.exists ? snap.data() : {drivers:[],thresholds:{warn:3,crit:5}};
         if(loaded < docKeys.length){ loaded++; if(loaded===docKeys.length){rebuild(false);finishInit();} }
         else { rebuild(true); }
@@ -1491,14 +1462,14 @@ function initApp(userKey){
     });
   } else {
     let first = true;
-    const unsub = db.collection(concediiColl()).doc(userKey).onSnapshot(snap=>{
+    const unsub = db.collection("concedii").doc(userKey).onSnapshot(snap=>{
       if(snap.exists){
         state = snap.data();
         if(!state.thresholds) state.thresholds = {warn:3,crit:5};
         state.thresholds = {warn:3,crit:5};
       } else {
         loadDefaultDrivers();
-        db.collection(concediiColl()).doc(userKey).set(JSON.parse(JSON.stringify(state)));
+        db.collection("concedii").doc(userKey).set(JSON.parse(JSON.stringify(state)));
       }
       if(first){first=false;finishInit();}
       else{renderAll();saveLocalBackup();setSaveStatus("ok","Sincronizat ✓");}
@@ -1543,29 +1514,9 @@ function finishInit(){
 function scheduleSave(){
   if(saveTimer)clearTimeout(saveTimer);
   setSaveStatus("saving","Se salvează...");
-  // Capturăm anul și userul LA MOMENTUL APELULUI — nu la momentul execuției
-  const savedYear = activeYear;
-  const savedUser = window.activeUserKey;
   saveTimer = setTimeout(async()=>{
     try{
       isSaving = true;
-      // GUARD: dacă între timp s-a schimbat anul sau userul, anulăm
-      if(activeYear !== savedYear){
-        console.warn("scheduleSave: year changed from",savedYear,"to",activeYear,"— ABORTED");
-        setSaveStatus("ok","");
-        return;
-      }
-      if(window.activeUserKey !== savedUser){
-        console.warn("scheduleSave: user changed — ABORTED");
-        setSaveStatus("ok","");
-        return;
-      }
-      // PROTECȚIE: nu salva niciodată dacă lista de persoane e goală
-      if(!state.drivers || state.drivers.length === 0){
-        console.warn("scheduleSave: drivers empty — ABORTED");
-        setSaveStatus("error","⚠️ Salvare anulată — listă goală!");
-        return;
-      }
       const uk = window.activeUserKey||"tania";
       if(uk==="tania"||uk==="admin"){
         const byDoc = {raluca:[],madalina:[],corina:[],tania:[]};
@@ -1577,20 +1528,20 @@ function scheduleSave(){
           byDoc.tania.push(dr);
         });
         await Promise.all([
-          db.collection(concediiColl()).doc("raluca").set({drivers:byDoc.raluca,thresholds:state.thresholds}),
-          db.collection(concediiColl()).doc("madalina").set({drivers:byDoc.madalina,thresholds:state.thresholds}),
-          db.collection(concediiColl()).doc("corina").set({drivers:byDoc.corina,thresholds:state.thresholds}),
-          db.collection(concediiColl()).doc("tania").set({drivers:byDoc.tania,thresholds:state.thresholds}),
+          db.collection("concedii").doc("raluca").set({drivers:byDoc.raluca,thresholds:state.thresholds}),
+          db.collection("concedii").doc("madalina").set({drivers:byDoc.madalina,thresholds:state.thresholds}),
+          db.collection("concedii").doc("corina").set({drivers:byDoc.corina,thresholds:state.thresholds}),
+          db.collection("concedii").doc("tania").set({drivers:byDoc.tania,thresholds:state.thresholds}),
         ]);
       } else {
-        await db.collection(concediiColl()).doc(uk).set(JSON.parse(JSON.stringify(state)));
+        await db.collection("concedii").doc(uk).set(JSON.parse(JSON.stringify(state)));
         try{
-          const tSnap = await db.collection(concediiColl()).doc("tania").get();
+          const tSnap = await db.collection("concedii").doc("tania").get();
           if(tSnap.exists){
             const tData = tSnap.data();
             const myIds = new Set(state.drivers.map(d=>d.id));
             const merged = (tData.drivers||[]).map(td=>myIds.has(td.id)?state.drivers.find(d=>d.id===td.id):td);
-            await db.collection(concediiColl()).doc("tania").set({drivers:merged,thresholds:state.thresholds});
+            await db.collection("concedii").doc("tania").set({drivers:merged,thresholds:state.thresholds});
           }
         }catch(e){console.warn("sync tania",e);}
       }
@@ -1608,27 +1559,19 @@ function scheduleSave(){
 
 function buildCompleteBackup(){
   const backup = {
-    version: 3,
-    year: activeYear,
+    version: 2,
     savedAt: new Date().toISOString(),
-    thresholds: state.thresholds||{warn:3,crit:5},
     drivers: (state.drivers||[]).map(dr=>({
-      id:             dr.id,
-      name:           dr.name,
-      visibleTo:      dr.visibleTo||[],
-      maxDays:        dr.maxDays||0,
-      carryOverDays:  dr.carryOverDays||0,
-      carryOverByYear:dr.carryOverByYear||{},
-      leaves:         dr.leaves||[],
-      krankLeaves:    dr.krankLeaves||[],
-      unpaidLeaves:   dr.unpaidLeaves||[]
-    })),
-    prezente: (presState.presence&&Object.keys(presState.presence).length>0)
-      ? JSON.parse(JSON.stringify(presState.presence))
-      : {},
-    sortatori: (sortState.drivers&&sortState.drivers.length>0)
-      ? { drivers: JSON.parse(JSON.stringify(sortState.drivers)), presence: JSON.parse(JSON.stringify(sortState.presence||{})) }
-      : null
+      id:            dr.id,
+      name:          dr.name,
+      visibleTo:     dr.visibleTo||[],
+      maxDays:       dr.maxDays||0,
+      carryOverDays: dr.carryOverDays||0,
+      carryOverByYear: dr.carryOverByYear||{},
+      leaves:        dr.leaves||[],
+      krankLeaves:   dr.krankLeaves||[],
+      unpaidLeaves:  dr.unpaidLeaves||[]
+    }))
   };
   return backup;
 }
@@ -1652,56 +1595,33 @@ function restoreCompleteBackup(bk){
 }
 
 async function triggerAutoBackup(time){
-  // Guard: capturăm anul la apel
-  const snapshotYear = activeYear;
-  const snapshotUser = window.activeUserKey;
   try{
     const now = new Date();
     const today = fmtDate(now);
+    const hour = String(now.getHours()).padStart(2,"0");
+    // Slot: morning(0-8), midday(8-16), evening(16-24)
     const slot = now.getHours()<8?"A":now.getHours()<16?"B":"C";
-    const docId = today+"_"+slot;
-
-    // PROTECȚIE: nu salva dacă datele sunt goale sau dacă s-a schimbat contextul
-    if(!state.drivers || state.drivers.length === 0){
-      console.warn("triggerAutoBackup: drivers empty — ABORTED"); return;
-    }
-    if(activeYear !== snapshotYear){
-      console.warn("triggerAutoBackup: year changed — ABORTED"); return;
-    }
-
-    const driversData = {};
+    const docId = today+"_"+slot; // max 3 versions per day
+    // Salvează DOAR concedii/krank/unpaid per sofer
+    const leavesOnly = {};
     (state.drivers||[]).forEach(dr=>{
-      driversData[dr.id||dr.name] = {
-        name: dr.name, visibleTo: dr.visibleTo||[],
-        maxDays: dr.maxDays||0, carryOverDays: dr.carryOverDays||0,
-        carryOverByYear: dr.carryOverByYear||{},
-        leaves: dr.leaves||[], krankLeaves: dr.krankLeaves||[], unpaidLeaves: dr.unpaidLeaves||[]
+      leavesOnly[dr.name]={
+        leaves:      (dr.leaves||[]),
+        krankLeaves: (dr.krankLeaves||[]),
+        unpaidLeaves:(dr.unpaidLeaves||[])
       };
     });
-
-    const sortatoriSnap = (sortState.drivers&&sortState.drivers.length>0)
-      ? {drivers:sortState.drivers, presence:sortState.presence||{}} : null;
-    const prezenteSnap = (presState.presence&&Object.keys(presState.presence).length>0)
-      ? presState.presence : null;
-
-    const backupDoc = {
-      version: 3, year: activeYear,
-      savedAt: now.toISOString(), time, date: today, slot,
-      savedBy: window.activeUserKey||"unknown",
-      driverCount: state.drivers.length,
-      thresholds: state.thresholds||{warn:3,crit:5},
-      drivers: driversData,
-      ...(sortatoriSnap ? {sortatori: sortatoriSnap} : {}),
-      ...(prezenteSnap  ? {prezente:  prezenteSnap}  : {})
-    };
-
-    await db.collection(backupColl()).doc(docId).set(backupDoc);
-
-    // localStorage keys includ anul
-    const lsKeyTime = "mtc_last_backup_time_"+activeYear;
-    const lsKeyDate = "mtc_last_backup_date_"+activeYear;
-    localStorage.setItem(lsKeyTime, time);
-    localStorage.setItem(lsKeyDate, today);
+    await db.collection("daily_backup").doc(docId).set({
+      leaves:    leavesOnly,
+      savedAt:   now.toISOString(),
+      time:      time,
+      date:      today,
+      slot:      slot,
+      count:     Object.keys(leavesOnly).length,
+      savedBy:   window.activeUserKey||"unknown"
+    });
+    localStorage.setItem("mtc_last_backup_time", time);
+    localStorage.setItem("mtc_last_backup_date", today);
     updateBackupInfoLine(today, time);
     if(isAdmin()) setSaveStatus("ok","Salvat la "+time+" · backup ✓");
   }catch(e){ console.error("backup err",e); }
@@ -1718,8 +1638,8 @@ function updateBackupInfoLine(date, time){
 }
 
 function loadBackupInfoFromStorage(){
-  const date = localStorage.getItem("mtc_last_backup_date_"+activeYear) || localStorage.getItem("mtc_last_backup_date");
-  const time = localStorage.getItem("mtc_last_backup_time_"+activeYear) || localStorage.getItem("mtc_last_backup_time");
+  const date = localStorage.getItem("mtc_last_backup_date");
+  const time = localStorage.getItem("mtc_last_backup_time");
   if(date&&time) updateBackupInfoLine(date,time);
 }
 
@@ -1736,53 +1656,32 @@ function hashPin(pin){
   return (h>>>0).toString(36);
 }
 
-function getSession(uk){ const ts=localStorage.getItem("mtc_s_"+uk); if(!ts)return false; return (Date.now()-parseInt(ts))/(1000*60)<PIN_SESSION_MINS; }
-function setSession(uk){ localStorage.setItem("mtc_s_"+uk,Date.now().toString()); }
-function clearSession(uk){ localStorage.removeItem("mtc_s_"+uk); }
+// sessionStorage se șterge automat la închiderea tab-ului
+// localStorage persistă — NU îl folosim pentru sesiuni
+function getSession(uk){ const ts=sessionStorage.getItem("mtc_s_"+uk); if(!ts)return false; return (Date.now()-parseInt(ts))/(1000*60)<PIN_SESSION_MINS; }
+function setSession(uk){ sessionStorage.setItem("mtc_s_"+uk,Date.now().toString()); }
+function clearSession(uk){ sessionStorage.removeItem("mtc_s_"+uk); localStorage.removeItem("mtc_s_"+uk); }
 
-// Clear all sessions on page load — always ask PIN
-["raluca","tania","madalina","corina"].forEach(uk=>clearSession(uk));
-
-// Reset complet al memoriei aplicației — folosit la logout și auto-logout
-function fullReset(){
-  // Oprim toți listenerii Firestore
-  unsubAll();
-  if(_sortUnsub){ try{_sortUnsub();}catch(e){} _sortUnsub=null; }
-  if(_presUnsub){ try{_presUnsub();}catch(e){} _presUnsub=null; }
-  // Reset complet state în memorie
-  state      = {drivers:[], thresholds:{warn:3,crit:5}};
-  presState  = {presence:{}};
-  sortState  = {drivers:[], presence:{}};
-  // Curăță timere
-  if(autoLogoutTimer){ clearTimeout(autoLogoutTimer); autoLogoutTimer=null; }
-  if(saveTimer){ clearTimeout(saveTimer); saveTimer=null; }
-  // Curăță orice date vizuale sensibile
-  try{
-    const tl=document.getElementById("timeline"); if(tl) tl.innerHTML="";
-    const st=document.getElementById("sortatoriTimeline"); if(st) st.innerHTML="";
-    const dl=document.getElementById("driversList"); if(dl) dl.innerHTML="";
-    const cal=document.getElementById("calendarGrid"); if(cal) cal.innerHTML="";
-  }catch(e){}
-}
+// La orice încărcare a paginii — curăță toate sesiunile (tab închis = logout complet)
+["raluca","tania","madalina","corina","mihaela","admin"].forEach(uk=>clearSession(uk));
 
 function resetAutoLogout(){
   if(autoLogoutTimer) clearTimeout(autoLogoutTimer);
   autoLogoutTimer = setTimeout(()=>{
     const uk = window.activeUserKey;
-    if(uk && uk!=="admin"){
+    if(uk&&uk!=="admin"){
       clearSession(uk);
-      const prevUser = uk;
       window.activeUserKey = null;
-      fullReset();
+      state = {drivers:[],thresholds:{warn:3,crit:5}};
+      unsubAll();
       document.getElementById("appRoot").style.display = "none";
+      setTimeout(()=>showPinScreen(uk),100);
       document.getElementById("authScreen").style.display = "flex";
-      // Arată ecranul de PIN al utilizatorului curent (nu cel anterior)
-      setTimeout(()=>showPinScreen(prevUser), 150);
     }
   }, PIN_SESSION_MINS*60*1000);
 }
-["click","keydown","touchstart","mousemove","scroll"].forEach(ev=>
-  document.addEventListener(ev,()=>{ if(window.activeUserKey && window.activeUserKey!=="admin") resetAutoLogout(); },{passive:true})
+["click","keydown","touchstart"].forEach(ev=>
+  document.addEventListener(ev,()=>{ if(window.activeUserKey&&window.activeUserKey!=="admin") resetAutoLogout(); },{passive:true})
 );
 
 async function getPinFromFirestore(uk){
@@ -1827,15 +1726,7 @@ async function clearPinFromFirestore(uk){
 
 window.loginAsUser = function(userKey){
   if(typeof enterApp !== "function"){ setTimeout(()=>window.loginAsUser(userKey),100); return; }
-  // Reset complet înainte de orice login — nicio urmă din sesiunea anterioară
-  fullReset();
-  if(getSession(userKey)){
-    window.activeUserKey = userKey;
-    resetAutoLogout();
-    // Chiar dacă sesiunea e validă, reîncărcăm datele fresh din Firestore
-    enterApp(userKey);
-    return;
-  }
+  if(getSession(userKey)){ window.activeUserKey=userKey; resetAutoLogout(); enterApp(userKey); return; }
   showPinScreen(userKey);
 };
 
@@ -1982,11 +1873,12 @@ auth.onAuthStateChanged(user=>{
   else if(!user&&window.activeUserKey==="admin"){ window.activeUserKey=null; document.getElementById("authScreen").style.display="flex"; document.getElementById("appRoot").style.display="none"; }
 });
 window.doLogout = async function(){
-  const prevUser = window.activeUserKey;
-  clearSession(prevUser);
-  if(prevUser==="admin") await auth.signOut().catch(()=>{});
+  unsubAll();
+  if(_sortUnsub){ try{_sortUnsub();}catch(e){} _sortUnsub=null; }
+  clearSession(window.activeUserKey);
+  if(window.activeUserKey==="admin") await auth.signOut();
   window.activeUserKey = null;
-  fullReset();
+  state = {drivers:[],thresholds:{warn:3,crit:5}};
   document.getElementById("appRoot").style.display = "none";
   document.getElementById("authScreen").style.display = "flex";
 };
@@ -2079,17 +1971,12 @@ function enterApp(userKey){
   if(actLogBtn2) actLogBtn2.style.display = isAdm?"block":"none";
   const verifyExcelBtn2 = document.getElementById("verifyExcelBtn");
   if(verifyExcelBtn2) verifyExcelBtn2.style.display = isAdm?"block":"none";
-  const importExcelBtn2 = document.getElementById("importExcelBtn");
-  if(importExcelBtn2) importExcelBtn2.style.display = isAdm?"block":"none";
   const uploadBackupBtn = document.getElementById("uploadBackupBtn");
   if(uploadBackupBtn) uploadBackupBtn.style.display = isAdm?"block":"none";
-  const publishVersionBtn = document.getElementById("publishVersionBtn");
-  if(publishVersionBtn) publishVersionBtn.style.display = isAdm?"block":"none";
 
-  // Pornim ascultătorul de versiune pentru toți userii
-  startVersionWatch();
-
-  const legendUnpaid = document.getElementById("legendUnpaid");
+  const modPlanificare2 = document.getElementById("modPlanificare");
+  if(modPlanificare2) modPlanificare2.style.display = isAdm?"block":"none";
+  if(isAdm) loadPlanState();
   if(legendUnpaid) legendUnpaid.style.display = isTaniaAdm?"flex":"none";
 
   const statsBtn = document.getElementById("statsBtn");
@@ -2138,7 +2025,7 @@ function enterApp(userKey){
       renderSortatoriTimeline();
     };
     docKeys.forEach(dk=>{
-      const unsub = db.collection(concediiColl()).doc(dk).onSnapshot(snap=>{
+      const unsub = db.collection("concedii").doc(dk).onSnapshot(snap=>{
         cache[dk] = snap.exists ? snap.data() : {drivers:[],thresholds:{warn:3,crit:5}};
         loaded = Math.min(loaded+1, docKeys.length);
         if(loaded>=docKeys.length) rebuild();
@@ -2788,193 +2675,42 @@ function importBackup(e){
   reader.readAsText(file);e.target.value="";
 }
 
-let _backupDocs = []; // cache backup docs
-let _selectedBackupIdx = -1;
-
-async function openBackupManager(){
+async function loadLastFirestoreBackup(){
   if(!isAdminOrTania()){toast("Doar Admin sau Tania",true);return;}
-  openModal("modalBackupManager");
-  document.getElementById("backupManagerPreview").style.display="none";
-  document.getElementById("backupManagerList").style.display="block";
-  document.getElementById("backupManagerSub").textContent="Backup-uri pentru anul "+activeYear+"...";
-  document.getElementById("backupManagerList").innerHTML='<div style="color:var(--text-dim);padding:20px;text-align:center">⏳ Se încarcă...</div>';
   try{
-    const snap = await db.collection(backupColl()).orderBy("savedAt","desc").limit(20).get();
-    if(snap.empty){
-      document.getElementById("backupManagerList").innerHTML=`<div style="color:var(--text-dim);padding:20px;text-align:center">Nu există backup-uri pentru ${activeYear}.<br><small>Backup-urile se creează automat la fiecare salvare.</small></div>`;
-      document.getElementById("backupManagerSub").textContent="0 backup-uri pentru "+activeYear;
-      return;
-    }
-    _backupDocs = snap.docs.map(d=>({id:d.id, ...d.data()}));
-    document.getElementById("backupManagerSub").textContent=_backupDocs.length+" backup-uri pentru "+activeYear;
-    renderBackupList();
-  }catch(e){
-    document.getElementById("backupManagerList").innerHTML='<div style="color:var(--red);padding:20px">Eroare: '+e.message+'</div>';
-  }
-}
-
-function renderBackupList(){
-  const MONTHS_RO=["","Ian","Feb","Mar","Apr","Mai","Iun","Iul","Aug","Sep","Oct","Nov","Dec"];
-  let html="";
-  _backupDocs.forEach((bd,i)=>{
-    const ver = bd.version||1;
-    const driverCount = bd.driverCount || (bd.drivers?Object.keys(bd.drivers).length:0) || bd.count || 0;
-    const hasPrezente = !!(bd.prezente && Object.keys(bd.prezente).length>0);
-    const hasSortatori = !!(bd.sortatori && bd.sortatori.drivers && bd.sortatori.drivers.length>0);
-    const savedAt = bd.savedAt ? new Date(bd.savedAt) : null;
-    const dateStr = savedAt ? savedAt.toLocaleDateString("ro-RO",{weekday:"short",day:"2-digit",month:"short",year:"numeric"}) : (bd.date||bd.id);
-    const timeStr = savedAt ? savedAt.toLocaleTimeString("ro-RO",{hour:"2-digit",minute:"2-digit"}) : (bd.time||"?");
-    const byUser = bd.savedBy||"?";
-    const isLatest = i===0;
-
-    html+=`<div style="background:var(--bg-elev-2);border-radius:8px;padding:12px 14px;margin-bottom:8px;border:1px solid ${isLatest?"var(--accent)":"var(--border)"};cursor:pointer;transition:border-color 0.2s" onclick="previewBackup(${i})">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
-        <div>
-          <div style="font-weight:700;font-size:13px;margin-bottom:4px">
-            ${isLatest?'<span style="background:var(--accent);color:#000;font-size:10px;font-weight:800;border-radius:3px;padding:1px 5px;margin-right:6px">ULTIMUL</span>':""}
-            ${escapeHtml(dateStr)} · ${timeStr}
-          </div>
-          <div style="font-size:12px;color:var(--text-dim);display:flex;gap:10px;flex-wrap:wrap">
-            <span>👤 ${driverCount} persoane</span>
-            ${hasPrezente?'<span style="color:var(--green)">✓ Prezențe</span>':""}
-            ${hasSortatori?'<span style="color:var(--accent)">✓ Sortatori</span>':""}
-            <span>💾 v${ver}</span>
-            <span>de: ${escapeHtml(byUser)}</span>
-          </div>
-        </div>
-        <button class="btn btn-secondary btn-small" style="white-space:nowrap" onclick="event.stopPropagation();previewBackup(${i})">👁 Previzualizare</button>
-      </div>
-    </div>`;
-  });
-  document.getElementById("backupManagerList").innerHTML=html;
-}
-
-function previewBackup(idx){
-  _selectedBackupIdx=idx;
-  const bd=_backupDocs[idx];
-  const savedAt=bd.savedAt?new Date(bd.savedAt):null;
-  const dateStr=savedAt?savedAt.toLocaleString("ro-RO"):(bd.date||bd.id)+" "+bd.time;
-  document.getElementById("backupPreviewTitle").textContent="Backup din: "+dateStr;
-
-  // Build preview
-  const MONTHS_RO=["","Ian","Feb","Mar","Apr","Mai","Iun","Iul","Aug","Sep","Oct","Nov","Dec"];
-  let html="";
-
-  // Drivers section
-  const driversObj = bd.drivers||{};
-  const driversArr = Array.isArray(driversObj)?driversObj:Object.values(driversObj);
-  html+=`<div style="font-size:12px;font-weight:700;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">👥 Persoane (${driversArr.length})</div>`;
-  html+=`<div style="background:var(--bg-elev-2);border-radius:6px;padding:8px;margin-bottom:10px;max-height:180px;overflow-y:auto">`;
-  if(driversArr.length===0){
-    // Format vechi cu leaves
-    const leavesObj=bd.leaves||{};
-    const names=Object.keys(leavesObj);
-    html+=names.map(n=>{
-      const d=leavesObj[n];
-      const parts=[];
-      if(d.leaves&&d.leaves.length)parts.push((d.leaves.length)+"U");
-      if(d.krankLeaves&&d.krankLeaves.length)parts.push(d.krankLeaves.length+"K");
-      if(d.unpaidLeaves&&d.unpaidLeaves.length)parts.push(d.unpaidLeaves.length+"S");
-      return `<div style="font-size:12px;padding:2px 0;border-bottom:1px solid var(--border)">${escapeHtml(n)} ${parts.length?"("+parts.join(", ")+")":""}</div>`;
-    }).join("");
-  } else {
-    html+=driversArr.map(d=>{
-      const lv=(d.leaves||[]).length, kr=(d.krankLeaves||[]).length, up=(d.unpaidLeaves||[]).length;
-      const parts=[];
-      if(lv)parts.push(lv+" concedii");if(kr)parts.push(kr+" krank");if(up)parts.push(up+" S");
-      return `<div style="font-size:12px;padding:2px 0;border-bottom:1px solid var(--border)">${escapeHtml(d.name||"?")} <span style="color:var(--text-dim)">${parts.length?"("+parts.join(", ")+")":" — fără absențe"}</span></div>`;
-    }).join("");
-  }
-  html+=`</div>`;
-
-  // Prezente
-  if(bd.prezente&&Object.keys(bd.prezente).length>0){
-    const luni=Object.keys(bd.prezente).sort();
-    html+=`<div style="font-size:12px;font-weight:700;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">✓ Prezențe salvate</div>`;
-    html+=`<div style="background:var(--bg-elev-2);border-radius:6px;padding:8px;margin-bottom:10px;font-size:12px">`;
-    luni.forEach(mk=>{
-      const persoane=Object.keys(bd.prezente[mk]||{});
-      html+=`<div style="padding:2px 0"><strong>${mk}</strong>: ${persoane.length} persoane cu prezențe</div>`;
+    setSaveStatus("saving","Se încarcă lista backup-uri...");
+    const snap = await db.collection("daily_backup").orderBy("savedAt","desc").limit(9).get();
+    if(snap.empty){toast("Nu există backup în Firestore",true);setSaveStatus("ok","Gata");return;}
+    // Show list of available backups
+    const list = snap.docs.map((d,i)=>{
+      const bd=d.data();
+      return {id:d.id, date:bd.date||d.id, time:bd.time||"?", count:bd.count||0, savedBy:bd.savedBy||"?", leaves:bd.leaves};
     });
-    html+=`</div>`;
-  }
-
-  // Sortatori
-  if(bd.sortatori&&bd.sortatori.drivers&&bd.sortatori.drivers.length>0){
-    html+=`<div style="font-size:12px;font-weight:700;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">📋 Sortatori (${bd.sortatori.drivers.length})</div>`;
-    html+=`<div style="background:var(--bg-elev-2);border-radius:6px;padding:8px;margin-bottom:10px;font-size:12px;max-height:100px;overflow-y:auto">`;
-    html+=bd.sortatori.drivers.map(d=>`<span style="margin-right:8px">${escapeHtml(d.name)}</span>`).join("");
-    html+=`</div>`;
-  }
-
-  document.getElementById("backupPreviewContent").innerHTML=html;
-  document.getElementById("backupManagerList").style.display="none";
-  document.getElementById("backupManagerPreview").style.display="block";
-}
-
-async function confirmRestoreBackup(){
-  if(_selectedBackupIdx<0||_selectedBackupIdx>=_backupDocs.length) return;
-  const bd=_backupDocs[_selectedBackupIdx];
-  const btn=document.getElementById("backupRestoreConfirmBtn");
-  btn.disabled=true; btn.textContent="⏳ Se restaurează...";
-
-  try{
+    // Build selection dialog
+    const opts = list.map((b,i)=>`${i+1}. ${b.date} ora ${b.time} (${b.count} soferi, de ${b.savedBy})`).join("\n");
+    const choice = prompt("Alege backup-ul de restaurat (scrie numărul 1-"+list.length+"):\n\n"+opts);
+    if(!choice) return;
+    const idx = parseInt(choice)-1;
+    if(idx<0||idx>=list.length){toast("Număr invalid",true);return;}
+    const selected = list[idx];
+    if(!selected.drivers && !selected.leaves){toast("Backup fără date utilizabile",true);return;}
+    if(!confirm("Restaurezi backup-ul din "+selected.date+" ora "+selected.time+"?\nConcedii, krank, fără plată, zile disponibile și reportate vor fi înlocuite."))return;
     let restored=0;
-
-    // Restaurează persoane + concedii
-    const driversObj=bd.drivers||{};
-    const driversArr=Array.isArray(driversObj)?driversObj:Object.values(driversObj);
-
-    if(driversArr.length>0){
-      driversArr.forEach(bkDr=>{
-        const dr=state.drivers.find(d=>d.id===bkDr.id||d.name===bkDr.name);
-        if(dr){
-          dr.leaves        = bkDr.leaves||[];
-          dr.krankLeaves   = bkDr.krankLeaves||[];
-          dr.unpaidLeaves  = bkDr.unpaidLeaves||[];
-          if(bkDr.maxDays!==undefined)       dr.maxDays=bkDr.maxDays;
-          if(bkDr.carryOverDays!==undefined) dr.carryOverDays=bkDr.carryOverDays;
-          if(bkDr.carryOverByYear)           dr.carryOverByYear=bkDr.carryOverByYear;
-          restored++;
-        }
-      });
-    } else if(bd.leaves){
-      // Format vechi
+    if(selected.drivers){
+      restored=restoreCompleteBackup(selected);
+    } else if(selected.leaves){
       state.drivers.forEach(dr=>{
-        if(bd.leaves[dr.name]){
-          const bk=bd.leaves[dr.name];
+        if(selected.leaves[dr.name]){
+          const bk=selected.leaves[dr.name];
           dr.leaves=bk.leaves||[];dr.krankLeaves=bk.krankLeaves||[];dr.unpaidLeaves=bk.unpaidLeaves||[];
           restored++;
         }
       });
     }
-
-    // Restaurează prezențe
-    if(bd.prezente&&Object.keys(bd.prezente).length>0){
-      Object.assign(presState.presence, bd.prezente);
-      await savePresState();
-    }
-
-    // Restaurează sortatori
-    if(bd.sortatori&&bd.sortatori.drivers&&bd.sortatori.drivers.length>0){
-      sortState.drivers=bd.sortatori.drivers;
-      sortState.presence=bd.sortatori.presence||sortState.presence||{};
-      await saveSortState();
-    }
-
-    if(bd.thresholds) state.thresholds=bd.thresholds;
-
-    scheduleSave();
-    renderAll();
-    if(document.getElementById("sortatoriTimeline")) renderSortatoriTimeline();
-    logActivity("🔄 Backup restaurat","—","backup din "+(bd.date||bd.savedAt||bd.id)+", "+restored+" persoane");
-    toast("✅ Restaurat: "+restored+" persoane, prezențe și sortatori");
-    closeModal("modalBackupManager");
-  }catch(e){
-    toast("Eroare restaurare: "+e.message,true);
-    console.error(e);
-  }
-  btn.disabled=false; btn.textContent="🔄 Restaurează acest backup";
+    scheduleSave(); renderAll();
+    setSaveStatus("ok","Backup restaurat ✓");
+    toast("✓ Backup din "+selected.date+" ("+selected.time+"): "+restored+" persoane restaurate");
+  }catch(e){toast("Eroare: "+e.message,true);setSaveStatus("error","Eroare backup");}
 }
 
 // Manual download of current leaves data
@@ -2988,6 +2724,7 @@ function uploadLocalBackup(e){
       const bk=JSON.parse(ev.target.result);
       let restored=0;
       if(bk.drivers && bk.drivers.length>0){
+        // Format nou — înlocuiește complet lista de persoane
         state.drivers = bk.drivers.map(d=>({
           id:             d.id||uid(),
           name:           d.name,
@@ -3001,32 +2738,21 @@ function uploadLocalBackup(e){
         }));
         restored = state.drivers.length;
       } else if(bk.leaves){
+        // Format vechi — creează persoane dacă nu există
         Object.entries(bk.leaves).forEach(([name,data])=>{
           let dr=state.drivers.find(d=>d.name===name);
-          if(!dr){ dr={id:uid(),name,visibleTo:["tania"],maxDays:0,carryOverDays:0,carryOverByYear:{},leaves:[],krankLeaves:[],unpaidLeaves:[]}; state.drivers.push(dr); }
-          dr.leaves=data.leaves||[]; dr.krankLeaves=data.krankLeaves||[]; dr.unpaidLeaves=data.unpaidLeaves||[];
+          if(!dr){
+            dr={id:uid(),name,visibleTo:["tania"],maxDays:0,carryOverDays:0,carryOverByYear:{},leaves:[],krankLeaves:[],unpaidLeaves:[]};
+            state.drivers.push(dr);
+          }
+          dr.leaves=data.leaves||[];
+          dr.krankLeaves=data.krankLeaves||[];
+          dr.unpaidLeaves=data.unpaidLeaves||[];
           restored++;
         });
       } else throw new Error("Format necunoscut");
-
-      if(bk.thresholds) state.thresholds=bk.thresholds;
-
-      // Restaurează prezențe
-      if(bk.prezente && Object.keys(bk.prezente).length>0){
-        Object.assign(presState.presence, bk.prezente);
-        savePresState();
-      }
-      // Restaurează sortatori
-      if(bk.sortatori && bk.sortatori.drivers && bk.sortatori.drivers.length>0){
-        sortState.drivers  = bk.sortatori.drivers;
-        sortState.presence = bk.sortatori.presence||sortState.presence||{};
-        saveSortState();
-      }
-
-      scheduleSave(); renderAll();
-      if(document.getElementById("sortatoriTimeline")) renderSortatoriTimeline();
-      logActivity("📂 Backup fișier restaurat","—",restored+" persoane");
-      toast("✓ Restaurat complet: "+restored+" persoane + prezențe + sortatori");
+      scheduleSave();renderAll();
+      toast("✓ Restaurat complet: "+restored+" persoane");
     }catch(err){toast("Eroare: "+err.message,true);console.error(err);}
   };
   reader.readAsText(file);e.target.value="";
@@ -3039,29 +2765,26 @@ function downloadBackupNow(){
   const blob=new Blob([data],{type:"application/json"});
   const url=URL.createObjectURL(blob);
   const a=document.createElement("a");
-  a.href=url;
-  a.download="mtc-backup-"+activeYear+"-"+fmtDate(new Date())+".json";
-  a.click();
+  a.href=url; a.download="mtc-backup-complet-"+fmtDate(new Date())+".json"; a.click();
   URL.revokeObjectURL(url);
-  toast("💾 Backup "+activeYear+" descărcat ("+backup.drivers.length+" persoane)");
+  toast("💾 Backup complet descărcat ("+backup.drivers.length+" persoane)");
 }
 
-// Auto backup zilnic pentru Admin
+// Auto backup zilnic pentru Admin — salvat în Firestore col "daily_backup"
 async function autoSaveDailyBackup(){
   if(!isAdmin()) return;
   const today = fmtDate(new Date());
-  const lsKey = "mtc_last_daily_backup_"+activeYear;
-  const lastBackupDay = localStorage.getItem(lsKey);
-  if(lastBackupDay===today) return;
+  const lastBackupDay = localStorage.getItem("mtc_last_daily_backup");
+  if(lastBackupDay===today) return; // deja salvat azi
   try{
-    await db.collection(backupColl()).doc(today).set({
+    await db.collection("daily_backup").doc(today).set({
       data: JSON.parse(JSON.stringify(state)),
       savedAt: new Date().toISOString(),
-      year: activeYear,
       drivers: state.drivers.length
     });
-    localStorage.setItem(lsKey, today);
-    console.log("Daily backup saved:", today, "year:", activeYear);
+    localStorage.setItem("mtc_last_daily_backup", today);
+    toast("✅ Backup automat salvat pentru "+today);
+    console.log("Daily backup saved:", today);
   }catch(e){ console.error("Daily backup failed:", e); }
 }
 
@@ -3089,8 +2812,7 @@ function renderHolidayBanner(){
 
 function renderCalendar(){
   const y=currentDate.getFullYear(),m=currentDate.getMonth();
-  document.getElementById("monthLabel").textContent=MONTHS[m];
-  const _yl=document.getElementById("yearLabel"); if(_yl)_yl.textContent=y;
+  document.getElementById("monthLabel").textContent=MONTHS[m]+" "+y;
   const today=new Date(),firstDay=new Date(y,m,1),lastDay=new Date(y,m+1,0);
   const startDow=(firstDay.getDay()+6)%7;
   const DOW_SHORT=["Lun","Mar","Mie","Joi","Vin","Sâm","Dum"];
@@ -3180,8 +2902,46 @@ function openDayDetail(dateStr){
   document.getElementById("modalDaySub").textContent=sub;
   const list=document.getElementById("dayDriversList");
   if(!drivers.length){list.innerHTML="<div class=\"empty\">Nicio persoană în concediu</div>";}
-  else{list.innerHTML=drivers.map(dr=>{const leave=dr.leaves.find(l=>dateInLeave(d,l));return`<div class="day-driver"><span>${escapeHtml(dr.name)}</span><span style="color:var(--text-dim);font-size:11px">${formatDateRO(leave.start)} → ${formatDateRO(leave.end)}</span></div>`;}).join("");}
+  else{
+    list.innerHTML=drivers.map(dr=>{
+      // Colectăm toate perioadele pentru această persoană (concediu normal)
+      const allLeaves = (dr.leaves||[]).filter(l=>dateInLeave(d,l));
+      // Sortăm după start
+      allLeaves.sort((a,b)=>a.start.localeCompare(b.start));
+      // Fuzionăm perioadele consecutive sau suprapuse
+      const merged = mergeLeaves(dr.leaves||[]);
+      // Găsim perioada fuzionată care acoperă ziua d
+      const covering = merged.find(l=>dateInLeave(d,l));
+      const rangeStr = covering ? formatDateRO(covering.start)+" → "+formatDateRO(covering.end) : "";
+      return `<div class="day-driver"><span>${escapeHtml(dr.name)}</span><span style="color:var(--text-dim);font-size:11px">${rangeStr}</span></div>`;
+    }).join("");
+  }
   openModal("modalDay");
+}
+
+// Fuzionează perioadele consecutive sau suprapuse dintr-o listă de leaves
+function mergeLeaves(leaves){
+  if(!leaves||!leaves.length) return [];
+  // Sortăm după start
+  const sorted = [...leaves].sort((a,b)=>a.start.localeCompare(b.start));
+  const merged = [];
+  for(const lv of sorted){
+    if(!merged.length){merged.push({start:lv.start,end:lv.end});continue;}
+    const last = merged[merged.length-1];
+    // Verificăm dacă perioadele sunt consecutive (endDate+1zi >= startDate)
+    const lastEnd = parseDate(last.end);
+    const curStart = parseDate(lv.start);
+    lastEnd.setDate(lastEnd.getDate()+1); // ziua după end
+    // Sari duminicile la verificarea consecutivității
+    while(isSunday(lastEnd)) lastEnd.setDate(lastEnd.getDate()+1);
+    if(curStart <= lastEnd){
+      // Extinde perioada curentă dacă end-ul e mai mare
+      if(lv.end > last.end) last.end = lv.end;
+    } else {
+      merged.push({start:lv.start,end:lv.end});
+    }
+  }
+  return merged;
 }
 
 // ============================================================
@@ -3300,8 +3060,7 @@ document.addEventListener("mousemove",e=>{if(tlDrag.active&&e.buttons!==1)tlDrag
 
 function renderTimeline(){
   const y=currentDate.getFullYear(),m=currentDate.getMonth(),daysInMonth=new Date(y,m+1,0).getDate(),today=new Date();
-  document.getElementById("monthLabel").textContent=MONTHS[m];
-  const _yl2=document.getElementById("yearLabel"); if(_yl2)_yl2.textContent=y;
+  document.getElementById("monthLabel").textContent=MONTHS[m]+" "+y;
   const tl=document.getElementById("timeline");
   const visDrivers=getVisibleDrivers();
 
@@ -3437,87 +3196,12 @@ function changeMonth(delta){
   const prevYear = currentDate.getFullYear();
   currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth()+delta, 1);
   const newYear = currentDate.getFullYear();
+  // Dacă am trecut într-un an nou și suntem Admin/Tania, calculăm carry-over automat
+  // FĂRĂ să ștergem nimic — zilele din 2026 rămân intacte
   if(newYear > prevYear && isAdminOrTania()){
     autoCalculateCarryOver(prevYear, newYear);
   }
   renderMain();
-}
-
-async function switchYear(year){
-  if(year < 2024 || year > 2035) return;
-  if(year === activeYear) return;
-
-  const lbl = document.getElementById("yearLabel");
-  if(lbl) lbl.textContent="...";
-
-  // Reset complet — curăță tot ca la logout
-  fullReset();
-
-  activeYear = year;
-  currentDate = new Date(year, currentDate.getMonth(), 1);
-  if(lbl) lbl.textContent=year;
-
-  const uk = window.activeUserKey||"tania";
-  setSaveStatus("saving","Se încarcă "+year+"...");
-
-  try{
-    const testSnap = await db.collection(concediiColl()).doc(uk==="admin"?"tania":uk).get();
-    if(!testSnap.exists){
-      await initYearFromBase(uk, year);
-    } else {
-      initApp(uk);
-    }
-  }catch(e){
-    await initYearFromBase(uk, year);
-  }
-
-  loadPresState();
-  loadSortState();
-  loadBackupInfoFromStorage();
-  toast("📅 Schimbat la "+year);
-}
-
-async function initYearFromBase(uk, year){
-  // Copiem persoanele din BASE_YEAR (fără concedii/prezențe) în noul an
-  try{
-    const baseColl = BASE_YEAR===2026?"concedii":"concedii_"+BASE_YEAR;
-    const docKeys = ["raluca","madalina","corina","tania"];
-    const promises = docKeys.map(dk=>db.collection(baseColl).doc(dk).get());
-    const snaps = await Promise.all(promises);
-
-    // Construim noua stare fără concedii
-    const byDoc = {raluca:[],madalina:[],corina:[],tania:[]};
-    snaps.forEach((snap,i)=>{
-      const dk=docKeys[i];
-      if(snap.exists){
-        (snap.data().drivers||[]).forEach(dr=>{
-          const clean = {
-            id: dr.id, name: dr.name, visibleTo: dr.visibleTo||[],
-            maxDays: dr.maxDays||0, carryOverDays: 0, carryOverByYear: {},
-            leaves:[], krankLeaves:[], unpaidLeaves:[]
-          };
-          byDoc[dk].push(clean);
-          if(dk==="tania") byDoc.tania.push(clean);
-        });
-      }
-    });
-
-    // Deduplicare tania
-    const seenTania = new Set();
-    byDoc.tania = byDoc.tania.filter(d=>{ if(seenTania.has(d.id)) return false; seenTania.add(d.id); return true; });
-
-    // Salvăm în noua colecție
-    const newColl = concediiColl();
-    await Promise.all(docKeys.map(dk=>
-      db.collection(newColl).doc(dk).set({drivers:byDoc[dk],thresholds:{warn:3,crit:5}})
-    ));
-
-    toast("✨ An nou "+year+" inițializat cu persoanele din "+BASE_YEAR+" (fără concedii)");
-  }catch(e){
-    console.error("initYearFromBase error",e);
-  }
-  // Acum încărcăm
-  initApp(uk);
 }
 
 function autoCalculateCarryOver(fromYear, toYear){
@@ -3598,14 +3282,19 @@ function setAppMode(mode){
   document.getElementById("sortatoriModule").style.display  = mode==="sortatori"?"block":"none";
   const pm = document.getElementById("prezenteModule");
   if(pm) pm.style.display = mode==="prezente"?"block":"none";
+  const planM = document.getElementById("planificareModule");
+  if(planM) planM.style.display = mode==="planificare"?"block":"none";
   document.getElementById("modConcedii").classList.toggle("active",  mode==="concedii");
   document.getElementById("modConcedii").classList.toggle("mod-tab-active",  mode==="concedii");
   document.getElementById("modSortatori").classList.toggle("active", mode==="sortatori");
   document.getElementById("modSortatori").classList.toggle("mod-tab-active", mode==="sortatori");
   const mp=document.getElementById("modPrezente");
   if(mp){ mp.classList.toggle("active", mode==="prezente"); mp.classList.toggle("mod-tab-active", mode==="prezente"); }
-  if(mode==="sortatori") renderSortatoriTimeline();
-  if(mode==="prezente")  renderPrezenteTimeline();
+  const mpl=document.getElementById("modPlanificare");
+  if(mpl){ mpl.classList.toggle("active", mode==="planificare"); mpl.classList.toggle("mod-tab-active", mode==="planificare"); }
+  if(mode==="sortatori")   renderSortatoriTimeline();
+  if(mode==="prezente")    renderPrezenteTimeline();
+  if(mode==="planificare") renderPlanificare();
 }
 
 function setSortView(v){
@@ -3624,13 +3313,8 @@ function goSortToday(){ sortCurrentDate = new Date(); renderSortatoriTimeline();
 // ---- Firestore ----
 async function saveSortState(){
   try{
-    if(!sortState.drivers || sortState.drivers.length === 0){
-      console.warn("saveSortState: empty — ABORTED"); return;
-    }
-    // Guard anti-cross-year
-    const yr = activeYear;
-    await db.collection(sortatoriColl()).doc("state").set(JSON.parse(JSON.stringify(sortState)));
-    if(activeYear !== yr) console.warn("saveSortState: year changed mid-save (harmless, saved to correct coll)");
+    await db.collection("sortatori").doc("state").set(JSON.parse(JSON.stringify(sortState)));
+    console.log("Sortatori saved:", sortState.drivers.length, "drivers");
   }catch(e){ console.error("sort save",e); }
 }
 
@@ -3638,7 +3322,7 @@ function loadSortState(){
   // Unsubscribe previous listener if exists
   if(_sortUnsub){ try{_sortUnsub();}catch(e){} _sortUnsub=null; }
   
-  _sortUnsub = db.collection(sortatoriColl()).doc("state").onSnapshot(snap=>{
+  _sortUnsub = db.collection("sortatori").doc("state").onSnapshot(snap=>{
     if(snap.exists){
       const data = snap.data();
       sortState.drivers  = data.drivers  || [];
@@ -3684,17 +3368,7 @@ function togglePresence(driverName, day, isRightClick){
 let _sortDrag = {active:false, driverName:null, mode:null}; // mode: "prezent"|"absent"|"clear"
 
 function sortDragStart(driverName, day, isRight){
-  const _uk=window.activeUserKey||"";
-  const isMih = _uk==="mihaela";
-  if(isMih){
-    // Mihaela poate edita doar luna curentă
-    const now=new Date();
-    if(sortCurrentDate.getFullYear()!==now.getFullYear()||sortCurrentDate.getMonth()!==now.getMonth()){
-      toast("Poți marca prezența doar în luna curentă",true);
-      return;
-    }
-  }
-  if(!isAdminOrTania() && _uk!=="mihaela" && _uk!=="madalina") return;
+  if(!isAdminOrTania()) return;
   const mk = getSortKey();
   const cur = (sortState.presence[mk]&&sortState.presence[mk][driverName]&&sortState.presence[mk][driverName][String(day)]);
   // Determinăm modul după butonul apăsat și starea curentă
@@ -3730,19 +3404,7 @@ function sortDragApply(driverName, day){
 
 function sortDragEnd(){
   if(!_sortDrag.active) return;
-  const name = _sortDrag.driverName;
-  const mode = _sortDrag.mode;
-  const mk = getSortKey();
   _sortDrag = {active:false, driverName:null, mode:null};
-  // Numărăm zilele marcate în luna curentă
-  const dp = (sortState.presence[mk]&&sortState.presence[mk][name])||{};
-  const pCount = Object.values(dp).filter(v=>v==="prezent").length;
-  const aCount = Object.values(dp).filter(v=>v==="absent").length;
-  logActivity(
-    mode==="prezent"?"✓ Prezență sortator":mode==="absent"?"✗ Absență sortator":"🗑 Ștergere sortator",
-    name,
-    "drag — "+mk+" (prezent:"+pCount+", absent:"+aCount+")"
-  );
   saveSortState();
 }
 document.addEventListener("mouseup", ()=>{ if(_sortDrag.active) sortDragEnd(); });
@@ -3752,6 +3414,7 @@ document.addEventListener("mousemove", e=>{ if(_sortDrag.active && e.buttons===0
 let _pickAvail=[], _pickGroup="", _pickCat="";
 
 function openAddSortatorCat(group, cat){
+  // Colecteaza driveri disponibili din modulul concedii
   const existingNames = new Set((sortState.drivers||[]).filter(d=>d.group===group).map(d=>d.name));
   const groupKey = group==="eiselfing"?"madalina":"raluca";
   const avail = (state.drivers||[]).filter(d=>{
@@ -3765,51 +3428,38 @@ function openAddSortatorCat(group, cat){
   _pickGroup = group;
   _pickCat   = cat;
   
-  const catLabel = cat==="permanent"?"Permanenți":cat==="rotatie"?"Rotații":cat==="camion"?"Camion":"Urgențe";
+  const catLabel = cat==="permanent"?"Permanenți":cat==="rotatie"?"Rotații":"Urgențe";
   const grpLabel = group==="eiselfing"?"Eiselfing":"Ruhstorf";
-
-  const renderList = (filter)=>{
-    const filtered = filter ? avail.filter(d=>d.name.toLowerCase().includes(filter.toLowerCase())) : avail;
-    if(!filtered.length) return `<div style="padding:14px;text-align:center;color:var(--text-dim);font-size:13px">Niciun rezultat</div>`;
-    return filtered.map((dr,i)=>{
-      const origIdx = avail.indexOf(dr);
-      return `<label style="display:flex;align-items:center;gap:10px;padding:7px 4px;cursor:pointer;border-bottom:1px solid var(--border)">
-        <input type="checkbox" class="sort-pick-cb" value="${origIdx}" style="width:16px;height:16px;cursor:pointer">
-        <span style="font-size:13px">${escapeHtml(dr.name)}</span>
-      </label>`;
-    }).join("");
-  };
-
+  
   let html = `<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Adaugă la ${catLabel} — ${grpLabel}</div>`;
-  html += `<input type="text" id="sortPickSearch" placeholder="🔍 Caută persoană..." oninput="document.getElementById('sortPickList').innerHTML=window._sortRenderList(this.value)"
-    style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg-elev-2);color:var(--text);font-size:13px;margin-bottom:8px;box-sizing:border-box">`;
-  html += `<div id="sortPickList" style="max-height:260px;overflow-y:auto">${renderList("")}</div>`;
+  html += '<div style="max-height:280px;overflow-y:auto">';
+  avail.forEach((dr,i)=>{
+    html += `<label style="display:flex;align-items:center;gap:10px;padding:7px 4px;cursor:pointer;border-bottom:1px solid var(--border)">
+      <input type="checkbox" class="sort-pick-cb" value="${i}" style="width:16px;height:16px;cursor:pointer">
+      <span style="font-size:13px">${escapeHtml(dr.name)}</span>
+    </label>`;
+  });
+  html += '</div>';
   html += `<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
     <button class="btn btn-secondary" onclick="closeModal('modalDay')">Anulează</button>
     <button class="btn" onclick="confirmSortPick()">+ Adaugă</button>
   </div>`;
-
-  window._sortRenderList = renderList;
   
   document.getElementById("modalDayTitle").textContent = catLabel+" — "+grpLabel;
   document.getElementById("modalDaySub").textContent   = avail.length+" persoane disponibile";
   document.getElementById("dayDriversList").innerHTML  = html;
   openModal("modalDay");
-  setTimeout(()=>{ const s=document.getElementById("sortPickSearch"); if(s)s.focus(); },150);
 }
 
 function confirmSortPick(){
   const checked = [...document.querySelectorAll(".sort-pick-cb:checked")];
   if(!checked.length){ toast("Selectează cel puțin o persoană",true); return; }
-  const names = [];
   checked.forEach(cb=>{
     const dr = _pickAvail[parseInt(cb.value)];
-    if(dr){ sortState.drivers.push({id:uid(),name:dr.name,group:_pickGroup,category:_pickCat}); names.push(dr.name); }
+    if(dr) sortState.drivers.push({id:uid(),name:dr.name,group:_pickGroup,category:_pickCat});
   });
-  sortState.drivers.sort((a,b)=>a.name.localeCompare(b.name,"ro"));
-  names.forEach(n=>logActivity("➕ Sortator adăugat", n, _pickCat+" — "+_pickGroup));
-  renderSortatoriTimeline();
-  saveSortState();
+  renderSortatoriTimeline(); // render imediat
+  saveSortState();           // salveaza in Firestore
   closeModal("modalDay");
   toast("✓ "+checked.length+" sortator(i) adăugat(i)");
 }
@@ -3818,17 +3468,15 @@ function deleteSortator(id){
   const dr = (sortState.drivers||[]).find(d=>d.id===id);
   if(!dr||!confirm("Ștergi "+dr.name+" din sortatori?")) return;
   sortState.drivers = sortState.drivers.filter(d=>d.id!==id);
-  logActivity("🗑 Sortator șters", dr.name, dr.category+" — "+dr.group);
   renderSortatoriTimeline();
   saveSortState();
   toast("🗑 "+dr.name+" șters");
 }
 
 // ---- Render ----
-function makeSortRow(dr, presence, daysInMonth, y, m, gridCols, canAdd, canEdit){
-  if(canEdit===undefined) canEdit=canAdd;
+function makeSortRow(dr, presence, daysInMonth, y, m, gridCols, canEdit){
   const dp = presence[dr.name]||{};
-  const delBtn = canAdd ? `<span onclick="deleteSortator('${dr.id}')" style="color:var(--red);cursor:pointer;font-size:10px;margin-left:4px" title="Șterge">✕</span>` : "";
+  const delBtn = canEdit ? `<span onclick="deleteSortator('${dr.id}')" style="color:var(--red);cursor:pointer;font-size:10px;margin-left:4px" title="Șterge">✕</span>` : "";
   let dRow = `<div class='tl-driver-row' style='font-size:12px'>${escapeHtml(dr.name)}${delBtn}</div>`;
   let gRow = `<div class='tl-row' style='grid-template-columns:${gridCols}'>`;
 
@@ -3886,13 +3534,7 @@ function renderSortatoriTimeline(){
   const mk=getSortKey();
   const presence=(sortState.presence&&sortState.presence[mk])||{};
   const colW=34, gridCols=`repeat(${days},${colW}px)`;
-  const _uk2=window.activeUserKey||"";
-  const isMihaela2 = _uk2==="mihaela";
-  const today2 = new Date();
-  // Mihaela poate edita doar luna curentă
-  const mihaelaCurMonth = isMihaela2 && (sortCurrentDate.getFullYear()===today2.getFullYear() && sortCurrentDate.getMonth()===today2.getMonth());
-  const canEdit=isAdminOrTania()||(!isMihaela2&&_uk2==="madalina")||(isMihaela2&&mihaelaCurMonth);
-  const canAdd=isAdminOrTania();
+  const canEdit=isAdminOrTania();
 
   const perm   =drivers.filter(d=>!d.category||d.category==="permanent");
   const rotatie=drivers.filter(d=>d.category==="rotatie");
@@ -3913,27 +3555,27 @@ function renderSortatoriTimeline(){
   gH+="</div>";
 
   // Permanenți
-  const hP=makeCatHeader("Permanenți","#10b981",perm.length,gridCols,canAdd,group,"permanent",days);
+  const hP=makeCatHeader("Permanenți","#10b981",perm.length,gridCols,canEdit,group,"permanent",days);
   dH+=hP.dRow; gH+=hP.gRow;
-  perm.forEach(dr=>{ const r=makeSortRow(dr,presence,days,y,m,gridCols,canAdd,canEdit); dH+=r.dRow; gH+=r.gRow; });
+  perm.forEach(dr=>{ const r=makeSortRow(dr,presence,days,y,m,gridCols,canEdit); dH+=r.dRow; gH+=r.gRow; });
   if(!perm.length){ dH+=`<div class='tl-driver-row' style='color:var(--text-dim);font-style:italic;font-size:11px'>—</div>`; gH+=`<div class='tl-row' style='grid-template-columns:${gridCols}'></div>`; }
 
   // Rotații
-  const hR=makeCatHeader("Rotații","#f59e0b",rotatie.length,gridCols,canAdd,group,"rotatie",days);
+  const hR=makeCatHeader("Rotații","#f59e0b",rotatie.length,gridCols,canEdit,group,"rotatie",days);
   dH+=hR.dRow; gH+=hR.gRow;
-  rotatie.forEach(dr=>{ const r=makeSortRow(dr,presence,days,y,m,gridCols,canAdd,canEdit); dH+=r.dRow; gH+=r.gRow; });
+  rotatie.forEach(dr=>{ const r=makeSortRow(dr,presence,days,y,m,gridCols,canEdit); dH+=r.dRow; gH+=r.gRow; });
   if(!rotatie.length){ dH+=`<div class='tl-driver-row' style='color:var(--text-dim);font-style:italic;font-size:11px'>—</div>`; gH+=`<div class='tl-row' style='grid-template-columns:${gridCols}'></div>`; }
 
   // Camion
-  const hC=makeCatHeader("Camion","#8b5cf6",camion.length,gridCols,canAdd,group,"camion",days);
+  const hC=makeCatHeader("Camion","#8b5cf6",camion.length,gridCols,canEdit,group,"camion",days);
   dH+=hC.dRow; gH+=hC.gRow;
-  camion.forEach(dr=>{ const r=makeSortRow(dr,presence,days,y,m,gridCols,canAdd,canEdit); dH+=r.dRow; gH+=r.gRow; });
+  camion.forEach(dr=>{ const r=makeSortRow(dr,presence,days,y,m,gridCols,canEdit); dH+=r.dRow; gH+=r.gRow; });
   if(!camion.length){ dH+=`<div class='tl-driver-row' style='color:var(--text-dim);font-style:italic;font-size:11px'>—</div>`; gH+=`<div class='tl-row' style='grid-template-columns:${gridCols}'></div>`; }
 
   // Urgențe
-  const hU=makeCatHeader("Urgențe","#ef4444",urgenta.length,gridCols,canAdd,group,"urgenta",days);
+  const hU=makeCatHeader("Urgențe","#ef4444",urgenta.length,gridCols,canEdit,group,"urgenta",days);
   dH+=hU.dRow; gH+=hU.gRow;
-  urgenta.forEach(dr=>{ const r=makeSortRow(dr,presence,days,y,m,gridCols,canAdd,canEdit); dH+=r.dRow; gH+=r.gRow; });
+  urgenta.forEach(dr=>{ const r=makeSortRow(dr,presence,days,y,m,gridCols,canEdit); dH+=r.dRow; gH+=r.gRow; });
   if(!urgenta.length){ dH+=`<div class='tl-driver-row' style='color:var(--text-dim);font-style:italic;font-size:11px'>—</div>`; gH+=`<div class='tl-row' style='grid-template-columns:${gridCols}'></div>`; }
 
   dH+="</div>"; gH+="</div>";
@@ -3956,10 +3598,9 @@ async function logActivity(action, person, details){
       person:    person||"",
       details:   details||"",
       timestamp: new Date().toISOString(),
-      year:      activeYear,
       month:     currentDate.getFullYear()+"-"+String(currentDate.getMonth()+1).padStart(2,"0")
     };
-    await db.collection(activityColl()).add(entry);
+    await db.collection("activity_log").add(entry);
   }catch(e){ console.warn("log err",e); }
 }
 
@@ -3968,7 +3609,7 @@ async function openActivityLog(){
   openModal("modalActivityLog");
   document.getElementById("actLogContent").innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:20px">⏳ Se încarcă...</div>';
   try{
-    const snap = await db.collection(activityColl())
+    const snap = await db.collection("activity_log")
       .orderBy("timestamp","desc")
       .limit(200)
       .get();
@@ -4125,11 +3766,11 @@ function processExcelWorkbook(wb, fileName){
 
       // What Excel says
       const excStatus = exc.status.toLowerCase();
-      const excUrlaub   = excStatus==="urlaub";
-      const excKrank    = excStatus==="krank" || excStatus==="krankenstand";
-      const excPresent  = excStatus==="x" || exc.hasArrival; // X în H = prezent
-      const excFeiertag = excStatus==="feiertag" || excStatus==="f";
-      const excSonder   = excStatus.includes("sonder") || excStatus==="sonderurlaub";
+      const excUrlaub  = excStatus==="urlaub";
+      const excKrank   = excStatus==="krank" || excStatus==="krankenstand";
+      const excPresent = exc.hasArrival;
+      const excFeiertag= excStatus==="feiertag";
+      const excSonder  = excStatus.includes("sonder") || excStatus.includes("sonderurlaub");
 
       // What HTML says
       const htmlLeave  = (dr.leaves||[]).some(l=>dateInLeave(d,l));
@@ -4454,7 +4095,7 @@ function getPresMonthKey(){
 
 function loadPresState(){
   if(_presUnsub){ try{_presUnsub();}catch(e){} _presUnsub=null; }
-  _presUnsub = db.collection(prezenteColl()).doc("state").onSnapshot(snap=>{
+  _presUnsub = db.collection("prezente").doc("state").onSnapshot(snap=>{
     if(snap.exists){
       presState = snap.data();
       if(!presState.presence) presState.presence={};
@@ -4468,9 +4109,7 @@ function loadPresState(){
 
 async function savePresState(){
   try{
-    // Guard: prezenteColl() folosește activeYear curent — safe dacă nu s-a schimbat
-    if(!presState.presence || Object.keys(presState.presence).length === 0) return;
-    await db.collection(prezenteColl()).doc("state").set(JSON.parse(JSON.stringify(presState)));
+    await db.collection("prezente").doc("state").set(JSON.parse(JSON.stringify(presState)));
   }catch(e){ console.error("pres save",e); }
 }
 
@@ -4542,298 +4181,263 @@ function presDragEnd(){
 }
 
 // ============================================================
-// IMPORT EXCEL → HTML
+// PLANIFICARE SAPTAMANALA (doar Admin, Ruhstorf)
 // ============================================================
-let _importPending = [];
+let planCurrentDate = new Date(); // orice zi din saptamana curenta
+let planState = {}; // { "2026-W23": { "NumeDriver": [0,1,0,1,1,1,0] } } (7 zile Lu-Du)
+let _planUnsub = null;
 
-function importExcelFile(e){
-  const files = [...e.target.files];
-  e.target.value = "";
-  if(!files.length) return;
-  _importPending = [];
-  document.getElementById("importExcelSub").textContent = "Se procesează "+files.length+" fișier(e)...";
-  document.getElementById("importExcelResults").innerHTML = '<div style="color:var(--text-dim);padding:20px;text-align:center">⏳ Se încarcă...</div>';
-  document.getElementById("importExcelConfirmBtn").style.display = "none";
-  openModal("modalImportExcel");
-  let done = 0;
-  const allResults = [];
-  files.forEach(file=>{
-    const reader = new FileReader();
-    reader.onload = function(ev){
-      try{
-        const data = new Uint8Array(ev.target.result);
-        const wb = XLSX.read(data, {type:"array", cellDates:true, cellNF:false});
-        const res = parseExcelForImport(wb, file.name);
-        allResults.push(...res);
-      }catch(err){ allResults.push({error: file.name+": "+err.message}); }
-      done++;
-      if(done===files.length) renderImportPreview(allResults);
-    };
-    reader.readAsArrayBuffer(file);
-  });
+const PLAN_DAYS = ["Lun","Mar","Mie","Joi","Vin","Sâm","Dum"];
+const PLAN_DAYS_FULL = ["Luni","Marți","Miercuri","Joi","Vineri","Sâmbătă","Duminică"];
+
+function getPlanWeekKey(){
+  const d = new Date(planCurrentDate);
+  const dow = (d.getDay()+6)%7; // 0=luni
+  const mon = new Date(d); mon.setDate(d.getDate()-dow);
+  const y = mon.getFullYear();
+  const week = getISOWeek(mon);
+  return y+"-W"+String(week).padStart(2,"0");
 }
 
-function parseExcelForImport(wb, fileName){
-  const skipSheets = new Set(["Angajati","Model"]);
-  const results = [];
-  const MONTH_MAP = {
-    januar:1,january:1,februar:2,february:2,märz:3,march:3,
-    april:4,mai:5,may:5,juni:6,june:6,juli:7,july:7,august:8,
-    september:9,oktober:10,october:10,november:11,dezember:12,december:12
-  };
-  wb.SheetNames.forEach(sheetName=>{
-    if(skipSheets.has(sheetName)) return;
-    const ws = wb.Sheets[sheetName];
-    if(!ws) return;
-    const nameCell = ws["F3"];
-    const personName = (nameCell && String(nameCell.v||"").trim()) || sheetName;
-    if(!personName) return;
-    const monthCell = ws["I3"], yearCell = ws["I4"];
-    const monthStr  = monthCell ? String(monthCell.v||"").trim() : "";
-    const yearVal   = yearCell  ? parseInt(yearCell.v) : 0;
-    const monthNum  = MONTH_MAP[monthStr.toLowerCase()] || 0;
-    if(!monthNum || !yearVal){ results.push({name:personName, skip:"lună necunoscută ("+monthStr+")"}); return; }
-    const dr = state.drivers.find(d=>
-      d.name.toLowerCase()===personName.toLowerCase()||
-      normalizeForSearch(d.name)===normalizeForSearch(personName)
-    );
-    if(!dr){ results.push({name:personName, monthNum, yearVal, monthStr, skip:"persoană negăsită în HTML"}); return; }
-
-    const changes = {leaves:[], krank:[], unpaid:[], prezente:[]};
-    let runType=null, runStart=null;
-    const flush=(type,startDay,endDay)=>{
-      const startStr=fmtDate(new Date(yearVal,monthNum-1,startDay));
-      const endStr=fmtDate(new Date(yearVal,monthNum-1,endDay));
-      if(type==="urlaub")   changes.leaves.push({start:startStr,end:endStr});
-      else if(type==="krank")  changes.krank.push({start:startStr,end:endStr});
-      else if(type==="unpaid") changes.unpaid.push({start:startStr,end:endStr});
-    };
-    for(let row=6; row<=36; row++){
-      const bCell=ws["B"+row];
-      if(!bCell||bCell.v===null||bCell.v===undefined) continue;
-      const dayNum=parseInt(bCell.v);
-      if(isNaN(dayNum)||dayNum<1||dayNum>31) continue;
-      const d=new Date(yearVal,monthNum-1,dayNum);
-      if(d.getMonth()!==monthNum-1) continue;
-      const dCell=ws["D"+row], hCell=ws["H"+row];
-      const rawStatus=hCell?String(hCell.v||hCell.w||"").trim():"";
-      const status=rawStatus.toLowerCase();
-      const hasArrival=dCell&&dCell.v!==null&&dCell.v!==undefined&&dCell.v!=="";
-
-      // Determină tipul zilei
-      // X în coloana H = prezent (marcat explicit ca prezent/sortat)
-      // Ora în coloana D fără altceva în H = de asemenea prezent
-      let dayType=null;
-      if(status==="urlaub"||status==="u") dayType="urlaub";
-      else if(status==="krank"||status==="krankenstand"||status==="k") dayType="krank";
-      else if(status.includes("sonder")||status==="sonderurlaub") dayType="unpaid";
-      else if(status==="feiertag"||status==="f") dayType="feiertag";
-      else if(status==="x") dayType="prezent";           // X explicit = prezent
-      else if(status==="prezent"||status==="p") dayType="prezent"; // dacă scrie "Prezent"
-      else if(hasArrival) dayType="prezent";              // oră în D fără altceva = prezent
-      if(dayType==="urlaub"||dayType==="krank"||dayType==="unpaid"){
-        if(runType===dayType){}
-        else{ if(runType) flush(runType,runStart,dayNum-1); runType=dayType; runStart=dayNum; }
-      } else {
-        if(runType){ flush(runType,runStart,dayNum-1); runType=null; runStart=null; }
-      }
-      if(dayType==="prezent") changes.prezente.push(dayNum);
-    }
-    if(runType) flush(runType,runStart,new Date(yearVal,monthNum,0).getDate());
-
-    const existing={leaves:(dr.leaves||[]),krank:(dr.krankLeaves||[]),unpaid:(dr.unpaidLeaves||[])};
-    const isNew=(l,arr)=>!arr.some(e=>e.start===l.start&&e.end===l.end);
-    const newLeaves=changes.leaves.filter(l=>isNew(l,existing.leaves));
-    const newKrank=changes.krank.filter(l=>isNew(l,existing.krank));
-    const newUnpaid=changes.unpaid.filter(l=>isNew(l,existing.unpaid));
-    const mk=yearVal+"-"+String(monthNum).padStart(2,"0");
-    const existingPres=(presState.presence&&presState.presence[mk]&&presState.presence[mk][dr.name])||{};
-    const newPrezente=changes.prezente.filter(d=>existingPres[String(d)]!=="prezent");
-    results.push({
-      name:personName, drId:dr.id, drName:dr.name,
-      monthNum, yearVal, monthStr, fileName,
-      newLeaves, newKrank, newUnpaid, newPrezente,
-      totalNew: newLeaves.length+newKrank.length+newUnpaid.length+newPrezente.length
-    });
-  });
-  return results;
+function getISOWeek(d){
+  const date = new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  const dayNum = date.getUTCDay()||7;
+  date.setUTCDate(date.getUTCDate()+4-dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(),0,1));
+  return Math.ceil((((date-yearStart)/86400000)+1)/7);
 }
 
-function renderImportPreview(results){
-  _importPending=results.filter(r=>!r.error&&!r.skip&&r.totalNew>0);
-  const errors=results.filter(r=>r.error);
-  const skipped=results.filter(r=>r.skip);
-  const empty=results.filter(r=>!r.error&&!r.skip&&r.totalNew===0);
-  const MRO=["","Ianuarie","Februarie","Martie","Aprilie","Mai","Iunie","Iulie","August","Septembrie","Octombrie","Noiembrie","Decembrie"];
-  document.getElementById("importExcelSub").textContent=results.length+" persoane · "+_importPending.length+" cu date noi";
-  document.getElementById("importExcelConfirmBtn").style.display=_importPending.length>0?"inline-flex":"none";
-  let html=`<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
-    <div style="padding:7px 14px;background:rgba(16,185,129,0.15);border-radius:6px;font-size:13px">📥 De importat: <strong>${_importPending.length}</strong></div>
-    <div style="padding:7px 14px;background:rgba(100,100,100,0.1);border-radius:6px;font-size:13px">✅ Deja OK: <strong>${empty.length}</strong></div>
-    ${skipped.length?`<div style="padding:7px 14px;background:rgba(100,100,100,0.1);border-radius:6px;font-size:13px">⏭ Sărite: <strong>${skipped.length}</strong></div>`:""}
-    ${errors.length?`<div style="padding:7px 14px;background:rgba(239,68,68,0.15);border-radius:6px;font-size:13px">❌ Erori: <strong>${errors.length}</strong></div>`:""}
-  </div>`;
-  if(_importPending.length===0){
-    html+=`<div style="text-align:center;padding:30px;color:var(--text-dim)">Nimic de importat — toate datele există deja.</div>`;
-  } else {
-    html+=`<div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;padding:8px 12px;background:var(--bg-elev-2);border-radius:6px">⚠️ Datele existente <strong>nu se șterg</strong> — se adaugă doar ce lipsește.</div>`;
-    _importPending.forEach(r=>{
-      html+=`<div style="background:var(--bg-elev-2);border-radius:7px;padding:10px 14px;margin-bottom:8px;border-left:3px solid #10b981">`;
-      html+=`<div style="font-weight:700;font-size:13px;margin-bottom:6px">${escapeHtml(r.drName||r.name)} <span style="color:var(--text-dim);font-size:11px;font-weight:400">${MRO[r.monthNum]||""} ${r.yearVal}</span></div>`;
-      if(r.newLeaves.length)   html+=r.newLeaves.map(l=>`<div style="font-size:12px;padding:1px 0">🟡 Concediu: ${l.start} → ${l.end}</div>`).join("");
-      if(r.newKrank.length)    html+=r.newKrank.map(l=>`<div style="font-size:12px;padding:1px 0">🔵 Krank: ${l.start} → ${l.end}</div>`).join("");
-      if(r.newUnpaid.length)   html+=r.newUnpaid.map(l=>`<div style="font-size:12px;padding:1px 0">🟣 Fără plată (S): ${l.start} → ${l.end}</div>`).join("");
-      if(r.newPrezente.length) html+=`<div style="font-size:12px;padding:1px 0">✅ Prezențe: ziua ${r.newPrezente.join(", ")}</div>`;
-      html+=`</div>`;
-    });
-  }
-  if(skipped.length){
-    html+=`<div style="background:var(--bg-elev-2);border-radius:6px;padding:8px 12px;margin-top:8px;border-left:3px solid #666">`;
-    html+=`<div style="font-size:12px;font-weight:700;color:var(--text-dim);margin-bottom:4px">Sărite:</div>`;
-    html+=skipped.map(r=>`<div style="font-size:12px;color:var(--text-dim)">• ${escapeHtml(r.name)} — ${r.skip}</div>`).join("");
-    html+=`</div>`;
-  }
-  document.getElementById("importExcelResults").innerHTML=html;
+function getPlanWeekDates(){
+  const d = new Date(planCurrentDate);
+  const dow = (d.getDay()+6)%7;
+  const mon = new Date(d); mon.setDate(d.getDate()-dow);
+  return Array.from({length:7},(_,i)=>{ const dd=new Date(mon); dd.setDate(mon.getDate()+i); return dd; });
 }
 
-async function confirmImportExcel(){
-  if(!_importPending.length) return;
-  const btn=document.getElementById("importExcelConfirmBtn");
-  btn.disabled=true; btn.textContent="⏳ Se importă...";
-  const MRO=["","Ian","Feb","Mar","Apr","Mai","Iun","Iul","Aug","Sep","Oct","Nov","Dec"];
-  let count=0;
-  _importPending.forEach(r=>{
-    const dr=state.drivers.find(d=>d.id===r.drId);
-    if(!dr) return;
-    r.newLeaves.forEach(l=>{ if(!dr.leaves)dr.leaves=[]; dr.leaves.push({start:l.start,end:l.end}); logActivity("📥 Import concediu",dr.name,l.start+"→"+l.end+" ("+MRO[r.monthNum]+" "+r.yearVal+")"); });
-    r.newKrank.forEach(l=>{ if(!dr.krankLeaves)dr.krankLeaves=[]; dr.krankLeaves.push({start:l.start,end:l.end}); logActivity("📥 Import krank",dr.name,l.start+"→"+l.end+" ("+MRO[r.monthNum]+" "+r.yearVal+")"); });
-    r.newUnpaid.forEach(l=>{ if(!dr.unpaidLeaves)dr.unpaidLeaves=[]; dr.unpaidLeaves.push({start:l.start,end:l.end}); logActivity("📥 Import S",dr.name,l.start+"→"+l.end+" ("+MRO[r.monthNum]+" "+r.yearVal+")"); });
-    if(r.newPrezente.length){
-      const mk=r.yearVal+"-"+String(r.monthNum).padStart(2,"0");
-      if(!presState.presence[mk]) presState.presence[mk]={};
-      if(!presState.presence[mk][dr.name]) presState.presence[mk][dr.name]={};
-      r.newPrezente.forEach(d=>{ presState.presence[mk][dr.name][String(d)]="prezent"; });
-      logActivity("📥 Import prezențe",dr.name,r.newPrezente.length+"z ("+MRO[r.monthNum]+" "+r.yearVal+")");
-    }
-    count++;
-  });
-  renderAll();
-  scheduleSave();
-  await savePresState();
-  toast("✅ Import complet: "+count+" persoane actualizate");
-  btn.disabled=false; btn.textContent="✅ Importă tot";
-  _importPending=[];
-  closeModal("modalImportExcel");
+function changePlanWeek(delta){
+  planCurrentDate = new Date(planCurrentDate);
+  planCurrentDate.setDate(planCurrentDate.getDate() + delta*7);
+  renderPlanificare();
 }
 
-// ============================================================
-// VERSION UPDATE NOTIFICATION
-// ============================================================
-const APP_VERSION = "2026.06.01";
+function goTodayPlan(){
+  planCurrentDate = new Date();
+  renderPlanificare();
+}
 
-// La pornire salvăm că am văzut versiunea curentă din localStorage
-// (dacă nu există nimic în localStorage, nu facem nimic — prima rulare)
-let _versionUnsub = null;
+function loadPlanState(){
+  if(_planUnsub){ try{_planUnsub();}catch(e){} }
+  _planUnsub = db.collection("planificare").doc("ruhstorf").onSnapshot(snap=>{
+    planState = snap.exists ? (snap.data()||{}) : {};
+    if(appMode==="planificare") renderPlanificare();
+  }, err=>console.warn("plan snap",err));
+}
 
-function startVersionWatch(){
-  if(_versionUnsub) return;
+async function savePlanState(){
   try{
-    _versionUnsub = db.collection("app_meta").doc("version").onSnapshot(snap=>{
-      try{
-        if(!snap.exists) return;
-        const data = snap.data();
-        const latestVersion = data.version||"";
-        const latestMsg = data.message||"";
-        if(!latestVersion) return;
-        let seenVersion = "";
-        try{ seenVersion = localStorage.getItem("mtc_version_current")||""; }catch(e){}
-        if(!seenVersion){
-          try{ localStorage.setItem("mtc_version_current", latestVersion); }catch(e){}
-          return;
-        }
-        if(latestVersion !== seenVersion) showVersionBanner(latestVersion, latestMsg);
-      }catch(e){ console.warn("version snap handler err",e); }
-    }, err=>{
-      // Permisiune refuzată sau colecție inexistentă — ignorăm silențios
-      console.warn("version watch disabled (no permission or collection):", err.code||err.message);
-      _versionUnsub = null;
-    });
-  }catch(e){
-    console.warn("startVersionWatch failed:", e);
-  }
+    await db.collection("planificare").doc("ruhstorf").set(JSON.parse(JSON.stringify(planState)));
+  }catch(e){ console.error("plan save",e); }
 }
 
-function showVersionBanner(newVersion, msg){
-  if(document.getElementById("versionBanner")) return;
+function renderPlanificare(){
+  const grid = document.getElementById("planificareGrid");
+  if(!grid) return;
 
-  // Verifică dacă userul a ignorat deja această versiune (doar pentru admin care a publicat-o)
-  const dismissedKey = "mtc_version_dismissed_"+newVersion;
-  if(isAdmin() && localStorage.getItem(dismissedKey)) return;
+  const wk = getPlanWeekKey();
+  const dates = getPlanWeekDates();
+  const weekData = planState[wk] || {};
 
-  const overlay = document.createElement("div");
-  overlay.id = "versionBanner";
-  overlay.style.cssText = "position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)";
-  
-  const isAdminUser = isAdmin();
-  const dismissBtn = isAdminUser
-    ? `<button onclick="try{localStorage.setItem('mtc_version_current','${newVersion}');}catch(e){}document.getElementById('versionBanner').remove()" 
-         style="background:transparent;border:1px solid rgba(255,255,255,0.3);color:rgba(255,255,255,0.6);border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px">
-         Ignoră (doar admin)
-       </button>`
-    : "";
+  // Label săptămână
+  const mon = dates[0], sun = dates[6];
+  const fmt = d => d.getDate()+"."+(d.getMonth()+1)+"."+d.getFullYear();
+  document.getElementById("planWeekLabel").textContent = "Săptămâna "+wk+" · "+fmt(mon)+" – "+fmt(sun);
 
-  overlay.innerHTML = `
-    <div style="background:linear-gradient(135deg,#4f46e5,#7c3aed);border-radius:16px;padding:36px 40px;max-width:440px;width:90%;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,0.5)">
-      <div style="font-size:48px;margin-bottom:12px">🚀</div>
-      <div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:8px">Versiune nouă!</div>
-      ${msg?`<div style="font-size:14px;color:rgba(255,255,255,0.8);margin-bottom:20px">${msg}</div>`:'<div style="margin-bottom:20px"></div>'}
-      <div style="font-size:13px;color:rgba(255,255,255,0.65);margin-bottom:28px">
-        Aplicația a fost actualizată.<br>Trebuie să reîncarci pagina pentru a continua.
-      </div>
-      <button onclick="try{localStorage.setItem('mtc_version_current','${newVersion}');}catch(e){}window.location.reload(true)" 
-        style="background:#fff;color:#4f46e5;border:none;border-radius:10px;padding:14px 40px;font-size:16px;font-weight:800;cursor:pointer;width:100%;margin-bottom:10px;box-shadow:0 4px 14px rgba(0,0,0,0.2)">
-        ↻ Actualizează acum
-      </button>
-      ${dismissBtn}
+  // Sortatori Ruhstorf din sortState
+  const ruhDrivers = (sortState.drivers||[]).filter(d=>d.group==="ruhstorf")
+    .sort((a,b)=>a.name.localeCompare(b.name,"ro"));
+
+  if(!ruhDrivers.length){
+    grid.innerHTML='<div style="color:var(--text-dim);padding:20px;text-align:center">Nu există sortatori în Ruhstorf. Adaugă-i mai întâi în tabul Sortatori.</div>';
+    return;
+  }
+
+  // Construim grid
+  const colW = 76;
+  const nameW = 160;
+  const badgeW = 32;
+
+  let html = `<div style="display:grid;grid-template-columns:${badgeW}px ${nameW}px repeat(7,${colW}px);min-width:${badgeW+nameW+7*colW}px;border:1px solid var(--border);border-radius:8px;overflow:hidden">`;
+
+  // Header
+  html += `<div style="background:var(--bg-elev-2);border-bottom:2px solid var(--border);padding:8px 4px;font-size:11px;font-weight:700;text-align:center"></div>`;
+  html += `<div style="background:var(--bg-elev-2);border-bottom:2px solid var(--border);padding:8px;font-size:11px;font-weight:700;color:var(--text-dim)">SORTATOR</div>`;
+  dates.forEach((d,i)=>{
+    const isSun = d.getDay()===0;
+    const isSat = d.getDay()===6;
+    const isToday = sameDay(d,new Date());
+    const holiday = getHoliday(d);
+    const dayStr = PLAN_DAYS[i]+" "+d.getDate()+"."+(d.getMonth()+1);
+    html += `<div style="background:${isToday?"rgba(251,191,36,0.15)":isSun||isSat?"rgba(239,68,68,0.08)":"var(--bg-elev-2)"};border-bottom:2px solid var(--border);border-left:1px solid var(--border);padding:6px 4px;font-size:11px;font-weight:700;text-align:center;color:${holiday?"var(--holiday)":isToday?"var(--accent)":isSun||isSat?"var(--red)":"var(--text)"}">
+      ${dayStr}${holiday?`<div style="font-size:9px;opacity:0.8">${holiday.split("(")[0].trim()}</div>`:""}
     </div>`;
-  
-  // Blochează click-ul în afara modalului (nu se poate închide)
-  overlay.addEventListener("click", e=>{ if(e.target===overlay && !isAdminUser) e.stopPropagation(); });
-  document.body.appendChild(overlay);
+  });
 
-  // Blochează tastatura (Escape etc.) pentru non-admin
-  if(!isAdminUser){
-    document.addEventListener("keydown", function blockKeys(e){
-      if(document.getElementById("versionBanner")){
-        e.preventDefault(); e.stopPropagation();
+  // Rows per driver
+  ruhDrivers.forEach((dr, ri)=>{
+    const dw = weekData[dr.name] || [0,0,0,0,0,0,0];
+    const prezCount = dw.filter(v=>v===1).length;
+    const rowBg = ri%2===0 ? "var(--bg-elev)" : "var(--bg-elev-2)";
+
+    // Badge cu numărul de prezențe
+    const badge = prezCount > 0
+      ? `<div style="width:22px;height:22px;background:#10b981;color:#fff;border-radius:4px;font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center;margin:auto">${prezCount}</div>`
+      : `<div style="width:22px;height:22px;border:1px solid var(--border);border-radius:4px;margin:auto"></div>`;
+
+    html += `<div style="background:${rowBg};border-bottom:1px solid var(--border);padding:6px 4px;display:flex;align-items:center;justify-content:center">${badge}</div>`;
+    html += `<div style="background:${rowBg};border-bottom:1px solid var(--border);padding:6px 8px;font-size:12px;font-weight:600;display:flex;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(dr.name)}</div>`;
+
+    dates.forEach((d,di)=>{
+      const isSun = d.getDay()===0;
+      const isSat = d.getDay()===6;
+      const holiday = getHoliday(d);
+      const isBlocked = isSun || !!holiday;
+
+      // Verifică concediu din modulul concedii
+      const concDr = state.drivers.find(sd=>sd.name===dr.name);
+      const onLeave = concDr && (
+        (concDr.leaves||[]).some(l=>dateInLeave(d,l)) ||
+        (concDr.krankLeaves||[]).some(l=>dateInLeave(d,l)) ||
+        (concDr.unpaidLeaves||[]).some(l=>dateInLeave(d,l))
+      );
+
+      const val = isBlocked ? -1 : onLeave ? -2 : dw[di];
+      let cellBg, cellText, cellLabel, cursor;
+
+      if(isBlocked){
+        cellBg = "repeating-linear-gradient(45deg,rgba(239,68,68,0.05),rgba(239,68,68,0.05) 4px,rgba(239,68,68,0.1) 4px,rgba(239,68,68,0.1) 8px)";
+        cellText = ""; cursor = "not-allowed"; cellLabel = "";
+      } else if(onLeave){
+        cellBg = "rgba(255,220,0,0.25)"; cellText = "#7a5800"; cursor = "not-allowed"; cellLabel = "U";
+      } else if(val===1){
+        cellBg = "#10b981"; cellText = "#fff"; cursor = "pointer"; cellLabel = "✓";
       } else {
-        document.removeEventListener("keydown", blockKeys);
+        cellBg = rowBg; cellText = "var(--text-dim)"; cursor = "pointer"; cellLabel = "";
       }
-    }, true);
-  }
+
+      const clickFn = (!isBlocked && !onLeave)
+        ? `onclick="togglePlanCell('${dr.name.replace(/'/g,"\\'")}',${di})"`
+        : "";
+
+      html += `<div style="background:${cellBg};border-bottom:1px solid var(--border);border-left:1px solid var(--border);height:38px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:${cellText};cursor:${cursor};user-select:none;transition:filter 0.1s" ${clickFn} title="${escapeHtml(dr.name)} · ${PLAN_DAYS_FULL[di]}">${cellLabel}</div>`;
+    });
+  });
+
+  html += `</div>`;
+  grid.innerHTML = html;
 }
 
-// Admin poate publica o versiune nouă din sidebar
-async function publishNewVersion(){
-  if(!isAdmin()) return;
-  const action = confirm("Publică versiune nouă?\n\nOK = publică (toți userii vor vedea notificarea)\nCancel = resetează (oprește notificarea curentă)");
-  if(action){
-    const msg = prompt("Mesaj pentru utilizatori:", "Funcționalități noi disponibile");
-    if(msg===null) return;
-    const version = new Date().toISOString().slice(0,10).replace(/-/g,".")+"."+Date.now().toString().slice(-4);
-    try{
-      await db.collection("app_meta").doc("version").set({version, message:msg, publishedAt:new Date().toISOString(), publishedBy:"admin"});
-      // Admin vede deja noua versiune — o salvăm ca "curentă" pentru el
-      try{ localStorage.setItem("mtc_version_current", version); }catch(e){}
-      toast("✅ Versiune "+version+" publicată — toți userii vor vedea notificarea");
-    }catch(e){ toast("Eroare: "+e.message,true); }
-  } else {
-    // Resetează — șterge documentul din Firestore
-    try{
-      await db.collection("app_meta").doc("version").delete();
-      toast("✅ Notificarea de versiune a fost oprită");
-    }catch(e){ toast("Eroare: "+e.message,true); }
+function togglePlanCell(driverName, dayIdx){
+  const wk = getPlanWeekKey();
+  if(!planState[wk]) planState[wk] = {};
+  if(!planState[wk][driverName]) planState[wk][driverName] = [0,0,0,0,0,0,0];
+  planState[wk][driverName][dayIdx] = planState[wk][driverName][dayIdx]===1 ? 0 : 1;
+  renderPlanificare();
+  savePlanState();
+}
+
+function clearPlanWeek(){
+  const wk = getPlanWeekKey();
+  if(!confirm("Ștergi toate marcajele pentru "+wk+"?")) return;
+  delete planState[wk];
+  renderPlanificare();
+  savePlanState();
+}
+
+function openWhatsAppExport(){
+  const wk = getPlanWeekKey();
+  const dates = getPlanWeekDates();
+  const weekData = planState[wk] || {};
+  const ruhDrivers = (sortState.drivers||[]).filter(d=>d.group==="ruhstorf")
+    .sort((a,b)=>a.name.localeCompare(b.name,"ro"));
+
+  // Analizăm prezența
+  const fullWeek = []; // prezenti toata saptamana (Lu-Vi)
+  const partial = {}; // { NumeDriver: [idxZile] }
+  const freeDays = []; // zile libere (sâmbătă liberă sau sărbătoare)
+
+  // Zile de lucru: Lu-Sa (0-5), exceptând duminica și sărbătorile
+  const workDayIdxs = dates.map((d,i)=>({d,i})).filter(({d})=>d.getDay()!==0 && !getHoliday(d)).map(({i})=>i);
+
+  ruhDrivers.forEach(dr=>{
+    const concDr = state.drivers.find(sd=>sd.name===dr.name);
+    const dw = weekData[dr.name] || [0,0,0,0,0,0,0];
+    const prezentZile = workDayIdxs.filter(i=>{
+      const d = dates[i];
+      const onLeave = concDr && ((concDr.leaves||[]).some(l=>dateInLeave(d,l))||(concDr.krankLeaves||[]).some(l=>dateInLeave(d,l))||(concDr.unpaidLeaves||[]).some(l=>dateInLeave(d,l)));
+      return dw[i]===1 && !onLeave;
+    });
+    if(prezentZile.length===0) return;
+    if(prezentZile.length===workDayIdxs.length){
+      fullWeek.push(dr.name);
+    } else {
+      partial[dr.name] = prezentZile;
+    }
+  });
+
+  // Sărbători în această săptămână
+  const holidays = dates.filter(d=>getHoliday(d)&&d.getDay()!==0);
+
+  // Construim mesajul
+  const mon = dates[0], sun = dates[6];
+  const fmt = d => d.getDate()+"."+(d.getMonth()+1);
+  const fmtFull = d => PLAN_DAYS_FULL[(d.getDay()+6)%7]+" "+d.getDate()+"."+(d.getMonth()+1)+"."+d.getFullYear();
+
+  let msg = "Bună ziua, colegi! 👋\n\n";
+  msg += "Postez programul sortatorilor pentru săptămâna "+fmt(mon)+" – "+fmt(sun)+".\n\n";
+
+  if(fullWeek.length>0){
+    const names = fullWeek.join(", ");
+    let holidayNote = "";
+    if(holidays.length>0){
+      const hlDays = holidays.map(d=>"*"+PLAN_DAYS_FULL[(d.getDay()+6)%7]+" "+d.getDate()+"."+(d.getMonth()+1)+"*").join(", ");
+      holidayNote = " (exceptând "+hlDays+" când suntem cu toții liberi)";
+    }
+    msg += "🟢 *Prezenți întreaga săptămână"+holidayNote+":*\n";
+    msg += fullWeek.map(n=>"• "+n).join("\n")+"\n\n";
   }
+
+  if(Object.keys(partial).length>0){
+    msg += "🟡 *Prezenți parțial:*\n";
+    Object.entries(partial).forEach(([name,idxs])=>{
+      const zile = idxs.map(i=>PLAN_DAYS_FULL[i].toLowerCase()).join(", ");
+      msg += "• *"+name+"* — "+zile+"\n";
+    });
+    msg += "\n";
+  }
+
+  if(holidays.length>0){
+    msg += "🔴 *Zile libere:*\n";
+    holidays.forEach(d=>{
+      const h = getHoliday(d);
+      msg += "• "+fmtFull(d)+(h?" ("+h.split("(")[0].trim()+")"  :"")+"\n";
+    });
+    msg += "\n";
+  }
+
+  msg += "Dacă aveți nelămuriri, vă rog să mi le adresați fără probleme. 🙏";
+
+  // Afișăm
+  document.getElementById("waSubtitle").textContent = "Săptămâna "+wk+" · "+fmt(mon)+" – "+fmt(sun)+"."+dates[5].getFullYear();
+  document.getElementById("waText").value = msg;
+  openModal("modalWhatsApp");
+}
+
+function copyWaText(){
+  const ta = document.getElementById("waText");
+  ta.select();
+  try{
+    navigator.clipboard.writeText(ta.value).then(()=>toast("✓ Mesaj copiat!")).catch(()=>{document.execCommand("copy");toast("✓ Copiat!");});
+  }catch(e){document.execCommand("copy");toast("✓ Copiat!");}
 }
 
 // ============================================================
@@ -4956,13 +4560,7 @@ function openSortPrintModal(){
         const dr=row.dr;
         const dp=(presence[dr.name])||{};
         const concediuDr=state.drivers.find(d=>d.name===dr.name);
-        // Numără prezențele din luna curentă
-        let prez=0;
-        for(let dn=1;dn<=days;dn++){ if(dp[String(dn)]==="prezent") prez++; }
-        const badge = prez>0
-          ? `<span style="display:inline-block;min-width:16px;height:16px;line-height:16px;background:#2e7d32;color:#fff;font-size:8px;font-weight:900;border-radius:3px;text-align:center;padding:0 2px;margin-right:5px;vertical-align:middle">${prez}</span>`
-          : `<span style="display:inline-block;width:16px;height:16px;border:1px solid #ccc;border-radius:3px;margin-right:5px;vertical-align:middle"></span>`;
-        html+=`<tr><td class="name-col">${badge}${escapeHtml(dr.name)}</td>`;
+        html+=`<tr><td class="name-col">${escapeHtml(dr.name)}</td>`;
         for(let dn=1;dn<=days;dn++){
           const d=new Date(y,m,dn);
           if(isSunday(d)||getHoliday(d)){html+=`<td class="sun"></td>`;continue;}

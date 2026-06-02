@@ -1125,13 +1125,13 @@
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
         <div style="display:flex;align-items:center;gap:8px">
           <button onclick="changePlanWeek(-1)" style="background:var(--bg-elev-2);border:1px solid var(--border);border-radius:6px;padding:4px 12px;cursor:pointer;color:var(--text);font-size:16px">‹</button>
-          <span id="planWeekLabel" style="font-size:14px;font-weight:700;color:var(--accent);min-width:200px;text-align:center"></span>
+          <span id="planWeekLabel" style="font-size:14px;font-weight:700;color:var(--accent);min-width:160px;text-align:center"></span>
           <button onclick="changePlanWeek(1)" style="background:var(--bg-elev-2);border:1px solid var(--border);border-radius:6px;padding:4px 12px;cursor:pointer;color:var(--text);font-size:16px">›</button>
           <button onclick="goTodayPlan()" class="btn btn-secondary btn-small" style="width:auto">Azi</button>
         </div>
         <div style="display:flex;gap:8px">
           <button onclick="clearPlanWeek()" class="btn btn-secondary btn-small" style="width:auto;border-color:var(--red);color:var(--red)">🗑 Șterge săptămâna</button>
-          <button onclick="openWhatsAppExport()" class="btn btn-small" style="width:auto;background:#25d366;border-color:#25d366;color:#fff;font-weight:700">💬 Export WhatsApp</button>
+          <button onclick="openWhatsAppExport()" class="btn btn-small" style="width:auto;background:#25d366;border-color:#25d366;color:#fff;font-weight:700">💬 Export WhatsApp săptămâna curentă</button>
         </div>
       </div>
       <div id="planificareGrid" style="overflow-x:auto"></div>
@@ -4243,192 +4243,248 @@ function renderPlanificare(){
   const grid = document.getElementById("planificareGrid");
   if(!grid) return;
 
-  const wk = getPlanWeekKey();
-  const dates = getPlanWeekDates();
-  const weekData = planState[wk] || {};
+  const y = planCurrentDate.getFullYear();
+  const m = planCurrentDate.getMonth();
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  const MONTHS_RO = ["Ianuarie","Februarie","Martie","Aprilie","Mai","Iunie","Iulie","August","Septembrie","Octombrie","Noiembrie","Decembrie"];
 
-  // Label săptămână
-  const mon = dates[0], sun = dates[6];
-  const fmt = d => d.getDate()+"."+(d.getMonth()+1)+"."+d.getFullYear();
-  document.getElementById("planWeekLabel").textContent = "Săptămâna "+wk+" · "+fmt(mon)+" – "+fmt(sun);
+  document.getElementById("planWeekLabel").textContent = MONTHS_RO[m]+" "+y;
 
-  // Sortatori Ruhstorf din sortState
-  const ruhDrivers = (sortState.drivers||[]).filter(d=>d.group==="ruhstorf")
-    .sort((a,b)=>a.name.localeCompare(b.name,"ro"));
+  // Categorii ca la sortatori
+  const cats = [
+    {label:"Permanenți", key:"permanent", color:"#10b981"},
+    {label:"Rotații",    key:"rotatie",   color:"#f59e0b"},
+    {label:"Camion",     key:"camion",    color:"#8b5cf6"},
+    {label:"Urgențe",    key:"urgenta",   color:"#ef4444"},
+  ];
 
-  if(!ruhDrivers.length){
+  // Zile lunii ca array de Date
+  const days = Array.from({length:daysInMonth},(_,i)=>new Date(y,m,i+1));
+
+  // Împarte zilele în săptămâni (Lu-Du)
+  const weeks = [];
+  let week = [];
+  days.forEach(d=>{
+    const dow = (d.getDay()+6)%7; // 0=luni
+    if(dow===0 && week.length) { weeks.push(week); week=[]; }
+    week.push(d);
+  });
+  if(week.length) weeks.push(week);
+
+  // Coloane: badge(28) + name(155) + spacer(4) + pentru fiecare zi(32) + gap(6) între săptămâni
+  const badgeW=28, nameW=155, dayW=32, gapW=8;
+  const totalCols = badgeW+nameW+4+daysInMonth*dayW+weeks.length*gapW;
+
+  // Header cu zilele grupate pe săptămâni
+  const DOW_SHORT=["L","M","M","J","V","S","D"];
+  const today = new Date();
+
+  let headerHtml = `<div style="display:flex;min-width:${totalCols}px;border-bottom:2px solid var(--border);background:var(--bg-elev-2);position:sticky;top:0;z-index:10">`;
+  headerHtml += `<div style="width:${badgeW}px;min-width:${badgeW}px"></div>`;
+  headerHtml += `<div style="width:${nameW}px;min-width:${nameW}px;padding:6px 8px;font-size:10px;font-weight:700;color:var(--text-dim)">SORTATOR</div>`;
+  headerHtml += `<div style="width:4px;min-width:4px"></div>`;
+
+  weeks.forEach((wkDays,wi)=>{
+    // Week label above
+    const wkNum = getISOWeek(wkDays[0]);
+    headerHtml += `<div style="display:flex;flex-direction:column">`;
+    headerHtml += `<div style="text-align:center;font-size:9px;font-weight:700;color:var(--text-dim);padding:2px 0;border-bottom:1px solid var(--border)">W${wkNum}</div>`;
+    headerHtml += `<div style="display:flex">`;
+    wkDays.forEach(d=>{
+      const isSun=d.getDay()===0, isSat=d.getDay()===6;
+      const isToday=sameDay(d,today);
+      const holiday=getHoliday(d);
+      const dow=(d.getDay()+6)%7;
+      headerHtml+=`<div style="width:${dayW}px;min-width:${dayW}px;text-align:center;padding:3px 0;font-size:9px;font-weight:700;color:${holiday?"var(--holiday)":isToday?"var(--accent)":isSun||isSat?"rgba(239,68,68,0.8)":"var(--text)"};background:${isToday?"rgba(251,191,36,0.12)":""}" title="${holiday||""}">
+        ${DOW_SHORT[dow]}<div style="font-size:10px;font-weight:900">${d.getDate()}</div>
+      </div>`;
+    });
+    headerHtml+=`</div></div>`;
+    if(wi<weeks.length-1) headerHtml+=`<div style="width:${gapW}px;min-width:${gapW}px;border-left:2px solid var(--border)"></div>`;
+  });
+  headerHtml+=`</div>`;
+
+  // Rows per category + driver
+  let rowsHtml = "";
+
+  cats.forEach(cat=>{
+    const catDrivers = (sortState.drivers||[])
+      .filter(d=>d.group==="ruhstorf" && (cat.key==="permanent"?(!d.category||d.category==="permanent"):d.category===cat.key))
+      .sort((a,b)=>a.name.localeCompare(b.name,"ro"));
+    if(!catDrivers.length) return;
+
+    // Category header row
+    rowsHtml+=`<div style="display:flex;min-width:${totalCols}px;background:var(--bg-elev-2);border-bottom:1px solid var(--border);border-left:3px solid ${cat.color}">`;
+    rowsHtml+=`<div style="width:${badgeW}px;min-width:${badgeW}px"></div>`;
+    rowsHtml+=`<div style="width:${nameW+4}px;padding:4px 8px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:${cat.color}">${cat.label}</div>`;
+    // empty day cells for category header
+    weeks.forEach((wkDays,wi)=>{
+      wkDays.forEach(()=>rowsHtml+=`<div style="width:${dayW}px"></div>`);
+      if(wi<weeks.length-1) rowsHtml+=`<div style="width:${gapW}px;border-left:2px solid var(--border)"></div>`;
+    });
+    rowsHtml+=`</div>`;
+
+    catDrivers.forEach((dr,ri)=>{
+      const wkKey = y+"-"+String(m+1).padStart(2,"0");
+      // Collect all week data for this driver this month
+      const allDayVals = {}; // dayOfMonth -> 0|1
+      weeks.forEach(wkDays=>{
+        const wk = getISOWeek(wkDays[0])+"-"+wkDays[0].getFullYear();
+        const wkStateKey = wkDays[0].getFullYear()+"-W"+String(getISOWeek(wkDays[0])).padStart(2,"0");
+        const wkData = (planState[wkStateKey]&&planState[wkStateKey][dr.name]) || [0,0,0,0,0,0,0];
+        wkDays.forEach(d=>{
+          const dow=(d.getDay()+6)%7;
+          if(d.getMonth()===m) allDayVals[d.getDate()] = wkData[dow];
+        });
+      });
+      const prezCount = Object.values(allDayVals).filter(v=>v===1).length;
+      const rowBg = ri%2===0?"var(--bg-elev)":"var(--bg-elev-2)";
+
+      const badge = prezCount>0
+        ? `<div style="width:20px;height:20px;background:#10b981;color:#fff;border-radius:3px;font-size:10px;font-weight:900;display:flex;align-items:center;justify-content:center;margin:auto">${prezCount}</div>`
+        : `<div style="width:20px;height:20px;border:1px solid var(--border);border-radius:3px;margin:auto"></div>`;
+
+      rowsHtml+=`<div style="display:flex;min-width:${totalCols}px;background:${rowBg};border-bottom:1px solid var(--border)">`;
+      rowsHtml+=`<div style="width:${badgeW}px;min-width:${badgeW}px;display:flex;align-items:center;justify-content:center;padding:2px">${badge}</div>`;
+      rowsHtml+=`<div style="width:${nameW}px;min-width:${nameW}px;padding:4px 8px;font-size:12px;font-weight:600;display:flex;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(dr.name)}</div>`;
+      rowsHtml+=`<div style="width:4px;min-width:4px"></div>`;
+
+      const concDr = state.drivers.find(sd=>sd.name===dr.name);
+      weeks.forEach((wkDays,wi)=>{
+        const wkStateKey = wkDays[0].getFullYear()+"-W"+String(getISOWeek(wkDays[0])).padStart(2,"0");
+        const wkData = (planState[wkStateKey]&&planState[wkStateKey][dr.name]) || [0,0,0,0,0,0,0];
+
+        wkDays.forEach(d=>{
+          if(d.getMonth()!==m){
+            rowsHtml+=`<div style="width:${dayW}px;min-width:${dayW}px;background:var(--bg-elev-2);opacity:0.3"></div>`;
+            return;
+          }
+          const dow=(d.getDay()+6)%7;
+          const isSun=d.getDay()===0, holiday=getHoliday(d);
+          const isBlocked=isSun||!!holiday;
+          const onLeave=concDr&&((concDr.leaves||[]).some(l=>dateInLeave(d,l))||(concDr.krankLeaves||[]).some(l=>dateInLeave(d,l))||(concDr.unpaidLeaves||[]).some(l=>dateInLeave(d,l)));
+          const isToday=sameDay(d,today);
+          const val=wkData[dow];
+
+          let bg,color,label,cursor;
+          if(isBlocked){ bg="rgba(239,68,68,0.07)"; color=""; label=""; cursor="not-allowed"; }
+          else if(onLeave){ bg="rgba(255,220,0,0.25)"; color="#7a5800"; label="U"; cursor="not-allowed"; }
+          else if(val===1){ bg="#10b981"; color="#fff"; label="✓"; cursor="pointer"; }
+          else { bg=isToday?"rgba(251,191,36,0.08)":rowBg; color=""; label=""; cursor="pointer"; }
+
+          const esc=dr.name.replace(/\\/g,"\\\\").replace(/'/g,"\\'");
+          const clickFn=(!isBlocked&&!onLeave)?`onclick="togglePlanCell('${esc}','${wkStateKey}',${dow})"` :"";
+          rowsHtml+=`<div style="width:${dayW}px;min-width:${dayW}px;height:34px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:${color};cursor:${cursor};border-left:1px solid rgba(128,128,128,0.1)" ${clickFn}>${label}</div>`;
+        });
+        if(wi<weeks.length-1) rowsHtml+=`<div style="width:${gapW}px;min-width:${gapW}px;border-left:2px solid var(--border);background:${rowBg}"></div>`;
+      });
+      rowsHtml+=`</div>`;
+    });
+  });
+
+  if(!rowsHtml){
     grid.innerHTML='<div style="color:var(--text-dim);padding:20px;text-align:center">Nu există sortatori în Ruhstorf. Adaugă-i mai întâi în tabul Sortatori.</div>';
     return;
   }
 
-  // Construim grid
-  const colW = 76;
-  const nameW = 160;
-  const badgeW = 32;
-
-  let html = `<div style="display:grid;grid-template-columns:${badgeW}px ${nameW}px repeat(7,${colW}px);min-width:${badgeW+nameW+7*colW}px;border:1px solid var(--border);border-radius:8px;overflow:hidden">`;
-
-  // Header
-  html += `<div style="background:var(--bg-elev-2);border-bottom:2px solid var(--border);padding:8px 4px;font-size:11px;font-weight:700;text-align:center"></div>`;
-  html += `<div style="background:var(--bg-elev-2);border-bottom:2px solid var(--border);padding:8px;font-size:11px;font-weight:700;color:var(--text-dim)">SORTATOR</div>`;
-  dates.forEach((d,i)=>{
-    const isSun = d.getDay()===0;
-    const isSat = d.getDay()===6;
-    const isToday = sameDay(d,new Date());
-    const holiday = getHoliday(d);
-    const dayStr = PLAN_DAYS[i]+" "+d.getDate()+"."+(d.getMonth()+1);
-    html += `<div style="background:${isToday?"rgba(251,191,36,0.15)":isSun||isSat?"rgba(239,68,68,0.08)":"var(--bg-elev-2)"};border-bottom:2px solid var(--border);border-left:1px solid var(--border);padding:6px 4px;font-size:11px;font-weight:700;text-align:center;color:${holiday?"var(--holiday)":isToday?"var(--accent)":isSun||isSat?"var(--red)":"var(--text)"}">
-      ${dayStr}${holiday?`<div style="font-size:9px;opacity:0.8">${holiday.split("(")[0].trim()}</div>`:""}
-    </div>`;
-  });
-
-  // Rows per driver
-  ruhDrivers.forEach((dr, ri)=>{
-    const dw = weekData[dr.name] || [0,0,0,0,0,0,0];
-    const prezCount = dw.filter(v=>v===1).length;
-    const rowBg = ri%2===0 ? "var(--bg-elev)" : "var(--bg-elev-2)";
-
-    // Badge cu numărul de prezențe
-    const badge = prezCount > 0
-      ? `<div style="width:22px;height:22px;background:#10b981;color:#fff;border-radius:4px;font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center;margin:auto">${prezCount}</div>`
-      : `<div style="width:22px;height:22px;border:1px solid var(--border);border-radius:4px;margin:auto"></div>`;
-
-    html += `<div style="background:${rowBg};border-bottom:1px solid var(--border);padding:6px 4px;display:flex;align-items:center;justify-content:center">${badge}</div>`;
-    html += `<div style="background:${rowBg};border-bottom:1px solid var(--border);padding:6px 8px;font-size:12px;font-weight:600;display:flex;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(dr.name)}</div>`;
-
-    dates.forEach((d,di)=>{
-      const isSun = d.getDay()===0;
-      const isSat = d.getDay()===6;
-      const holiday = getHoliday(d);
-      const isBlocked = isSun || !!holiday;
-
-      // Verifică concediu din modulul concedii
-      const concDr = state.drivers.find(sd=>sd.name===dr.name);
-      const onLeave = concDr && (
-        (concDr.leaves||[]).some(l=>dateInLeave(d,l)) ||
-        (concDr.krankLeaves||[]).some(l=>dateInLeave(d,l)) ||
-        (concDr.unpaidLeaves||[]).some(l=>dateInLeave(d,l))
-      );
-
-      const val = isBlocked ? -1 : onLeave ? -2 : dw[di];
-      let cellBg, cellText, cellLabel, cursor;
-
-      if(isBlocked){
-        cellBg = "repeating-linear-gradient(45deg,rgba(239,68,68,0.05),rgba(239,68,68,0.05) 4px,rgba(239,68,68,0.1) 4px,rgba(239,68,68,0.1) 8px)";
-        cellText = ""; cursor = "not-allowed"; cellLabel = "";
-      } else if(onLeave){
-        cellBg = "rgba(255,220,0,0.25)"; cellText = "#7a5800"; cursor = "not-allowed"; cellLabel = "U";
-      } else if(val===1){
-        cellBg = "#10b981"; cellText = "#fff"; cursor = "pointer"; cellLabel = "✓";
-      } else {
-        cellBg = rowBg; cellText = "var(--text-dim)"; cursor = "pointer"; cellLabel = "";
-      }
-
-      const clickFn = (!isBlocked && !onLeave)
-        ? `onclick="togglePlanCell('${dr.name.replace(/'/g,"\\'")}',${di})"`
-        : "";
-
-      html += `<div style="background:${cellBg};border-bottom:1px solid var(--border);border-left:1px solid var(--border);height:38px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:${cellText};cursor:${cursor};user-select:none;transition:filter 0.1s" ${clickFn} title="${escapeHtml(dr.name)} · ${PLAN_DAYS_FULL[di]}">${cellLabel}</div>`;
-    });
-  });
-
-  html += `</div>`;
-  grid.innerHTML = html;
+  grid.innerHTML=`<div style="overflow-x:auto">${headerHtml}<div>${rowsHtml}</div></div>`;
 }
 
-function togglePlanCell(driverName, dayIdx){
-  const wk = getPlanWeekKey();
-  if(!planState[wk]) planState[wk] = {};
-  if(!planState[wk][driverName]) planState[wk][driverName] = [0,0,0,0,0,0,0];
-  planState[wk][driverName][dayIdx] = planState[wk][driverName][dayIdx]===1 ? 0 : 1;
+function togglePlanCell(driverName, weekKey, dayOfWeek){
+  if(!planState[weekKey]) planState[weekKey] = {};
+  if(!planState[weekKey][driverName]) planState[weekKey][driverName] = [0,0,0,0,0,0,0];
+  planState[weekKey][driverName][dayOfWeek] = planState[weekKey][driverName][dayOfWeek]===1 ? 0 : 1;
   renderPlanificare();
   savePlanState();
 }
 
+function changePlanWeek(delta){
+  // Navigare pe luni
+  planCurrentDate = new Date(planCurrentDate.getFullYear(), planCurrentDate.getMonth()+delta, 1);
+  renderPlanificare();
+}
+
+function goTodayPlan(){
+  planCurrentDate = new Date();
+  renderPlanificare();
+}
+
 function clearPlanWeek(){
-  const wk = getPlanWeekKey();
-  if(!confirm("Ștergi toate marcajele pentru "+wk+"?")) return;
-  delete planState[wk];
+  const y = planCurrentDate.getFullYear();
+  const m = planCurrentDate.getMonth();
+  const MONTHS_RO=["Ianuarie","Februarie","Martie","Aprilie","Mai","Iunie","Iulie","August","Septembrie","Octombrie","Noiembrie","Decembrie"];
+  if(!confirm("Ștergi toate marcajele pentru "+MONTHS_RO[m]+" "+y+"?")) return;
+  // Găsim toate cheile de săptămână care aparțin acestei luni
+  const daysInMonth = new Date(y,m+1,0).getDate();
+  const keysToDelete = new Set();
+  for(let day=1; day<=daysInMonth; day++){
+    const d = new Date(y,m,day);
+    const wkKey = y+"-W"+String(getISOWeek(d)).padStart(2,"0");
+    keysToDelete.add(wkKey);
+  }
+  keysToDelete.forEach(k=>{ delete planState[k]; });
   renderPlanificare();
   savePlanState();
 }
 
 function openWhatsAppExport(){
-  const wk = getPlanWeekKey();
+  // Generăm pentru săptămâna care conține planCurrentDate
+  const wkKey = getPlanWeekKey();
   const dates = getPlanWeekDates();
-  const weekData = planState[wk] || {};
+  const weekData = planState[wkKey] || {};
+
   const ruhDrivers = (sortState.drivers||[]).filter(d=>d.group==="ruhstorf")
     .sort((a,b)=>a.name.localeCompare(b.name,"ro"));
 
-  // Analizăm prezența
-  const fullWeek = []; // prezenti toata saptamana (Lu-Vi)
-  const partial = {}; // { NumeDriver: [idxZile] }
-  const freeDays = []; // zile libere (sâmbătă liberă sau sărbătoare)
+  const workDayIdxs = dates.map((d,i)=>({d,i})).filter(({d})=>d.getDay()!==0&&!getHoliday(d)).map(({i})=>i);
 
-  // Zile de lucru: Lu-Sa (0-5), exceptând duminica și sărbătorile
-  const workDayIdxs = dates.map((d,i)=>({d,i})).filter(({d})=>d.getDay()!==0 && !getHoliday(d)).map(({i})=>i);
-
+  const fullWeek=[], partial={};
   ruhDrivers.forEach(dr=>{
-    const concDr = state.drivers.find(sd=>sd.name===dr.name);
-    const dw = weekData[dr.name] || [0,0,0,0,0,0,0];
-    const prezentZile = workDayIdxs.filter(i=>{
-      const d = dates[i];
-      const onLeave = concDr && ((concDr.leaves||[]).some(l=>dateInLeave(d,l))||(concDr.krankLeaves||[]).some(l=>dateInLeave(d,l))||(concDr.unpaidLeaves||[]).some(l=>dateInLeave(d,l)));
-      return dw[i]===1 && !onLeave;
+    const concDr=state.drivers.find(sd=>sd.name===dr.name);
+    const dw=weekData[dr.name]||[0,0,0,0,0,0,0];
+    const prezZile=workDayIdxs.filter(i=>{
+      const d=dates[i];
+      const onLeave=concDr&&((concDr.leaves||[]).some(l=>dateInLeave(d,l))||(concDr.krankLeaves||[]).some(l=>dateInLeave(d,l))||(concDr.unpaidLeaves||[]).some(l=>dateInLeave(d,l)));
+      return dw[i]===1&&!onLeave;
     });
-    if(prezentZile.length===0) return;
-    if(prezentZile.length===workDayIdxs.length){
-      fullWeek.push(dr.name);
-    } else {
-      partial[dr.name] = prezentZile;
-    }
+    if(!prezZile.length) return;
+    if(prezZile.length===workDayIdxs.length) fullWeek.push(dr.name);
+    else partial[dr.name]=prezZile;
   });
 
-  // Sărbători în această săptămână
-  const holidays = dates.filter(d=>getHoliday(d)&&d.getDay()!==0);
+  const holidays=dates.filter(d=>getHoliday(d)&&d.getDay()!==0);
+  const mon=dates[0], sun=dates[6];
+  const fmt=d=>d.getDate()+"."+(d.getMonth()+1);
+  const fmtFull=d=>PLAN_DAYS_FULL[(d.getDay()+6)%7]+" "+d.getDate()+"."+(d.getMonth()+1)+"."+d.getFullYear();
 
-  // Construim mesajul
-  const mon = dates[0], sun = dates[6];
-  const fmt = d => d.getDate()+"."+(d.getMonth()+1);
-  const fmtFull = d => PLAN_DAYS_FULL[(d.getDay()+6)%7]+" "+d.getDate()+"."+(d.getMonth()+1)+"."+d.getFullYear();
-
-  let msg = "Bună ziua, colegi! 👋\n\n";
-  msg += "Postez programul sortatorilor pentru săptămâna "+fmt(mon)+" – "+fmt(sun)+".\n\n";
-
+  let msg="Bună ziua, colegi! 👋\n\n";
+  msg+="Postez programul sortatorilor pentru săptămâna "+fmt(mon)+" – "+fmt(sun)+".\n\n";
   if(fullWeek.length>0){
-    const names = fullWeek.join(", ");
-    let holidayNote = "";
+    let holidayNote="";
     if(holidays.length>0){
-      const hlDays = holidays.map(d=>"*"+PLAN_DAYS_FULL[(d.getDay()+6)%7]+" "+d.getDate()+"."+(d.getMonth()+1)+"*").join(", ");
-      holidayNote = " (exceptând "+hlDays+" când suntem cu toții liberi)";
+      const hlDays=holidays.map(d=>"*"+PLAN_DAYS_FULL[(d.getDay()+6)%7]+" "+d.getDate()+"."+(d.getMonth()+1)+"*").join(", ");
+      holidayNote=" (exceptând "+hlDays+" când suntem cu toții liberi)";
     }
-    msg += "🟢 *Prezenți întreaga săptămână"+holidayNote+":*\n";
-    msg += fullWeek.map(n=>"• "+n).join("\n")+"\n\n";
+    msg+="🟢 *Prezenți întreaga săptămână"+holidayNote+":*\n";
+    msg+=fullWeek.map(n=>"• "+n).join("\n")+"\n\n";
   }
-
   if(Object.keys(partial).length>0){
-    msg += "🟡 *Prezenți parțial:*\n";
+    msg+="🟡 *Prezenți parțial:*\n";
     Object.entries(partial).forEach(([name,idxs])=>{
-      const zile = idxs.map(i=>PLAN_DAYS_FULL[i].toLowerCase()).join(", ");
-      msg += "• *"+name+"* — "+zile+"\n";
+      const zile=idxs.map(i=>PLAN_DAYS_FULL[i].toLowerCase()).join(", ");
+      msg+="• *"+name+"* — "+zile+"\n";
     });
-    msg += "\n";
+    msg+="\n";
   }
-
   if(holidays.length>0){
-    msg += "🔴 *Zile libere:*\n";
-    holidays.forEach(d=>{
-      const h = getHoliday(d);
-      msg += "• "+fmtFull(d)+(h?" ("+h.split("(")[0].trim()+")"  :"")+"\n";
-    });
-    msg += "\n";
+    msg+="🔴 *Zile libere:*\n";
+    holidays.forEach(d=>{ const h=getHoliday(d); msg+="• "+fmtFull(d)+(h?" ("+h.split("(")[0].trim()+")"  :"")+"\n"; });
+    msg+="\n";
   }
+  msg+="Dacă aveți nelămuriri, vă rog să mi le adresați fără probleme. 🙏";
 
-  msg += "Dacă aveți nelămuriri, vă rog să mi le adresați fără probleme. 🙏";
-
-  // Afișăm
-  document.getElementById("waSubtitle").textContent = "Săptămâna "+wk+" · "+fmt(mon)+" – "+fmt(sun)+"."+dates[5].getFullYear();
-  document.getElementById("waText").value = msg;
+  document.getElementById("waSubtitle").textContent="Săptămâna "+wkKey+" · "+fmt(mon)+" – "+fmt(sun)+"."+sun.getFullYear();
+  document.getElementById("waText").value=msg;
   openModal("modalWhatsApp");
 }
 

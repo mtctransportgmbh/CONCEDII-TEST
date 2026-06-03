@@ -997,6 +997,7 @@
     <input type="file" id="verifyExcelFile" accept=".xlsx,.xlsm,.xls" style="display:none" onchange="verifyExcelFile(event)">
     <button class="btn btn-secondary btn-small" id="downloadBackupBtn" onclick="downloadBackupNow()" style="width:100%; margin-bottom:6px; display:none">💾 Descarcă backup acum</button>
     <button class="btn btn-secondary btn-small" id="uploadBackupBtn" onclick="document.getElementById('uploadBackupFile').click()" style="width:100%; margin-bottom:6px; display:none">📂 Încarcă backup fișier</button>
+    <button class="btn btn-secondary btn-small" id="publishVersionBtn" onclick="publishNewVersion()" style="width:100%; margin-bottom:6px; display:none; border-color:#6366f1; color:#6366f1">🚀 Publică versiune nouă</button>
     <input type="file" id="uploadBackupFile" accept=".json" style="display:none" onchange="uploadLocalBackup(event)">
 
     <div style="position:relative;margin-bottom:8px">
@@ -1976,6 +1977,9 @@ function enterApp(userKey){
 
   const modPlanificare2 = document.getElementById("modPlanificare");
   if(modPlanificare2) modPlanificare2.style.display = isAdm?"block":"none";
+  const publishVersionBtn = document.getElementById("publishVersionBtn");
+  if(publishVersionBtn) publishVersionBtn.style.display = isAdm?"block":"none";
+  startVersionWatch();
   if(isAdm) loadPlanState();
   if(legendUnpaid) legendUnpaid.style.display = isTaniaAdm?"flex":"none";
 
@@ -4187,7 +4191,76 @@ function presDragEnd(){
 }
 
 // ============================================================
-// PLANIFICARE SAPTAMANALA (doar Admin, Ruhstorf)
+// VERSION UPDATE NOTIFICATION
+// ============================================================
+const APP_VERSION = "2026.06.01";
+let _versionUnsub = null;
+
+function startVersionWatch(){
+  if(_versionUnsub) return;
+  try{
+    _versionUnsub = db.collection("app_meta").doc("version").onSnapshot(snap=>{
+      try{
+        if(!snap.exists) return;
+        const data=snap.data();
+        const latestVersion=data.version||"";
+        const latestMsg=data.message||"";
+        if(!latestVersion) return;
+        let seenVersion="";
+        try{ seenVersion=localStorage.getItem("mtc_version_current")||""; }catch(e){}
+        if(!seenVersion){ try{ localStorage.setItem("mtc_version_current",latestVersion); }catch(e){} return; }
+        if(latestVersion!==seenVersion) showVersionBanner(latestVersion,latestMsg);
+      }catch(e){ console.warn("version snap handler",e); }
+    }, err=>{ console.warn("version watch disabled:",err.code||err.message); _versionUnsub=null; });
+  }catch(e){ console.warn("startVersionWatch failed:",e); }
+}
+
+function showVersionBanner(newVersion, msg){
+  if(document.getElementById("versionBanner")) return;
+  const overlay=document.createElement("div");
+  overlay.id="versionBanner";
+  overlay.style.cssText="position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)";
+  const isAdminUser=isAdmin();
+  const dismissBtn=isAdminUser
+    ?`<button onclick="try{localStorage.setItem('mtc_version_current','${newVersion}');}catch(e){}document.getElementById('versionBanner').remove()" style="background:transparent;border:1px solid rgba(255,255,255,0.3);color:rgba(255,255,255,0.6);border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px">Ignoră (doar admin)</button>`
+    :"";
+  overlay.innerHTML=`<div style="background:linear-gradient(135deg,#4f46e5,#7c3aed);border-radius:16px;padding:36px 40px;max-width:440px;width:90%;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,0.5)">
+    <div style="font-size:48px;margin-bottom:12px">🚀</div>
+    <div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:8px">Versiune nouă!</div>
+    ${msg?`<div style="font-size:14px;color:rgba(255,255,255,0.8);margin-bottom:20px">${msg}</div>`:'<div style="margin-bottom:20px"></div>'}
+    <div style="font-size:13px;color:rgba(255,255,255,0.65);margin-bottom:28px">Aplicația a fost actualizată.<br>Trebuie să reîncarci pagina pentru a continua.</div>
+    <button onclick="try{localStorage.setItem('mtc_version_current','${newVersion}');}catch(e){}window.location.reload(true)" style="background:#fff;color:#4f46e5;border:none;border-radius:10px;padding:14px 40px;font-size:16px;font-weight:800;cursor:pointer;width:100%;margin-bottom:10px;box-shadow:0 4px 14px rgba(0,0,0,0.2)">↻ Actualizează acum</button>
+    ${dismissBtn}
+  </div>`;
+  if(!isAdminUser) overlay.addEventListener("click",e=>{if(e.target===overlay)e.stopPropagation();});
+  document.body.appendChild(overlay);
+  if(!isAdminUser){
+    document.addEventListener("keydown",function blockKeys(e){
+      if(document.getElementById("versionBanner")){e.preventDefault();e.stopPropagation();}
+      else document.removeEventListener("keydown",blockKeys);
+    },true);
+  }
+}
+
+async function publishNewVersion(){
+  if(!isAdmin()) return;
+  const action=confirm("Publică versiune nouă?\n\nOK = publică (toți userii vor vedea notificarea)\nCancel = resetează (oprește notificarea curentă)");
+  if(action){
+    const msg=prompt("Mesaj pentru utilizatori:","Funcționalități noi disponibile");
+    if(msg===null) return;
+    const version=new Date().toISOString().slice(0,10).replace(/-/g,".")+"."+Date.now().toString().slice(-4);
+    try{
+      await db.collection("app_meta").doc("version").set({version,message:msg,publishedAt:new Date().toISOString(),publishedBy:"admin"});
+      try{ localStorage.setItem("mtc_version_current",version); }catch(e){}
+      toast("✅ Versiune "+version+" publicată");
+    }catch(e){ toast("Eroare: "+e.message,true); }
+  } else {
+    try{
+      await db.collection("app_meta").doc("version").delete();
+      toast("✅ Notificarea de versiune oprită");
+    }catch(e){ toast("Eroare: "+e.message,true); }
+  }
+}
 // ============================================================
 let planCurrentDate = new Date(); // orice zi din saptamana curenta
 let planState = {}; // { "2026-W23": { "NumeDriver": [0,1,0,1,1,1,0] } } (7 zile Lu-Du)

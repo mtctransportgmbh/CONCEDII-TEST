@@ -2867,7 +2867,11 @@ function renderCalDay(d,otherMonth,today){
       const makeCell=({dr,type})=>{
         const cls=type==="krank"?" krank":type==="unpaid"?" unpaid":"";
         const suffix=type==="krank"?" K":type==="unpaid"?" U":"";
-        return `<div class="cal-name${cls}">${escapeHtml(dr.name.split(" ")[0])}${suffix}</div>`;
+        const parts=dr.name.trim().split(/\s+/);
+        // Afișăm: NumeFamilie + inițiala prenumelui (dacă există)
+        const familyName=parts[0];
+        const initial=parts.length>1?" "+parts[1][0]+".":"";
+        return `<div class="cal-name${cls}">${escapeHtml(familyName+initial)}${suffix}</div>`;
       };
       // If only ≤6 names, use single column (no separator)
       if(visible.length<=COL){
@@ -3524,6 +3528,8 @@ function makeCatHeader(label, color, count, gridCols, canEdit, group, cat, daysI
 }
 
 function renderSortatoriTimeline(){
+  // Re-render planificare dacă e activ (sortatorii s-au schimbat)
+  if(appMode==="planificare"){ renderPlanificare(); return; }
   const y=sortCurrentDate.getFullYear(), m=sortCurrentDate.getMonth();
   const days=new Date(y,m+1,0).getDate();
   const tl=document.getElementById("sortatoriTimeline");
@@ -4313,10 +4319,15 @@ function renderPlanificare(){
       .sort((a,b)=>a.name.localeCompare(b.name,"ro"));
     if(!catDrivers.length) return;
 
-    // Category header row
+    // Category header row — cu spațiu de separare deasupra (exceptând prima categorie)
+    const isFirstCat = rowsHtml === "";
+    if(!isFirstCat){
+      // Linie de separare între categorii
+      rowsHtml+=`<div style="display:flex;min-width:${totalCols}px;height:10px;background:var(--bg);border-bottom:1px solid var(--border)"></div>`;
+    }
     rowsHtml+=`<div style="display:flex;min-width:${totalCols}px;background:var(--bg-elev-2);border-bottom:1px solid var(--border);border-left:3px solid ${cat.color}">`;
     rowsHtml+=`<div style="width:${badgeW}px;min-width:${badgeW}px"></div>`;
-    rowsHtml+=`<div style="width:${nameW+4}px;padding:4px 8px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:${cat.color}">${cat.label}</div>`;
+    rowsHtml+=`<div style="width:${nameW+4}px;padding:5px 8px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:${cat.color}">${cat.label} <span style="color:var(--text-dim);font-weight:400">(${catDrivers.length})</span></div>`;
     // empty day cells for category header
     weeks.forEach((wkDays,wi)=>{
       wkDays.forEach(()=>rowsHtml+=`<div style="width:${dayW}px"></div>`);

@@ -435,11 +435,18 @@
   }
   .nav button:hover { background: var(--bg-elev-2); }
   .nav h2 {
-    font-size: 20px;
-    font-weight: 600;
-    min-width: 200px;
+    font-size: 15px;
+    font-weight: 900;
+    min-width: 160px;
     text-align: center;
-    text-transform: capitalize;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: #fff;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    border: 2px solid rgba(255,255,255,0.25);
+    border-radius: 10px;
+    padding: 7px 20px;
+    box-shadow: 0 3px 12px rgba(99,102,241,0.45), inset 0 1px 0 rgba(255,255,255,0.15);
   }
   
   .mod-tab {
@@ -1061,10 +1068,9 @@
         <div class="stat-value" id="statPeak">0</div>
       </div>
       <div id="statKrankBox" style="display:none"><div id="statKrank" style="display:none">0</div></div>
-    </div>
-    
-    <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
-      <button id="printBtn" onclick="openPrintModal()" style="display:none;padding:8px 20px;font-size:13px;font-weight:700;background:var(--accent);color:#000;border:none;border-radius:7px;cursor:pointer;box-shadow:0 2px 8px rgba(251,191,36,0.35)">🖨️ Print / Export PDF</button>
+      <div style="margin-left:auto;display:flex;align-items:center">
+        <button id="printBtn" onclick="openPrintModal()" style="display:none;padding:10px 22px;font-size:14px;font-weight:800;background:var(--accent);color:#000;border:none;border-radius:8px;cursor:pointer;box-shadow:0 3px 10px rgba(251,191,36,0.4);white-space:nowrap">🖨️ Print / Export PDF</button>
+      </div>
     </div>
     <div id="holidayBanner" class="holiday-banner" style="display:none"></div>
     
@@ -1460,6 +1466,13 @@ let state = {drivers:[], thresholds:{warn:3,crit:5}};
 let activeGroup = "total"; // for tania/admin filter
 let view = "calendar";
 let currentDate = new Date();
+let activeYear = currentDate.getFullYear();
+const BASE_YEAR = 2026;
+function concediiColl(){ return activeYear===BASE_YEAR?"concedii":"concedii_"+activeYear; }
+function sortatoriColl(){ return activeYear===BASE_YEAR?"sortatori":"sortatori_"+activeYear; }
+function prezenteColl(){  return activeYear===BASE_YEAR?"prezente":"prezente_"+activeYear; }
+function backupColl(){    return activeYear===BASE_YEAR?"daily_backup":"daily_backup_"+activeYear; }
+function activityColl(){  return activeYear===BASE_YEAR?"activity_log":"activity_log_"+activeYear; }
 let editingDriverId = null;
 let leaveDriverId = null;
 let comboSelectedId = null, comboHighlightIdx = 0, comboFiltered = [];
@@ -1646,7 +1659,7 @@ async function triggerAutoBackup(time){
         unpaidLeaves:(dr.unpaidLeaves||[])
       };
     });
-    await db.collection("daily_backup").doc(docId).set({
+    await db.collection(backupColl()).doc(docId).set({
       leaves:    leavesOnly,
       savedAt:   now.toISOString(),
       time:      time,
@@ -2719,7 +2732,7 @@ async function loadLastFirestoreBackup(){
   if(!isAdminOrTania()){toast("Doar Admin sau Tania",true);return;}
   try{
     setSaveStatus("saving","Se încarcă lista backup-uri...");
-    const snap = await db.collection("daily_backup").orderBy("savedAt","desc").limit(9).get();
+    const snap = await db.collection(backupColl()).orderBy("savedAt","desc").limit(9).get();
     if(snap.empty){toast("Nu există backup în Firestore",true);setSaveStatus("ok","Gata");return;}
     // Show list of available backups
     const list = snap.docs.map((d,i)=>{
@@ -2817,7 +2830,7 @@ async function autoSaveDailyBackup(){
   const lastBackupDay = localStorage.getItem("mtc_last_daily_backup");
   if(lastBackupDay===today) return; // deja salvat azi
   try{
-    await db.collection("daily_backup").doc(today).set({
+    await db.collection(backupColl()).doc(today).set({
       data: JSON.parse(JSON.stringify(state)),
       savedAt: new Date().toISOString(),
       drivers: state.drivers.length
@@ -3646,7 +3659,7 @@ async function logActivity(action, person, details){
       timestamp: new Date().toISOString(),
       month:     currentDate.getFullYear()+"-"+String(currentDate.getMonth()+1).padStart(2,"0")
     };
-    await db.collection("activity_log").add(entry);
+    await db.collection(activityColl()).add(entry);
   }catch(e){ console.warn("log err",e); }
 }
 
@@ -3655,7 +3668,7 @@ async function openActivityLog(){
   openModal("modalActivityLog");
   document.getElementById("actLogContent").innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:20px">⏳ Se încarcă...</div>';
   try{
-    const snap = await db.collection("activity_log")
+    const snap = await db.collection(activityColl())
       .orderBy("timestamp","desc")
       .limit(200)
       .get();

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ro">
+<html lang="ro" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
@@ -5635,17 +5635,9 @@ function toggleSidebar(){
 // ============================================================
 // THEME TOGGLE (Dark / Light)
 // ============================================================
-function toggleTheme(){
-  // Tema light e permanentă — butonul nu mai face nimic
-}
-function applyTheme(theme){
-  // Forțăm mereu light
-  document.documentElement.setAttribute("data-theme","light");
-  const btn=document.getElementById("themeToggleBtn");
-  if(btn) btn.style.display="none";
-}
-// Aplică light la încărcare
-(function(){ applyTheme("light"); })();
+function toggleTheme(){ /* tema light e permanentă */ }
+function applyTheme(){ document.documentElement.setAttribute("data-theme","light"); }
+(function(){ applyTheme(); try{localStorage.removeItem("mtc-theme");}catch(e){} })();
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema (Dark/Light)">🌙</button>

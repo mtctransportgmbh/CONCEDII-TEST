@@ -1794,6 +1794,19 @@ function showLockScreen(){
     </div>`;
   document.body.appendChild(overlay);
 
+  // Suport tastatură pentru lock screen
+  window._lockKeyHandler = function(e){
+    if(!document.getElementById("lockScreenOverlay")) {
+      document.removeEventListener("keydown", window._lockKeyHandler);
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    if(e.key>="0" && e.key<="9") window.lockPinKey(e.key);
+    else if(e.key==="Backspace") window.lockPinKey("⌫");
+  };
+  document.addEventListener("keydown", window._lockKeyHandler, true);
+
   // Reset stare PIN lock
   window._lockPin = "";
 }
@@ -1840,6 +1853,10 @@ function unlockScreen(){
   if(appRoot) appRoot.style.filter="";
   const overlay=document.getElementById("lockScreenOverlay");
   if(overlay) overlay.remove();
+  if(window._lockKeyHandler){
+    document.removeEventListener("keydown", window._lockKeyHandler, true);
+    window._lockKeyHandler=null;
+  }
 }
 
 function switchUserFromLock(){
@@ -3119,21 +3136,25 @@ function openDayDetail(dateStr){
 // Fuzionează perioadele consecutive sau suprapuse dintr-o listă de leaves
 function mergeLeaves(leaves){
   if(!leaves||!leaves.length) return [];
-  // Sortăm după start
-  const sorted = [...leaves].sort((a,b)=>a.start.localeCompare(b.start));
-  const merged = [];
+  const sorted=[...leaves].sort((a,b)=>a.start.localeCompare(b.start));
+  const merged=[];
   for(const lv of sorted){
     if(!merged.length){merged.push({start:lv.start,end:lv.end});continue;}
-    const last = merged[merged.length-1];
-    // Verificăm dacă perioadele sunt consecutive (endDate+1zi >= startDate)
-    const lastEnd = parseDate(last.end);
-    const curStart = parseDate(lv.start);
-    lastEnd.setDate(lastEnd.getDate()+1); // ziua după end
-    // Sari duminicile la verificarea consecutivității
-    while(isSunday(lastEnd)) lastEnd.setDate(lastEnd.getDate()+1);
-    if(curStart <= lastEnd){
-      // Extinde perioada curentă dacă end-ul e mai mare
-      if(lv.end > last.end) last.end = lv.end;
+    const last=merged[merged.length-1];
+    // Găsim ziua lucrătoare de după last.end
+    const lastEnd=parseDate(last.end);
+    const nextWorkday=new Date(lastEnd);
+    nextWorkday.setDate(nextWorkday.getDate()+1);
+    // Sări duminici și sărbători
+    while(isSunday(nextWorkday)||getHoliday(nextWorkday))
+      nextWorkday.setDate(nextWorkday.getDate()+1);
+    const curStart=parseDate(lv.start);
+    // Dacă prima zi lucrătoare după last.end e egală cu startul perioadei curente → consecutive
+    if(fmtDate(nextWorkday)===lv.start){
+      if(lv.end>last.end) last.end=lv.end;
+    } else if(curStart<=nextWorkday){
+      // Suprapunere
+      if(lv.end>last.end) last.end=lv.end;
     } else {
       merged.push({start:lv.start,end:lv.end});
     }
@@ -3250,9 +3271,22 @@ function tlDragEnd(){
     const hasPresence=filteredDays.some(dn=>drPres2[String(dn)]);
     if(hasPresence){ toast("⛔ "+dr.name+" are prezență marcată în această perioadă. Șterge mai întâi prezența.",true); return; }
     if(!dr.leaves)dr.leaves=[];
-    dr.leaves.push({start:startStr2,end:endStr2});
+    // Împărțim în segmente continue sărind sărbătorile
+    const segments=[];
+    let segStart=null, segEnd=null;
+    for(let d=new Date(y,m,s);d<=new Date(y,m,e);d.setDate(d.getDate()+1)){
+      if(isSunday(d)||getHoliday(d)){
+        if(segStart!==null){segments.push({start:fmtDate(segStart),end:fmtDate(segEnd)});segStart=null;segEnd=null;}
+      } else {
+        if(segStart===null) segStart=new Date(d);
+        segEnd=new Date(d);
+      }
+    }
+    if(segStart!==null) segments.push({start:fmtDate(segStart),end:fmtDate(segEnd)});
+    if(!segments.length){ tlDrag={active:false,driverId:null,startDay:null,endDay:null,removing:false}; return; }
+    segments.forEach(seg=>dr.leaves.push(seg));
     logActivity("➕ Concediu adăugat",dr.name,startStr2+" → "+endStr2+" ("+newDays+"z)");
-    renderAll();scheduleSave();toast("✓ "+dr.name+": "+newDays+" zile lucrătoare");
+    renderAll();scheduleSave();toast("✓ "+dr.name+": "+newDays+" zile lucrătoare"+(segments.length>1?" ("+segments.length+" segmente)":""));
   }
   tlDrag={active:false,driverId:null,startDay:null,endDay:null,removing:false};
 }
@@ -5148,7 +5182,7 @@ function generatePlanImage(wkKey, dates, weekData, cats, wkNum){
   const MONTHS_RO_SHORT=["Ian","Feb","Mar","Apr","Mai","Iun","Iul","Aug","Sep","Oct","Nov","Dec"];
 
   // Layout
-  const nameW=170, cellW=100, cellH=28, headerH=48, catLabelH=28, paddingL=10, paddingT=10;
+  const nameW=140, cellW=70, cellH=22, headerH=38, catLabelH=22, paddingL=8, paddingT=8;
   const totalW = paddingL*2 + nameW + workDays.length*cellW;
 
   // Count rows
@@ -5602,31 +5636,16 @@ function toggleSidebar(){
 // THEME TOGGLE (Dark / Light)
 // ============================================================
 function toggleTheme(){
-  const isLight = document.documentElement.getAttribute("data-theme")==="light";
-  const newTheme = isLight ? "dark" : "light";
-  applyTheme(newTheme);
-  try{ localStorage.setItem("mtc-theme", newTheme); }catch(e){}
+  // Tema light e permanentă — butonul nu mai face nimic
 }
-
 function applyTheme(theme){
-  if(theme==="light"){
-    document.documentElement.setAttribute("data-theme","light");
-    const btn=document.getElementById("themeToggleBtn");
-    if(btn){ btn.textContent="☀️"; btn.title="Schimbă la Dark"; }
-  } else {
-    document.documentElement.removeAttribute("data-theme");
-    const btn=document.getElementById("themeToggleBtn");
-    if(btn){ btn.textContent="🌙"; btn.title="Schimbă la Light"; }
-  }
+  // Forțăm mereu light
+  document.documentElement.setAttribute("data-theme","light");
+  const btn=document.getElementById("themeToggleBtn");
+  if(btn) btn.style.display="none";
 }
-
-// Aplică tema salvată la încărcare
-(function(){
-  try{
-    const saved = localStorage.getItem("mtc-theme");
-    if(saved) applyTheme(saved);
-  }catch(e){}
-})();
+// Aplică light la încărcare
+(function(){ applyTheme("light"); })();
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema (Dark/Light)">🌙</button>

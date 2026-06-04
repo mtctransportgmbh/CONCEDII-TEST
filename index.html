@@ -1188,12 +1188,20 @@
 
 <!-- WHATSAPP EXPORT MODAL -->
 <div class="modal-bg" id="modalWhatsApp">
-  <div class="modal" style="max-width:640px">
+  <div class="modal" style="max-width:680px">
     <h3>💬 Export WhatsApp</h3>
     <div class="modal-sub" id="waSubtitle"></div>
-    <textarea id="waText" style="width:100%;min-height:220px;background:var(--bg-elev-2);border:1px solid var(--border);border-radius:8px;padding:12px;color:var(--text);font-size:13px;line-height:1.6;resize:vertical;margin-top:10px;box-sizing:border-box" readonly></textarea>
-    <div class="modal-actions" style="margin-top:10px;gap:8px">
+    <textarea id="waText" style="width:100%;min-height:200px;background:var(--bg-elev-2);border:1px solid var(--border);border-radius:8px;padding:12px;color:var(--text);font-size:13px;line-height:1.6;resize:vertical;margin-top:10px;box-sizing:border-box" readonly></textarea>
+    <div style="margin-top:14px;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:#1a1a2e">
+      <div style="padding:8px 12px;font-size:11px;font-weight:700;color:var(--text-dim);background:var(--bg-elev-2)">🖼️ Imagine program săptămânal</div>
+      <div style="overflow-x:auto;padding:8px">
+        <canvas id="waPlanCanvas" style="display:none;border-radius:4px;max-width:100%"></canvas>
+        <img id="waPlanImg" style="display:none;max-width:100%;border-radius:4px" alt="Plan sortatori">
+      </div>
+    </div>
+    <div class="modal-actions" style="margin-top:10px;gap:8px;flex-wrap:wrap">
       <button class="btn btn-secondary" onclick="closeModal('modalWhatsApp')">Închide</button>
+      <a id="waPlanDownloadBtn" class="btn btn-secondary" style="display:none;text-decoration:none;border-color:#6366f1;color:#6366f1">📥 Descarcă imagine</a>
       <button class="btn" onclick="copyWaText()" style="background:#25d366;border-color:#25d366;color:#fff">📋 Copiază mesajul</button>
     </div>
   </div>
@@ -1736,19 +1744,120 @@ function fullReset(){
   }catch(e){}
 }
 
+// ============================================================
+// LOCK SCREEN (blur + PIN) — înlocuiește delogarea completă
+// ============================================================
+let _lockScreenActive = false;
+
+function showLockScreen(){
+  if(_lockScreenActive) return;
+  const uk = window.activeUserKey;
+  if(!uk || uk==="admin") return;
+  _lockScreenActive = true;
+
+  // Blur pe aplicație
+  const appRoot = document.getElementById("appRoot");
+  if(appRoot) appRoot.style.filter = "blur(8px)";
+
+  // Mesaje de bun venit per user
+  const greetings = {
+    raluca:   ["Bine ai revenit, Raluca! 👋😊", "Introdu PIN-ul pentru a continua."],
+    madalina: ["Bine ai revenit, Mădălina! 👋✨", "Introdu PIN-ul pentru a continua."],
+    corina:   ["Bine ai revenit, Corina! 👋🌟", "Introdu PIN-ul pentru a continua."],
+    tania:    ["Bine ai revenit, Tania! 👋💼", "Introdu PIN-ul pentru a continua."],
+    mihaela:  ["Bine ai revenit, Mihaela! 👋🎯", "Introdu PIN-ul pentru a continua."],
+  };
+  const [title, sub] = greetings[uk] || ["Bine ai revenit! 👋", "Introdu PIN-ul pentru a continua."];
+
+  // Cream overlay-ul de lock
+  const overlay = document.createElement("div");
+  overlay.id = "lockScreenOverlay";
+  overlay.style.cssText = "position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;animation:fadeIn 0.3s ease";
+  overlay.innerHTML = `
+    <div style="background:var(--bg-elev);border:1px solid var(--border);border-radius:20px;padding:36px 32px;max-width:380px;width:92%;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,0.5)">
+      <div style="font-size:52px;margin-bottom:10px">${uk==="raluca"?"😊":uk==="madalina"?"✨":uk==="corina"?"🌟":uk==="tania"?"💼":"🎯"}</div>
+      <div style="font-size:20px;font-weight:800;color:var(--accent);margin-bottom:6px">${title}</div>
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:24px">${sub}</div>
+      <!-- PIN dots -->
+      <div style="display:flex;justify-content:center;gap:12px;margin-bottom:24px">
+        ${[0,1,2,3,4,5].map(i=>`<div id="lpd${i}" style="width:14px;height:14px;border-radius:50%;border:2px solid var(--border);background:transparent;transition:all 0.15s"></div>`).join("")}
+      </div>
+      <!-- PIN pad -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:220px;margin:0 auto 16px">
+        ${[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map(k=>
+          k===""?`<div></div>`:
+          `<button onclick="lockPinKey('${k}')" style="aspect-ratio:1;border-radius:10px;border:1px solid var(--border);background:var(--bg-elev-2);color:var(--text);font-size:18px;font-weight:700;cursor:pointer;transition:all 0.1s;user-select:none" onmousedown="this.style.transform='scale(0.93)'" onmouseup="this.style.transform=''" onmouseleave="this.style.transform=''">${k}</button>`
+        ).join("")}
+      </div>
+      <div id="lockPinErr" style="font-size:12px;color:var(--red);height:16px;margin-bottom:12px"></div>
+      <button onclick="switchUserFromLock()" style="background:transparent;border:1px solid var(--border);color:var(--text-dim);border-radius:8px;padding:8px 20px;cursor:pointer;font-size:12px">🔄 Schimbă utilizatorul</button>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  // Reset stare PIN lock
+  window._lockPin = "";
+}
+
+window.lockPinKey = async function(k){
+  if(k==="⌫"){ window._lockPin=(window._lockPin||"").slice(0,-1); updateLockDots(); return; }
+  window._lockPin=(window._lockPin||"")+k;
+  updateLockDots();
+  if(window._lockPin.length===6){
+    // Verificăm PIN-ul
+    const uk=window.activeUserKey;
+    const storedHash=await getPinFromFirestore(uk);
+    const entered=window._lockPin;
+    window._lockPin="";
+    updateLockDots();
+    if(storedHash && hashPin(entered)===storedHash){
+      // PIN corect — deblocăm
+      unlockScreen();
+      setSession(uk);
+      resetAutoLogout();
+      toast("✓ Bine ai revenit, "+(USERS[uk]?.name||uk)+"! 😊");
+    } else {
+      // PIN greșit
+      document.getElementById("lockPinErr").textContent="❌ PIN incorect, încearcă din nou";
+      for(let i=0;i<6;i++){const d=document.getElementById("lpd"+i);if(d){d.style.background="#ef4444";d.style.borderColor="#ef4444";}}
+      setTimeout(()=>{ updateLockDots(); document.getElementById("lockPinErr").textContent=""; },700);
+    }
+  }
+};
+
+function updateLockDots(){
+  const len=(window._lockPin||"").length;
+  for(let i=0;i<6;i++){
+    const d=document.getElementById("lpd"+i);
+    if(!d) continue;
+    if(i<len){d.style.background="var(--accent)";d.style.borderColor="var(--accent)";}
+    else{d.style.background="transparent";d.style.borderColor="var(--border)";}
+  }
+}
+
+function unlockScreen(){
+  _lockScreenActive=false;
+  const appRoot=document.getElementById("appRoot");
+  if(appRoot) appRoot.style.filter="";
+  const overlay=document.getElementById("lockScreenOverlay");
+  if(overlay) overlay.remove();
+}
+
+function switchUserFromLock(){
+  // Delogare completă și mergi la ecranul de selectare user
+  unlockScreen();
+  const uk=window.activeUserKey;
+  clearSession(uk);
+  window.activeUserKey=null;
+  fullReset();
+  document.getElementById("appRoot").style.display="none";
+  document.getElementById("authScreen").style.display="flex";
+}
+
 function resetAutoLogout(){
   if(autoLogoutTimer) clearTimeout(autoLogoutTimer);
   autoLogoutTimer = setTimeout(()=>{
     const uk = window.activeUserKey;
-    if(uk && uk!=="admin"){
-      clearSession(uk);
-      const prevUser = uk;
-      window.activeUserKey = null;
-      fullReset();
-      document.getElementById("appRoot").style.display = "none";
-      document.getElementById("authScreen").style.display = "flex";
-      setTimeout(()=>showPinScreen(prevUser), 150);
-    }
+    if(uk && uk!=="admin") showLockScreen();
   }, PIN_SESSION_MINS*60*1000);
 }
 ["click","keydown","touchstart","mousemove","scroll"].forEach(ev=>
@@ -2795,12 +2904,11 @@ function uploadLocalBackup(e){
   if(!confirm("Restaurezi datele din fișierul backup?\nDatele actuale vor fi înlocuite complet."))
     {e.target.value="";return;}
   const reader=new FileReader();
-  reader.onload=ev=>{
+  reader.onload=async ev=>{
     try{
       const bk=JSON.parse(ev.target.result);
       let restored=0;
       if(bk.drivers && bk.drivers.length>0){
-        // Format nou — înlocuiește complet lista de persoane
         state.drivers = bk.drivers.map(d=>({
           id:             d.id||uid(),
           name:           d.name,
@@ -2814,24 +2922,32 @@ function uploadLocalBackup(e){
         }));
         restored = state.drivers.length;
       } else if(bk.leaves){
-        // Format vechi — creează persoane dacă nu există
         Object.entries(bk.leaves).forEach(([name,data])=>{
           let dr=state.drivers.find(d=>d.name===name);
-          if(!dr){
-            dr={id:uid(),name,visibleTo:["tania"],maxDays:0,carryOverDays:0,carryOverByYear:{},leaves:[],krankLeaves:[],unpaidLeaves:[]};
-            state.drivers.push(dr);
-          }
-          dr.leaves=data.leaves||[];
-          dr.krankLeaves=data.krankLeaves||[];
-          dr.unpaidLeaves=data.unpaidLeaves||[];
+          if(!dr){ dr={id:uid(),name,visibleTo:["tania"],maxDays:0,carryOverDays:0,carryOverByYear:{},leaves:[],krankLeaves:[],unpaidLeaves:[]}; state.drivers.push(dr); }
+          dr.leaves=data.leaves||[]; dr.krankLeaves=data.krankLeaves||[]; dr.unpaidLeaves=data.unpaidLeaves||[];
           restored++;
         });
       } else throw new Error("Format necunoscut");
-      scheduleSave();renderAll();
-      toast("✓ Restaurat complet: "+restored+" persoane");
+      if(bk.thresholds) state.thresholds=bk.thresholds;
+      // Restaurează prezențe
+      if(bk.prezente && Object.keys(bk.prezente).length>0){
+        Object.assign(presState.presence, bk.prezente);
+        await savePresState();
+      }
+      // Restaurează sortatori
+      if(bk.sortatori && bk.sortatori.drivers && bk.sortatori.drivers.length>0){
+        sortState.drivers=bk.sortatori.drivers;
+        sortState.presence=bk.sortatori.presence||sortState.presence||{};
+        await saveSortState();
+      }
+      scheduleSave(); renderAll();
+      if(document.getElementById("sortatoriTimeline")) renderSortatoriTimeline();
+      logActivity("📂 Backup JSON restaurat","—",restored+" persoane + prezențe + sortatori");
+      toast("✓ Restaurat: "+restored+" persoane, prezențe și sortatori");
     }catch(err){toast("Eroare: "+err.message,true);console.error(err);}
   };
-  reader.readAsText(file);e.target.value="";
+  reader.readAsText(file); e.target.value="";
 }
 
 function downloadBackupNow(){
@@ -2905,7 +3021,7 @@ function renderCalendar(){
   document.getElementById("statToday").textContent=onLeaveToday;setStatLevel("statTodayBox",onLeaveToday);
   const daysInMonth=lastDay.getDate();
   const counts=[];let krankTotal=0;
-  for(let d=1;d<=daysInMonth;d++){const dt=new Date(y,m,d);counts.push(isSunday(dt)?0:driversOnDate(dt).length);if(!isSunday(dt))krankTotal+=krankOnDate(dt).length;}
+  for(let d=1;d<=daysInMonth;d++){const dt=new Date(y,m,d);const isOff=isSunday(dt)||!!getHoliday(dt);counts.push(isOff?0:driversOnDate(dt).length);if(!isOff)krankTotal+=krankOnDate(dt).length;}
   const peak=Math.max(...counts,0);
   document.getElementById("statPeak").textContent=peak;
   if(document.getElementById("statKrank"))document.getElementById("statKrank").textContent=krankTotal;
@@ -2914,9 +3030,9 @@ function renderCalendar(){
 
 function renderCalDay(d,otherMonth,today){
   const dnum=d.getDate(),isSun=isSunday(d),holiday=getHoliday(d),isToday=sameDay(d,today);
-  const drivers=(otherMonth||isSun)?[]:driversOnDate(d);
-  const kDriversCal=(otherMonth||isSun)?[]:krankOnDate(d);
-  const uDriversCal=(otherMonth||isSun)?[]:unpaidOnDate(d);
+  const drivers=(otherMonth||isSun||!!holiday)?[]:driversOnDate(d);
+  const kDriversCal=(otherMonth||isSun||!!holiday)?[]:krankOnDate(d);
+  const uDriversCal=(otherMonth||isSun||!!holiday)?[]:unpaidOnDate(d);
   const hasKrank=kDriversCal.length>0;
   const hasUnpaid=uDriversCal.length>0;
   const classes=["cal-day"];
@@ -3057,9 +3173,13 @@ function tlDragMove(dn,pageX,pageY){
 }
 function tlDragUpdate(currentDn){
   const s=Math.min(tlDrag.startDay,currentDn),e=Math.max(tlDrag.startDay,currentDn);
+  const y=currentDate.getFullYear(),m=currentDate.getMonth();
   document.querySelectorAll(`.tl-cell[data-driver="${tlDrag.driverId}"]`).forEach(cell=>{
     const dn=parseInt(cell.dataset.day);
-    cell.classList.toggle("tl-selecting",dn>=s&&dn<=e);
+    // Nu evidenția duminici și sărbători
+    const d=new Date(y,m,dn);
+    const blocked=isSunday(d)||!!getHoliday(d);
+    cell.classList.toggle("tl-selecting",dn>=s&&dn<=e&&!blocked);
   });
 }
 function tlDragEnd(){
@@ -3529,7 +3649,18 @@ function sortDragApply(driverName, day){
 
 function sortDragEnd(){
   if(!_sortDrag.active) return;
-  _sortDrag = {active:false, driverName:null, mode:null};
+  const name=_sortDrag.driverName, mode=_sortDrag.mode;
+  const mk=getSortKey();
+  _sortDrag={active:false, driverName:null, mode:null};
+  // Log activitate
+  const dp=(sortState.presence[mk]&&sortState.presence[mk][name])||{};
+  const pCount=Object.values(dp).filter(v=>v==="prezent").length;
+  const aCount=Object.values(dp).filter(v=>v==="absent").length;
+  logActivity(
+    mode==="prezent"?"✓ Prezent sortator":mode==="absent"?"✗ Absent sortator":"🗑 Șters sortator",
+    name||"?",
+    (window.activeUserKey||"?")+": "+mk+" (prez:"+pCount+", abs:"+aCount+")"
+  );
   saveSortState();
 }
 document.addEventListener("mouseup", ()=>{ if(_sortDrag.active) sortDragEnd(); });
@@ -4943,13 +5074,21 @@ function openWhatsAppExport(){
   const dates = getPlanWeekDates();
   const weekData = planState[wkKey] || {};
 
-  const ruhDrivers = (sortState.drivers||[]).filter(d=>d.group==="ruhstorf")
-    .sort((a,b)=>a.name.localeCompare(b.name,"ro"));
+  const cats = [
+    {label:"Permanenți", key:"permanent", color:"#10b981"},
+    {label:"Rotații",    key:"rotatie",   color:"#f59e0b"},
+    {label:"Urgențe",    key:"urgenta",   color:"#ef4444"},
+  ];
+
+  const allRuhDrivers = cats.flatMap(cat=>
+    (sortState.drivers||[]).filter(d=>d.group==="ruhstorf"&&(cat.key==="permanent"?(!d.category||d.category==="permanent"):d.category===cat.key))
+    .sort((a,b)=>a.name.localeCompare(b.name,"ro"))
+  );
 
   const workDayIdxs = dates.map((d,i)=>({d,i})).filter(({d})=>d.getDay()!==0&&!getHoliday(d)).map(({i})=>i);
 
   const fullWeek=[], partial={};
-  ruhDrivers.forEach(dr=>{
+  allRuhDrivers.forEach(dr=>{
     const concDr=state.drivers.find(sd=>sd.name===dr.name);
     const dw=weekData[dr.name]||[0,0,0,0,0,0,0];
     const prezZile=workDayIdxs.filter(i=>{
@@ -4966,24 +5105,21 @@ function openWhatsAppExport(){
   const mon=dates[0], sun=dates[6];
   const fmt=d=>d.getDate()+"."+(d.getMonth()+1);
   const fmtFull=d=>PLAN_DAYS_FULL[(d.getDay()+6)%7]+" "+d.getDate()+"."+(d.getMonth()+1)+"."+d.getFullYear();
+  const wkNum=getISOWeek(mon);
 
   let msg="Bună ziua, colegi! 👋\n\n";
   msg+="Postez programul sortatorilor pentru săptămâna "+fmt(mon)+" – "+fmt(sun)+".\n\n";
   if(fullWeek.length>0){
-    let holidayNote="";
+    let hNote="";
     if(holidays.length>0){
       const hlDays=holidays.map(d=>"*"+PLAN_DAYS_FULL[(d.getDay()+6)%7]+" "+d.getDate()+"."+(d.getMonth()+1)+"*").join(", ");
-      holidayNote=" (exceptând "+hlDays+" când suntem cu toții liberi)";
+      hNote=" (exceptând "+hlDays+" când suntem cu toții liberi)";
     }
-    msg+="🟢 *Prezenți întreaga săptămână"+holidayNote+":*\n";
-    msg+=fullWeek.map(n=>"• "+n).join("\n")+"\n\n";
+    msg+="🟢 *Prezenți întreaga săptămână"+hNote+":*\n"+fullWeek.map(n=>"• "+n).join("\n")+"\n\n";
   }
   if(Object.keys(partial).length>0){
     msg+="🟡 *Prezenți parțial:*\n";
-    Object.entries(partial).forEach(([name,idxs])=>{
-      const zile=idxs.map(i=>PLAN_DAYS_FULL[i].toLowerCase()).join(", ");
-      msg+="• *"+name+"* — "+zile+"\n";
-    });
+    Object.entries(partial).forEach(([name,idxs])=>{ msg+="• *"+name+"* — "+idxs.map(i=>PLAN_DAYS_FULL[i].toLowerCase()).join(", ")+"\n"; });
     msg+="\n";
   }
   if(holidays.length>0){
@@ -4995,8 +5131,157 @@ function openWhatsAppExport(){
 
   document.getElementById("waSubtitle").textContent="Săptămâna "+wkKey+" · "+fmt(mon)+" – "+fmt(sun)+"."+sun.getFullYear();
   document.getElementById("waText").value=msg;
+
+  // Generăm imaginea
+  generatePlanImage(wkKey, dates, weekData, cats, wkNum);
+
   openModal("modalWhatsApp");
 }
+
+function generatePlanImage(wkKey, dates, weekData, cats, wkNum){
+  const canvas = document.getElementById("waPlanCanvas");
+  if(!canvas) return;
+
+  // Zile de lucru (fără duminică)
+  const workDays = dates.filter(d=>d.getDay()!==0);
+  const DOW_RO=["Dum","Lun","Mar","Mie","Joi","Vin","Sâm"];
+  const MONTHS_RO_SHORT=["Ian","Feb","Mar","Apr","Mai","Iun","Iul","Aug","Sep","Oct","Nov","Dec"];
+
+  // Layout
+  const nameW=170, cellW=100, cellH=28, headerH=48, catLabelH=28, paddingL=10, paddingT=10;
+  const totalW = paddingL*2 + nameW + workDays.length*cellW;
+
+  // Count rows
+  let totalRows=0;
+  const catData=[];
+  cats.forEach(cat=>{
+    const drivers=(sortState.drivers||[]).filter(d=>d.group==="ruhstorf"&&(cat.key==="permanent"?(!d.category||d.category==="permanent"):d.category===cat.key)).sort((a,b)=>a.name.localeCompare(b.name,"ro"));
+    if(!drivers.length) return;
+    totalRows += 1 + drivers.length; // cat header + rows
+    catData.push({cat, drivers});
+  });
+
+  const totalH = paddingT*2 + headerH + totalRows*cellH + (catData.length-1)*8;
+  canvas.width = totalW;
+  canvas.height = totalH;
+  canvas.style.display="block";
+
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle="#1a1a2e";
+  ctx.fillRect(0,0,totalW,totalH);
+
+  // Header săptămână
+  ctx.fillStyle="#2d2d4e";
+  ctx.fillRect(paddingL, paddingT, totalW-paddingL*2, headerH);
+  ctx.fillStyle="#ffffff";
+  ctx.font="bold 16px Arial";
+  ctx.textAlign="center";
+  ctx.fillText("SĂPTĂMÂNA "+wkNum, totalW/2, paddingT+18);
+  ctx.font="bold 12px Arial";
+  const mon=dates[0],sun=dates[6];
+  ctx.fillStyle="#aaaacc";
+  ctx.fillText(DOW_RO[1]+" "+mon.getDate()+"."+(mon.getMonth()+1)+" – "+DOW_RO[6]+" "+sun.getDate()+"."+(sun.getMonth()+1)+"."+sun.getFullYear(), totalW/2, paddingT+38);
+
+  // Day headers
+  const headY = paddingT + headerH;
+  ctx.fillStyle="#2d2d4e";
+  ctx.fillRect(paddingL, headY, nameW, cellH);
+  workDays.forEach((d,i)=>{
+    const x = paddingL+nameW+i*cellW;
+    const holiday=getHoliday(d);
+    const isSat=d.getDay()===6;
+    ctx.fillStyle=holiday?"#3d2060":isSat?"#2a1a1a":"#2d2d4e";
+    ctx.fillRect(x, headY, cellW, cellH);
+    ctx.fillStyle=holiday?"#c084fc":isSat?"#ff6b6b":"#ffffff";
+    ctx.font="bold 11px Arial";
+    ctx.textAlign="center";
+    ctx.fillText(DOW_RO[d.getDay()].toUpperCase()+" - "+d.getDate()+"."+(d.getMonth()+1).toString().padStart(2,"0"), x+cellW/2, headY+cellH/2+4);
+    // border
+    ctx.strokeStyle="#404060";
+    ctx.lineWidth=1;
+    ctx.strokeRect(x, headY, cellW, cellH);
+  });
+
+  // Rows
+  let rowY = headY + cellH;
+  let catSepExtra = 0;
+
+  catData.forEach((cd, ci)=>{
+    if(ci>0){ rowY+=8; catSepExtra+=8; }
+
+    // Category label
+    ctx.fillStyle=cd.cat.color+"33";
+    ctx.fillRect(paddingL, rowY, totalW-paddingL*2, catLabelH);
+    ctx.strokeStyle=cd.cat.color;
+    ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(paddingL,rowY); ctx.lineTo(paddingL,rowY+catLabelH); ctx.stroke();
+    ctx.lineWidth=1;
+    ctx.fillStyle=cd.cat.color;
+    ctx.font="bold 11px Arial";
+    ctx.textAlign="left";
+    ctx.fillText(cd.cat.label.toUpperCase()+" ("+cd.drivers.length+")", paddingL+10, rowY+catLabelH/2+4);
+    rowY+=catLabelH;
+
+    cd.drivers.forEach((dr, ri)=>{
+      const concDr=state.drivers.find(sd=>sd.name===dr.name);
+      const dw=weekData[dr.name]||[0,0,0,0,0,0,0];
+      const rowBg=ri%2===0?"#16213e":"#1a2440";
+
+      ctx.fillStyle=rowBg;
+      ctx.fillRect(paddingL, rowY, nameW, cellH);
+      ctx.fillStyle="#ddddee";
+      ctx.font="12px Arial";
+      ctx.textAlign="left";
+      ctx.fillText(dr.name, paddingL+8, rowY+cellH/2+4);
+
+      workDays.forEach((d, di)=>{
+        const x=paddingL+nameW+di*cellW;
+        const dow=(d.getDay()+6)%7;
+        const holiday=getHoliday(d);
+        const onLeave=concDr&&((concDr.leaves||[]).some(l=>dateInLeave(d,l))||(concDr.krankLeaves||[]).some(l=>dateInLeave(d,l))||(concDr.unpaidLeaves||[]).some(l=>dateInLeave(d,l)));
+        const val=dw[dow];
+        const isPresent=!holiday&&!onLeave&&val===1;
+
+        if(holiday){ ctx.fillStyle="#2a1040"; }
+        else if(onLeave){ ctx.fillStyle="#3d3000"; }
+        else if(isPresent){ ctx.fillStyle="#1a6b3a"; }
+        else { ctx.fillStyle=ri%2===0?"#16213e":"#1a2440"; }
+
+        ctx.fillRect(x, rowY, cellW, cellH);
+
+        if(isPresent){
+          ctx.fillStyle="#ffffff";
+          ctx.font="bold 11px Arial";
+          ctx.textAlign="center";
+          ctx.fillText(dr.name, x+cellW/2, rowY+cellH/2+4);
+        } else if(onLeave){
+          ctx.fillStyle="#fbbf24";
+          ctx.font="10px Arial";
+          ctx.textAlign="center";
+          ctx.fillText("U", x+cellW/2, rowY+cellH/2+4);
+        }
+
+        ctx.strokeStyle="#303060";
+        ctx.lineWidth=0.5;
+        ctx.strokeRect(x, rowY, cellW, cellH);
+      });
+
+      ctx.strokeStyle="#303060";
+      ctx.lineWidth=0.5;
+      ctx.strokeRect(paddingL, rowY, nameW, cellH);
+
+      rowY+=cellH;
+    });
+  });
+
+  // Convertim la imagine pentru download
+  const imgUrl=canvas.toDataURL("image/png");
+  const imgEl=document.getElementById("waPlanImg");
+  if(imgEl){ imgEl.src=imgUrl; imgEl.style.display="block"; }
+  const dlBtn=document.getElementById("waPlanDownloadBtn");
+  if(dlBtn){ dlBtn.href=imgUrl; dlBtn.download="plan-sortatori-W"+wkNum+".png"; dlBtn.style.display="inline-flex"; }
+}
+
 
 function copyWaText(){
   const ta = document.getElementById("waText");

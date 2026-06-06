@@ -5176,159 +5176,150 @@ function generatePlanImage(wkKey, dates, weekData, cats, wkNum){
   const canvas = document.getElementById("waPlanCanvas");
   if(!canvas) return;
 
-  // Zile de lucru (fără duminică)
   const workDays = dates.filter(d=>d.getDay()!==0);
-  const DOW_RO=["Dum","Lun","Mar","Mie","Joi","Vin","Sâm"];
-  const MONTHS_RO_SHORT=["Ian","Feb","Mar","Apr","Mai","Iun","Iul","Aug","Sep","Oct","Nov","Dec"];
+  const DOW=["","Lu","Ma","Mi","Jo","Vi","Sâ","Du"];
 
-  // Layout
-  const nameW=140, cellW=70, cellH=22, headerH=38, catLabelH=22, paddingL=8, paddingT=8;
-  const totalW = paddingL*2 + nameW + workDays.length*cellW;
+  // Layout 2x rezoluție pentru calitate
+  const nameW=200, cellW=62, cellH=32, headerH=58, catH=28, padL=14, padT=14, sep=10;
+  const totalW = padL*2 + nameW + workDays.length*cellW;
 
-  // Sloturi fixe: permanent=13, rotatie=1, camion=1, urgenta=toți
-  const FIXED_SLOTS = {permanent:13, rotatie:1, camion:1, urgenta:0};
+  // Sloturi fixe per categorie
+  const FIXED = {permanent:13, rotatie:1, camion:1, urgenta:0};
   let totalRows=0;
   const catData=[];
   cats.forEach(cat=>{
-    const drivers=(sortState.drivers||[]).filter(d=>d.group==="ruhstorf"&&(cat.key==="permanent"?(!d.category||d.category==="permanent"):d.category===cat.key)).sort((a,b)=>a.name.localeCompare(b.name,"ro"));
-    const slots = FIXED_SLOTS[cat.key] || drivers.length;
-    // Completăm cu sloturi goale dacă sunt mai puțini
-    const rows = [];
-    for(let i=0; i<Math.max(slots, drivers.length); i++){
-      rows.push(drivers[i] || null); // null = slot gol
-    }
+    const all=(sortState.drivers||[]).filter(d=>d.group==="ruhstorf"&&(cat.key==="permanent"?(!d.category||d.category==="permanent"):d.category===cat.key)).sort((a,b)=>a.name.localeCompare(b.name,"ro"));
+    const slots=FIXED[cat.key]||all.length;
+    const rows=Array.from({length:Math.max(slots,all.length)},(_,i)=>all[i]||null);
     if(!rows.length) return;
-    totalRows += 1 + rows.length;
-    catData.push({cat, rows});
+    totalRows+=1+rows.length;
+    catData.push({cat,rows});
   });
 
-  const totalH = paddingT*2 + headerH + totalRows*cellH + (catData.length-1)*8;
-  canvas.width = totalW;
-  canvas.height = totalH;
-  canvas.style.display="block";
+  const totalH=padT*2+headerH+cellH+totalRows*cellH+(catData.length-1)*sep;
+  canvas.width=totalW*2; canvas.height=totalH*2;
+  canvas.style.width=totalW+"px"; canvas.style.height=totalH+"px"; canvas.style.display="block";
+  const ctx=canvas.getContext("2d");
+  ctx.scale(2,2);
 
-  const ctx = canvas.getContext("2d");
-  ctx.fillStyle="#1a1a2e";
-  ctx.fillRect(0,0,totalW,totalH);
+  // ── Fundal ──
+  ctx.fillStyle="#0d1117"; ctx.fillRect(0,0,totalW,totalH);
 
-  // Header săptămână
-  ctx.fillStyle="#2d2d4e";
-  ctx.fillRect(paddingL, paddingT, totalW-paddingL*2, headerH);
-  ctx.fillStyle="#ffffff";
-  ctx.font="bold 16px Arial";
-  ctx.textAlign="center";
-  ctx.fillText("SĂPTĂMÂNA "+wkNum, totalW/2, paddingT+18);
-  ctx.font="bold 12px Arial";
+  // ── Header gradient ──
+  const g=ctx.createLinearGradient(0,padT,totalW,padT+headerH);
+  g.addColorStop(0,"#4f46e5"); g.addColorStop(1,"#7c3aed");
+  ctx.fillStyle=g;
+  ctx.beginPath(); ctx.roundRect(padL,padT,totalW-padL*2,headerH,10); ctx.fill();
+  ctx.fillStyle="#fff"; ctx.font="bold 16px Arial"; ctx.textAlign="center";
+  ctx.fillText("📦  SORTATORI RUHSTORF  —  SĂPTĂMÂNA "+wkNum, totalW/2, padT+22);
+  ctx.font="13px Arial"; ctx.fillStyle="rgba(255,255,255,0.8)";
   const mon=dates[0],sun=dates[6];
-  ctx.fillStyle="#aaaacc";
-  ctx.fillText(DOW_RO[1]+" "+mon.getDate()+"."+(mon.getMonth()+1)+" – "+DOW_RO[6]+" "+sun.getDate()+"."+(sun.getMonth()+1)+"."+sun.getFullYear(), totalW/2, paddingT+38);
+  ctx.fillText(mon.getDate()+"."+(mon.getMonth()+1)+" – "+sun.getDate()+"."+(sun.getMonth()+1)+"."+sun.getFullYear(), totalW/2, padT+44);
 
-  // Day headers
-  const headY = paddingT + headerH;
-  ctx.fillStyle="#2d2d4e";
-  ctx.fillRect(paddingL, headY, nameW, cellH);
+  // ── Header zile ──
+  const headY=padT+headerH+6;
+  ctx.fillStyle="#161b27"; ctx.fillRect(padL,headY,nameW,cellH);
+  ctx.fillStyle="#6b7db3"; ctx.font="bold 10px Arial"; ctx.textAlign="left";
+  ctx.fillText("SORTATOR", padL+10, headY+cellH/2+4);
+
   workDays.forEach((d,i)=>{
-    const x = paddingL+nameW+i*cellW;
-    const holiday=getHoliday(d);
-    const isSat=d.getDay()===6;
-    ctx.fillStyle=holiday?"#3d2060":isSat?"#2a1a1a":"#2d2d4e";
-    ctx.fillRect(x, headY, cellW, cellH);
-    ctx.fillStyle=holiday?"#c084fc":isSat?"#ff6b6b":"#ffffff";
-    ctx.font="bold 11px Arial";
-    ctx.textAlign="center";
-    ctx.fillText(DOW_RO[d.getDay()].toUpperCase()+" - "+d.getDate()+"."+(d.getMonth()+1).toString().padStart(2,"0"), x+cellW/2, headY+cellH/2+4);
-    // border
-    ctx.strokeStyle="#404060";
-    ctx.lineWidth=1;
-    ctx.strokeRect(x, headY, cellW, cellH);
+    const x=padL+nameW+i*cellW;
+    const hol=getHoliday(d), isSat=d.getDay()===6;
+    ctx.fillStyle=hol?"#2d1060":isSat?"#1c1f2a":"#161b27";
+    ctx.fillRect(x,headY,cellW,cellH);
+    ctx.fillStyle=hol?"#c084fc":isSat?"#f87171":"#94a3c8";
+    ctx.font="bold 10px Arial"; ctx.textAlign="center";
+    ctx.fillText(DOW[d.getDay()], x+cellW/2, headY+11);
+    ctx.font="bold 14px Arial";
+    ctx.fillStyle=hol?"#dda0ff":isSat?"#fca5a5":"#e2e8f0";
+    ctx.fillText(d.getDate(), x+cellW/2, headY+26);
+    ctx.strokeStyle="#1e2a4a"; ctx.lineWidth=0.5; ctx.strokeRect(x,headY,cellW,cellH);
   });
+  ctx.strokeStyle="#1e2a4a"; ctx.lineWidth=0.5; ctx.strokeRect(padL,headY,nameW,cellH);
 
-  // Rows
-  let rowY = headY + cellH;
-  let catSepExtra = 0;
+  let rowY=headY+cellH;
 
-  catData.forEach((cd, ci)=>{
-    if(ci>0){ rowY+=8; catSepExtra+=8; }
+  catData.forEach((cd,ci)=>{
+    if(ci>0) rowY+=sep;
 
-    // Category label
-    ctx.fillStyle=cd.cat.color+"33";
-    ctx.fillRect(paddingL, rowY, totalW-paddingL*2, catLabelH);
-    ctx.strokeStyle=cd.cat.color;
-    ctx.lineWidth=3;
-    ctx.beginPath(); ctx.moveTo(paddingL,rowY); ctx.lineTo(paddingL,rowY+catLabelH); ctx.stroke();
-    ctx.lineWidth=1;
-    ctx.fillStyle=cd.cat.color;
-    ctx.font="bold 11px Arial";
-    ctx.textAlign="left";
-    ctx.fillText(cd.cat.label.toUpperCase()+" ("+cd.rows.length+")", paddingL+10, rowY+catLabelH/2+4);
-    rowY+=catLabelH;
+    // ── Category header ──
+    ctx.fillStyle=cd.cat.color+"20";
+    ctx.fillRect(padL,rowY,totalW-padL*2,catH);
+    ctx.fillStyle=cd.cat.color; ctx.lineWidth=4;
+    ctx.fillRect(padL,rowY,4,catH); ctx.lineWidth=1;
+    ctx.font="bold 11px Arial"; ctx.textAlign="left"; ctx.fillStyle=cd.cat.color;
+    const prezCount=cd.rows.filter(dr=>{
+      if(!dr) return false;
+      const dw=weekData[dr.name]||[0,0,0,0,0,0,0];
+      return workDays.some(d=>dw[(d.getDay()+6)%7]===1);
+    }).length;
+    ctx.fillText(cd.cat.label.toUpperCase()+"  ·  "+prezCount+" prezenți / "+cd.rows.length+" locuri", padL+12, rowY+catH/2+4);
+    rowY+=catH;
 
-    cd.rows.forEach((dr, ri)=>{
+    cd.rows.forEach((dr,ri)=>{
       const concDr=dr?state.drivers.find(sd=>sd.name===dr.name):null;
       const dw=dr?(weekData[dr.name]||[0,0,0,0,0,0,0]):[0,0,0,0,0,0,0];
-      const rowBg=ri%2===0?"#16213e":"#1a2440";
+      const rowBg=ri%2===0?"#0f1520":"#131b28";
 
-      ctx.fillStyle=rowBg;
-      ctx.fillRect(paddingL, rowY, nameW, cellH);
+      // ── Coloana nume ──
+      ctx.fillStyle=rowBg; ctx.fillRect(padL,rowY,nameW,cellH);
       if(dr){
-        ctx.fillStyle="#ddddee";
-        ctx.font="12px Arial";
-        ctx.textAlign="left";
-        ctx.fillText(dr.name, paddingL+8, rowY+cellH/2+4);
+        // Numărăm zile prezent
+        const pz=workDays.filter(d=>dw[(d.getDay()+6)%7]===1).length;
+        if(pz>0){
+          ctx.fillStyle="#10b981";
+          ctx.beginPath(); ctx.roundRect(padL+5,rowY+7,20,18,3); ctx.fill();
+          ctx.fillStyle="#fff"; ctx.font="bold 10px Arial"; ctx.textAlign="center";
+          ctx.fillText(pz, padL+15, rowY+20);
+        }
+        ctx.fillStyle="#d1d5db"; ctx.font="12px Arial"; ctx.textAlign="left";
+        let nm=dr.name;
+        while(ctx.measureText(nm).width>nameW-38&&nm.length>4) nm=nm.slice(0,-1);
+        if(nm!==dr.name) nm=nm.trim()+"…";
+        ctx.fillText(nm, padL+30, rowY+cellH/2+4);
       } else {
-        // Slot gol
-        ctx.fillStyle="#3a3a5a";
-        ctx.font="11px Arial";
-        ctx.textAlign="left";
-        ctx.fillText("— loc liber —", paddingL+8, rowY+cellH/2+4);
+        ctx.fillStyle="#2d3748"; ctx.font="11px Arial"; ctx.textAlign="left";
+        ctx.fillText("— loc liber —", padL+10, rowY+cellH/2+4);
       }
 
-      workDays.forEach((d, di)=>{
-        const x=paddingL+nameW+di*cellW;
+      // ── Celule zile ──
+      workDays.forEach((d,di)=>{
+        const x=padL+nameW+di*cellW;
         const dow=(d.getDay()+6)%7;
-        const holiday=getHoliday(d);
+        const hol=getHoliday(d);
         const onLeave=concDr&&((concDr.leaves||[]).some(l=>dateInLeave(d,l))||(concDr.krankLeaves||[]).some(l=>dateInLeave(d,l))||(concDr.unpaidLeaves||[]).some(l=>dateInLeave(d,l)));
-        const val=dw[dow];
-        const isPresent=!holiday&&!onLeave&&val===1;
+        const isP=!hol&&!onLeave&&dw[dow]===1;
 
-        if(holiday){ ctx.fillStyle="#2a1040"; }
-        else if(onLeave){ ctx.fillStyle="#3d3000"; }
-        else if(isPresent){ ctx.fillStyle="#1a6b3a"; }
-        else { ctx.fillStyle=ri%2===0?"#16213e":"#1a2440"; }
+        if(hol)        ctx.fillStyle="#200d40";
+        else if(onLeave) ctx.fillStyle="#2d1f00";
+        else if(isP)   ctx.fillStyle="#064e35";
+        else           ctx.fillStyle=rowBg;
+        ctx.fillRect(x,rowY,cellW,cellH);
 
-        ctx.fillRect(x, rowY, cellW, cellH);
-
-        if(isPresent){
-          ctx.fillStyle="#ffffff";
-          ctx.font="bold 11px Arial";
-          ctx.textAlign="center";
-          ctx.fillText(dr.name, x+cellW/2, rowY+cellH/2+4);
+        ctx.textAlign="center";
+        if(isP){
+          // ✓ mare verde
+          ctx.fillStyle="#34d399"; ctx.font="bold 20px Arial";
+          ctx.fillText("✓", x+cellW/2, rowY+cellH/2+7);
         } else if(onLeave){
-          ctx.fillStyle="#fbbf24";
-          ctx.font="10px Arial";
-          ctx.textAlign="center";
+          ctx.fillStyle="#fbbf24"; ctx.font="bold 13px Arial";
           ctx.fillText("U", x+cellW/2, rowY+cellH/2+4);
+        } else if(hol){
+          ctx.fillStyle="#7c3aed"; ctx.font="14px Arial";
+          ctx.fillText("🎉", x+cellW/2, rowY+cellH/2+4);
         }
-
-        ctx.strokeStyle="#303060";
-        ctx.lineWidth=0.5;
-        ctx.strokeRect(x, rowY, cellW, cellH);
+        ctx.strokeStyle="#1a2440"; ctx.lineWidth=0.5; ctx.strokeRect(x,rowY,cellW,cellH);
       });
-
-      ctx.strokeStyle="#303060";
-      ctx.lineWidth=0.5;
-      ctx.strokeRect(paddingL, rowY, nameW, cellH);
-
+      ctx.strokeStyle="#1a2440"; ctx.lineWidth=0.5; ctx.strokeRect(padL,rowY,nameW,cellH);
       rowY+=cellH;
     });
   });
 
-  // Convertim la imagine pentru download
   const imgUrl=canvas.toDataURL("image/png");
   const imgEl=document.getElementById("waPlanImg");
-  if(imgEl){ imgEl.src=imgUrl; imgEl.style.display="block"; }
+  if(imgEl){imgEl.src=imgUrl;imgEl.style.display="block";}
   const dlBtn=document.getElementById("waPlanDownloadBtn");
-  if(dlBtn){ dlBtn.href=imgUrl; dlBtn.download="plan-sortatori-W"+wkNum+".png"; dlBtn.style.display="inline-flex"; }
+  if(dlBtn){dlBtn.href=imgUrl;dlBtn.download="plan-sortatori-W"+wkNum+".png";dlBtn.style.display="inline-flex";}
 }
 
 

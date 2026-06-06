@@ -2,12 +2,14 @@ name: Daily Firestore Backup - 22:00
 
 on:
   schedule:
-    - cron: '0 20 * * *'  # 20:00 UTC = 22:00 Romania (EEST, UTC+2)
-  workflow_dispatch:       # permite și rulare manuală din GitHub
+    - cron: '0 20 * * *'
+  workflow_dispatch:
 
 jobs:
   backup:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -15,7 +17,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Install dependencies
         run: npm install firebase-admin nodemailer

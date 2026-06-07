@@ -1485,6 +1485,7 @@ function concediiColl(){ return activeYear===BASE_YEAR?"concedii":"concedii_"+ac
 function sortatoriColl(){ return activeYear===BASE_YEAR?"sortatori":"sortatori_"+activeYear; }
 function prezenteColl(){  return activeYear===BASE_YEAR?"prezente":"prezente_"+activeYear; }
 function backupColl(){    return activeYear===BASE_YEAR?"daily_backup":"daily_backup_"+activeYear; }
+function planificareColl(){ return activeYear===BASE_YEAR?"planificare":"planificare_"+activeYear; }
 function activityColl(){  return activeYear===BASE_YEAR?"activity_log":"activity_log_"+activeYear; }
 let editingDriverId = null;
 let leaveDriverId = null;
@@ -1575,17 +1576,9 @@ function finishInit(){
 function scheduleSave(){
   if(saveTimer)clearTimeout(saveTimer);
   setSaveStatus("saving","Se salvează...");
-  const savedYear = activeYear;
-  const savedUser = window.activeUserKey;
   saveTimer = setTimeout(async()=>{
     try{
       isSaving = true;
-      // GUARD: nu salva dacă s-a schimbat anul sau userul
-      if(activeYear!==savedYear){ console.warn("scheduleSave: year changed — ABORTED"); setSaveStatus("ok",""); return; }
-      if(window.activeUserKey!==savedUser){ console.warn("scheduleSave: user changed — ABORTED"); setSaveStatus("ok",""); return; }
-      // PROTECȚIE: nu salva niciodată lista goală
-      if(!state.drivers||state.drivers.length===0){ console.warn("scheduleSave: drivers empty — ABORTED"); setSaveStatus("error","⚠️ Salvare anulată — listă goală!"); return; }
-
       const uk = window.activeUserKey||"tania";
       if(uk==="tania"||uk==="admin"){
         const byDoc = {raluca:[],madalina:[],corina:[],tania:[]};
@@ -1619,45 +1612,28 @@ function scheduleSave(){
       const time = String(t.getHours()).padStart(2,"0")+":"+String(t.getMinutes()).padStart(2,"0");
       saveLocalBackup();
       setSaveStatus("ok","Salvat la "+time+" ✓");
+      // Auto backup în Firestore la fiecare salvare
       triggerAutoBackup(time);
     }catch(e){ console.error("save",e); setSaveStatus("error","Eroare la salvare!"); }
     finally { isSaving = false; }
   },600);
 }
 
-// Backup debounced — 10s după ultima modificare
-let _backupDebounceTimer=null;
-function scheduleBackup(){
-  if(_backupDebounceTimer) clearTimeout(_backupDebounceTimer);
-  _backupDebounceTimer=setTimeout(()=>{
-    const now=new Date();
-    const time=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
-    triggerAutoBackup(time);
-  },10000);
-}
-
 function buildCompleteBackup(){
   const backup = {
-    version: 3,
-    year: activeYear,
+    version: 2,
     savedAt: new Date().toISOString(),
-    thresholds: state.thresholds||{warn:3,crit:5},
     drivers: (state.drivers||[]).map(dr=>({
-      id:             dr.id,
-      name:           dr.name,
-      visibleTo:      dr.visibleTo||[],
-      maxDays:        dr.maxDays||0,
-      carryOverDays:  dr.carryOverDays||0,
-      carryOverByYear:dr.carryOverByYear||{},
-      leaves:         dr.leaves||[],
-      krankLeaves:    dr.krankLeaves||[],
-      unpaidLeaves:   dr.unpaidLeaves||[]
-    })),
-    prezente: (presState.presence&&Object.keys(presState.presence).length>0)
-      ? JSON.parse(JSON.stringify(presState.presence)) : {},
-    sortatori: (sortState.drivers&&sortState.drivers.length>0)
-      ? {drivers:JSON.parse(JSON.stringify(sortState.drivers)), presence:JSON.parse(JSON.stringify(sortState.presence||{}))}
-      : null
+      id:            dr.id,
+      name:          dr.name,
+      visibleTo:     dr.visibleTo||[],
+      maxDays:       dr.maxDays||0,
+      carryOverDays: dr.carryOverDays||0,
+      carryOverByYear: dr.carryOverByYear||{},
+      leaves:        dr.leaves||[],
+      krankLeaves:   dr.krankLeaves||[],
+      unpaidLeaves:  dr.unpaidLeaves||[]
+    }))
   };
   return backup;
 }
@@ -1681,51 +1657,34 @@ function restoreCompleteBackup(bk){
 }
 
 async function triggerAutoBackup(time){
-  const snapshotYear = activeYear;
-  const snapshotUser = window.activeUserKey;
   try{
     const now = new Date();
     const today = fmtDate(now);
+    const hour = String(now.getHours()).padStart(2,"0");
+    // Slot: morning(0-8), midday(8-16), evening(16-24)
     const slot = now.getHours()<8?"A":now.getHours()<16?"B":"C";
-    const docId = today+"_"+slot;
-
-    // PROTECȚIE: nu salva dacă gol sau dacă s-a schimbat contextul
-    if(!state.drivers||state.drivers.length===0){ console.warn("triggerAutoBackup: empty — ABORTED"); return; }
-    if(activeYear!==snapshotYear){ console.warn("triggerAutoBackup: year changed — ABORTED"); return; }
-
-    const driversData={};
+    const docId = today+"_"+slot; // max 3 versions per day
+    // Salvează DOAR concedii/krank/unpaid per sofer
+    const leavesOnly = {};
     (state.drivers||[]).forEach(dr=>{
-      driversData[dr.id||dr.name]={
-        name:dr.name, visibleTo:dr.visibleTo||[],
-        maxDays:dr.maxDays||0, carryOverDays:dr.carryOverDays||0,
-        carryOverByYear:dr.carryOverByYear||{},
-        leaves:dr.leaves||[], krankLeaves:dr.krankLeaves||[], unpaidLeaves:dr.unpaidLeaves||[]
+      leavesOnly[dr.name]={
+        leaves:      (dr.leaves||[]),
+        krankLeaves: (dr.krankLeaves||[]),
+        unpaidLeaves:(dr.unpaidLeaves||[])
       };
     });
-
-    const sortatoriSnap=(sortState.drivers&&sortState.drivers.length>0)
-      ?{drivers:sortState.drivers,presence:sortState.presence||{}}:null;
-    const prezenteSnap=(presState.presence&&Object.keys(presState.presence).length>0)
-      ?presState.presence:null;
-
-    const backupDoc={
-      version:3, year:activeYear,
-      savedAt:now.toISOString(), time, date:today, slot,
-      savedBy:snapshotUser||"unknown",
-      driverCount:state.drivers.length,
-      thresholds:state.thresholds||{warn:3,crit:5},
-      drivers:driversData,
-      ...(sortatoriSnap?{sortatori:sortatoriSnap}:{}),
-      ...(prezenteSnap?{prezente:prezenteSnap}:{})
-    };
-
-    await db.collection(backupColl()).doc(docId).set(backupDoc);
-
-    const lsTime="mtc_last_backup_time_"+activeYear;
-    const lsDate="mtc_last_backup_date_"+activeYear;
-    localStorage.setItem(lsTime,time);
-    localStorage.setItem(lsDate,today);
-    updateBackupInfoLine(today,time);
+    await db.collection(backupColl()).doc(docId).set({
+      leaves:    leavesOnly,
+      savedAt:   now.toISOString(),
+      time:      time,
+      date:      today,
+      slot:      slot,
+      count:     Object.keys(leavesOnly).length,
+      savedBy:   window.activeUserKey||"unknown"
+    });
+    localStorage.setItem("mtc_last_backup_time", time);
+    localStorage.setItem("mtc_last_backup_date", today);
+    updateBackupInfoLine(today, time);
     if(isAdmin()) setSaveStatus("ok","Salvat la "+time+" · backup ✓");
   }catch(e){ console.error("backup err",e); }
 }
@@ -1741,8 +1700,8 @@ function updateBackupInfoLine(date, time){
 }
 
 function loadBackupInfoFromStorage(){
-  const date=localStorage.getItem("mtc_last_backup_date_"+activeYear)||localStorage.getItem("mtc_last_backup_date");
-  const time=localStorage.getItem("mtc_last_backup_time_"+activeYear)||localStorage.getItem("mtc_last_backup_time");
+  const date = localStorage.getItem("mtc_last_backup_date");
+  const time = localStorage.getItem("mtc_last_backup_time");
   if(date&&time) updateBackupInfoLine(date,time);
 }
 
@@ -1773,22 +1732,24 @@ function fullReset(){
   unsubAll();
   if(_sortUnsub){ try{_sortUnsub();}catch(e){} _sortUnsub=null; }
   if(_presUnsub){ try{_presUnsub();}catch(e){} _presUnsub=null; }
+  if(typeof _planUnsub!=="undefined"&&_planUnsub){ try{_planUnsub();}catch(e){} _planUnsub=null; }
   state      = {drivers:[], thresholds:{warn:3,crit:5}};
   presState  = {presence:{}};
   sortState  = {drivers:[], presence:{}};
+  planState  = {};
   if(autoLogoutTimer){ clearTimeout(autoLogoutTimer); autoLogoutTimer=null; }
   if(saveTimer){ clearTimeout(saveTimer); saveTimer=null; }
-  // Ascunde TOATE elementele de UI care depind de rol
-  const hideIds=["loadBackupBtn","importExcelBtn","actLogBtn","verifyExcelBtn",
-    "downloadBackupBtn","uploadBackupBtn","publishVersionBtn","printBtn","sortPrintBtn",
-    "modPlanificare","statsBtn","sortAdminControls"];
-  hideIds.forEach(id=>{const el=document.getElementById(id);if(el)el.style.display="none";});
+  // Ascunde toate butoanele specifice rolului
+  ["loadBackupBtn","importExcelBtn","actLogBtn","verifyExcelBtn",
+   "downloadBackupBtn","uploadBackupBtn","publishVersionBtn",
+   "printBtn","sortPrintBtn","modPlanificare","statsBtn","sortAdminControls"
+  ].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display="none";});
   // Reset mod editare sortatori
-  _sortEditMode=false;
-  const editBtn=document.getElementById("sortEditModeBtn");
-  if(editBtn){editBtn.textContent="✏️ Editează";editBtn.style.borderColor="var(--border)";editBtn.style.color="var(--text-dim)";}
-  const banner=document.getElementById("sortEditBanner");
-  if(banner)banner.style.display="none";
+  if(typeof _sortEditMode!=="undefined") _sortEditMode=false;
+  const _eb=document.getElementById("sortEditModeBtn");
+  if(_eb){_eb.textContent="✏️ Editează";_eb.style.borderColor="var(--border)";_eb.style.color="var(--text-dim)";}
+  const _eb2=document.getElementById("sortEditBanner");
+  if(_eb2) _eb2.style.display="none";
   try{
     const tl=document.getElementById("timeline"); if(tl) tl.innerHTML="";
     const st=document.getElementById("sortatoriTimeline"); if(st) st.innerHTML="";
@@ -3186,7 +3147,7 @@ function openDayDetail(dateStr){
   openModal("modalDay");
 }
 
-// Fuzionează perioadele consecutive sau suprapuse dintr-o listă de leaves
+// Fuzionează perioadele consecutive — sare duminici și sărbători
 function mergeLeaves(leaves){
   if(!leaves||!leaves.length) return [];
   const sorted=[...leaves].sort((a,b)=>a.start.localeCompare(b.start));
@@ -3194,19 +3155,17 @@ function mergeLeaves(leaves){
   for(const lv of sorted){
     if(!merged.length){merged.push({start:lv.start,end:lv.end});continue;}
     const last=merged[merged.length-1];
-    // Găsim ziua lucrătoare de după last.end
-    const lastEnd=parseDate(last.end);
-    const nextWorkday=new Date(lastEnd);
-    nextWorkday.setDate(nextWorkday.getDate()+1);
-    // Sări duminici și sărbători
-    while(isSunday(nextWorkday)||getHoliday(nextWorkday))
-      nextWorkday.setDate(nextWorkday.getDate()+1);
     const curStart=parseDate(lv.start);
-    // Dacă prima zi lucrătoare după last.end e egală cu startul perioadei curente → consecutive
-    if(fmtDate(nextWorkday)===lv.start){
+    // Avansăm de la last.end până găsim o zi lucrătoare
+    const probe=parseDate(last.end);
+    probe.setDate(probe.getDate()+1);
+    // Sări weekend-uri și sărbători
+    while(isSunday(probe)||!!getHoliday(probe)) probe.setDate(probe.getDate()+1);
+    // Dacă prima zi lucrătoare după last.end = startul curent → consecutive
+    if(fmtDate(probe)===fmtDate(curStart)){
       if(lv.end>last.end) last.end=lv.end;
-    } else if(curStart<=nextWorkday){
-      // Suprapunere
+    } else if(curStart<probe){
+      // Suprapunere — extindem
       if(lv.end>last.end) last.end=lv.end;
     } else {
       merged.push({start:lv.start,end:lv.end});
@@ -3494,92 +3453,38 @@ async function switchYear(year){
   if(year===activeYear) return;
   const lbl=document.getElementById("yearLabel");
   if(lbl) lbl.textContent="...";
-
-  // Salvăm un backup al anului curent ÎNAINTE de switch
-  if(state.drivers&&state.drivers.length>0){
-    const now=new Date();
-    const time=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
-    triggerAutoBackup(time); // backup preventiv
-  }
-
   fullReset();
   activeYear=year;
   currentDate=new Date(year,currentDate.getMonth(),1);
   if(lbl) lbl.textContent=year;
   const uk=window.activeUserKey||"tania";
   setSaveStatus("saving","Se încarcă "+year+"...");
-
   try{
-    const checkKey=uk==="admin"?"tania":uk;
-    const testSnap=await db.collection(concediiColl()).doc(checkKey).get();
-    if(!testSnap.exists){
-      await initYearFromBase(uk,year);
-    } else {
-      initApp(uk);
-    }
-  }catch(e){
-    console.error("switchYear error:",e);
-    // NU apelăm initYearFromBase la eroare — ar putea suprascrie date
-    // În schimb, revenim la anul anterior
-    toast("⚠️ Eroare la încărcarea anului "+year+". Verifică conexiunea.", true);
-    activeYear = BASE_YEAR;
-    currentDate = new Date(BASE_YEAR, currentDate.getMonth(), 1);
-    if(lbl) lbl.textContent=BASE_YEAR;
-    initApp(uk);
-    return;
-  }
+    const testSnap=await db.collection(concediiColl()).doc(uk==="admin"?"tania":uk).get();
+    if(!testSnap.exists){ await initYearFromBase(uk,year); }
+    else { initApp(uk); }
+  }catch(e){ await initYearFromBase(uk,year); }
   loadPresState(); loadSortState(); loadBackupInfoFromStorage();
+  if(isAdmin()) loadPlanState(); // reload planificare pentru noul an
   toast("📅 Schimbat la "+year);
 }
 
 async function initYearFromBase(uk, year){
-  // PROTECȚIE CRITICĂ: nu inițializa niciodată BASE_YEAR (2026)
-  if(year===BASE_YEAR){
-    console.warn("initYearFromBase: refuz să inițializez BASE_YEAR!");
-    initApp(uk);
-    return;
-  }
-  // Verificăm că newColl NU e colecția de bază
-  const newColl=concediiColl();
-  if(newColl==="concedii"){
-    console.error("initYearFromBase: activeYear="+activeYear+" dar concediiColl()='concedii' — ABORT!");
-    initApp(uk);
-    return;
-  }
-
   try{
-    // Citim persoanele din BASE_YEAR fără să le modificăm
-    const baseColl="concedii";
+    const baseColl="concedii"; // întotdeauna din 2026 (BASE_YEAR)
     const docKeys=["raluca","madalina","corina","tania"];
     const snaps=await Promise.all(docKeys.map(dk=>db.collection(baseColl).doc(dk).get()));
-
-    // Verificăm că am citit date reale (protecție anti-scriere goală)
-    const totalDrivers=snaps.reduce((s,snap)=>s+(snap.exists?(snap.data().drivers||[]).length:0),0);
-    if(totalDrivers===0){
-      console.warn("initYearFromBase: no drivers found in BASE_YEAR — creating empty year");
-    }
-
     const byDoc={raluca:[],madalina:[],corina:[],tania:[]};
     snaps.forEach((snap,i)=>{
       const dk=docKeys[i];
       if(snap.exists)(snap.data().drivers||[]).forEach(d=>{
-        byDoc[dk].push({
-          id:d.id, name:d.name, visibleTo:d.visibleTo||[],
-          maxDays:d.maxDays||0, carryOverDays:0, carryOverByYear:{},
-          leaves:[], krankLeaves:[], unpaidLeaves:[]
-        });
+        byDoc[dk].push({id:d.id,name:d.name,visibleTo:d.visibleTo||[],maxDays:d.maxDays||0,carryOverDays:0,carryOverByYear:{},leaves:[],krankLeaves:[],unpaidLeaves:[]});
       });
     });
-
-    // Scriem DOAR în colecția noului an (nu în "concedii")
-    await Promise.all(docKeys.map(dk=>
-      db.collection(newColl).doc(dk).set({drivers:byDoc[dk],thresholds:{warn:3,crit:5}})
-    ));
-    toast("✨ An nou "+year+" inițializat cu persoanele din "+BASE_YEAR+" (fără concedii)");
-  }catch(e){
-    console.error("initYearFromBase error:",e);
-    toast("⚠️ Eroare la inițializarea anului "+year, true);
-  }
+    const newColl=concediiColl();
+    await Promise.all(docKeys.map(dk=>db.collection(newColl).doc(dk).set({drivers:byDoc[dk],thresholds:{warn:3,crit:5}})));
+    toast("✨ An nou "+year+" inițializat cu persoanele din 2026");
+  }catch(e){ console.error("initYearFromBase",e); }
   initApp(uk);
 }
 
@@ -3683,43 +3588,8 @@ function setSortView(v){
   renderSortatoriTimeline();
 }
 
-let _sortEditMode = false;
-
-function toggleSortEditMode(){
-  _sortEditMode=!_sortEditMode;
-  const btn=document.getElementById("sortEditModeBtn");
-  const banner=document.getElementById("sortEditBanner");
-  if(_sortEditMode){
-    if(btn){btn.textContent="✏️ Editare activă...";btn.style.borderColor="#10b981";btn.style.color="#10b981";}
-    if(banner) banner.style.display="flex";
-    toast("✏️ Mod editare activat");
-  } else {
-    if(btn){btn.textContent="✏️ Editează";btn.style.borderColor="var(--border)";btn.style.color="var(--text-dim)";}
-    if(banner) banner.style.display="none";
-  }
-  renderSortatoriTimeline();
-}
-
-function confirmSortEdit(){
-  _sortEditMode=false;
-  const btn=document.getElementById("sortEditModeBtn");
-  const banner=document.getElementById("sortEditBanner");
-  if(btn){btn.textContent="✏️ Editează";btn.style.borderColor="var(--border)";btn.style.color="var(--text-dim)";}
-  if(banner) banner.style.display="none";
-  saveSortState();
-  toast("✅ Modificările au fost salvate!");
-  renderSortatoriTimeline();
-}
-
 function changeSortMonth(delta){
-  const next=new Date(sortCurrentDate.getFullYear(),sortCurrentDate.getMonth()+delta,1);
-  if(window.activeUserKey==="mihaela"){
-    const now=new Date();
-    const curMonth=new Date(now.getFullYear(),now.getMonth(),1);
-    const nextMonth=new Date(now.getFullYear(),now.getMonth()+1,1);
-    if(next<curMonth||next>nextMonth){toast("Poți vedea doar luna curentă și luna viitoare",true);return;}
-  }
-  sortCurrentDate=next;
+  sortCurrentDate = new Date(sortCurrentDate.getFullYear(), sortCurrentDate.getMonth()+delta, 1);
   renderSortatoriTimeline();
 }
 function goSortToday(){ sortCurrentDate = new Date(); renderSortatoriTimeline(); }
@@ -3729,7 +3599,6 @@ async function saveSortState(){
   try{
     if(!sortState.drivers||sortState.drivers.length===0){ console.warn("saveSortState: empty — ABORTED"); return; }
     await db.collection(sortatoriColl()).doc("state").set(JSON.parse(JSON.stringify(sortState)));
-    scheduleBackup();
   }catch(e){ console.error("sort save",e); }
 }
 
@@ -3782,10 +3651,37 @@ function togglePresence(driverName, day, isRightClick){
 // ---- Drag prezență sortatori ----
 let _sortDrag = {active:false, driverName:null, mode:null}; // mode: "prezent"|"absent"|"clear"
 
+let _sortEditMode = false;
+
+function toggleSortEditMode(){
+  _sortEditMode=!_sortEditMode;
+  const btn=document.getElementById("sortEditModeBtn");
+  const banner=document.getElementById("sortEditBanner");
+  if(_sortEditMode){
+    if(btn){btn.textContent="✏️ Editare activă...";btn.style.borderColor="#10b981";btn.style.color="#10b981";}
+    if(banner) banner.style.display="flex";
+    toast("✏️ Mod editare activat — bifează prezența");
+  } else {
+    if(btn){btn.textContent="✏️ Editează";btn.style.borderColor="var(--border)";btn.style.color="var(--text-dim)";}
+    if(banner) banner.style.display="none";
+  }
+  renderSortatoriTimeline();
+}
+
+function confirmSortEdit(){
+  _sortEditMode=false;
+  const btn=document.getElementById("sortEditModeBtn");
+  const banner=document.getElementById("sortEditBanner");
+  if(btn){btn.textContent="✏️ Editează";btn.style.borderColor="var(--border)";btn.style.color="var(--text-dim)";}
+  if(banner) banner.style.display="none";
+  saveSortState();
+  toast("✅ Modificările au fost salvate!");
+  renderSortatoriTimeline();
+}
+
 function sortDragStart(driverName, day, isRight){
   const _uk=window.activeUserKey||"";
   const isMih=_uk==="mihaela", isMad=_uk==="madalina";
-  // Mihaela și Mădălina necesită mod editare activ
   if((isMih||isMad)&&!_sortEditMode){
     toast("Apasă ✏️ Editează pentru a modifica prezența",true); return;
   }
@@ -4555,9 +4451,7 @@ function loadPresState(){
 
 async function savePresState(){
   try{
-    if(!presState.presence||Object.keys(presState.presence).length===0) return;
     await db.collection(prezenteColl()).doc("state").set(JSON.parse(JSON.stringify(presState)));
-    scheduleBackup();
   }catch(e){ console.error("pres save",e); }
 }
 
@@ -4900,7 +4794,7 @@ async function confirmImportExcel(){
 // ============================================================
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.06.01";
+const APP_VERSION = "2026.06.07";
 let _versionUnsub = null;
 
 function startVersionWatch(){
@@ -5013,7 +4907,7 @@ function goTodayPlan(){
 
 function loadPlanState(){
   if(_planUnsub){ try{_planUnsub();}catch(e){} }
-  _planUnsub = db.collection("planificare").doc("ruhstorf").onSnapshot(snap=>{
+  _planUnsub = db.collection(planificareColl()).doc("ruhstorf").onSnapshot(snap=>{
     planState = snap.exists ? (snap.data()||{}) : {};
     if(appMode==="planificare") renderPlanificare();
   }, err=>console.warn("plan snap",err));
@@ -5021,7 +4915,7 @@ function loadPlanState(){
 
 async function savePlanState(){
   try{
-    await db.collection("planificare").doc("ruhstorf").set(JSON.parse(JSON.stringify(planState)));
+    await db.collection(planificareColl()).doc("ruhstorf").set(JSON.parse(JSON.stringify(planState)));
   }catch(e){ console.error("plan save",e); }
 }
 
@@ -5035,10 +4929,11 @@ function renderPlanificare(){
   const MONTHS_RO=["Ianuarie","Februarie","Martie","Aprilie","Mai","Iunie","Iulie","August","Septembrie","Octombrie","Noiembrie","Decembrie"];
   document.getElementById("planWeekLabel").textContent = MONTHS_RO[m]+" "+y;
 
-  // Categorii — fără Camion
+  // Categorii — cu Camion
   const cats = [
     {label:"Permanenți", key:"permanent", color:"#10b981"},
     {label:"Rotații",    key:"rotatie",   color:"#f59e0b"},
+    {label:"Camion",     key:"camion",    color:"#8b5cf6"},
     {label:"Urgențe",    key:"urgenta",   color:"#ef4444"},
   ];
 
@@ -5163,7 +5058,7 @@ function renderPlanificare(){
           else if(val===1){bg="#10b981";color="#fff";label="✓";cursor="pointer";}
           else{bg=isToday?"rgba(251,191,36,0.08)":rowBg;color="";label="";cursor="pointer";}
           const esc=dr.name.replace(/\\/g,"\\\\").replace(/'/g,"\\'");
-          const click=(!isBlocked&&!onLeave)?`onclick="togglePlanCell('${esc}','${wkStateKey}',${dow})"` :"";
+          const click=(!isBlocked&&!onLeave)?`onmousedown="planDragStart('${esc}','${wkStateKey}',${dow})" onmouseenter="planDragEnter('${esc}','${wkStateKey}',${dow})"` :"";
           html+=`<td style="width:${dayW}px;min-width:${dayW}px;height:34px;background:${bg};border:1px solid var(--border);text-align:center;vertical-align:middle;font-size:13px;font-weight:900;color:${color};cursor:${cursor};user-select:none" ${click}>${label}</td>`;
         });
         if(wi<weeks.length-1) html+=`<td style="width:8px;background:var(--bg);border-bottom:1px solid var(--border);border-left:2px solid var(--border);border-right:2px solid var(--border)"></td>`;
@@ -5216,12 +5111,31 @@ function renderPlanificare(){
 
 
 function togglePlanCell(driverName, weekKey, dayOfWeek){
-  if(!planState[weekKey]) planState[weekKey] = {};
-  if(!planState[weekKey][driverName]) planState[weekKey][driverName] = [0,0,0,0,0,0,0];
-  planState[weekKey][driverName][dayOfWeek] = planState[weekKey][driverName][dayOfWeek]===1 ? 0 : 1;
-  renderPlanificare();
-  savePlanState();
+  if(!planState[weekKey]) planState[weekKey]={};
+  if(!planState[weekKey][driverName]) planState[weekKey][driverName]=[0,0,0,0,0,0,0];
+  planState[weekKey][driverName][dayOfWeek]=planState[weekKey][driverName][dayOfWeek]===1?0:1;
+  renderPlanificare(); savePlanState();
 }
+
+let _planDrag={active:false,mode:null};
+function planDragStart(name,wkKey,dow){
+  const cur=(planState[wkKey]&&planState[wkKey][name]&&planState[wkKey][name][dow])||0;
+  _planDrag={active:true,mode:cur===1?0:1};
+  _togglePlanTo(name,wkKey,dow,_planDrag.mode);
+}
+function planDragEnter(name,wkKey,dow){
+  if(!_planDrag.active) return;
+  _togglePlanTo(name,wkKey,dow,_planDrag.mode);
+}
+function _togglePlanTo(name,wkKey,dow,val){
+  if(!planState[wkKey]) planState[wkKey]={};
+  if(!planState[wkKey][name]) planState[wkKey][name]=[0,0,0,0,0,0,0];
+  if(planState[wkKey][name][dow]!==val){
+    planState[wkKey][name][dow]=val;
+    renderPlanificare(); savePlanState();
+  }
+}
+document.addEventListener("mouseup",()=>{ if(_planDrag.active) _planDrag={active:false,mode:null}; });
 
 function changePlanWeek(delta){
   // Navigare pe luni
@@ -5253,84 +5167,72 @@ function clearPlanWeek(){
 }
 
 function openWhatsAppExport(){
-  // Săptămâna VIITOARE
-  const nextMon = new Date();
-  nextMon.setDate(nextMon.getDate()+(8-(nextMon.getDay()||7)));
-  nextMon.setHours(0,0,0,0);
-  const dates = Array.from({length:7},(_,i)=>{const d=new Date(nextMon);d.setDate(nextMon.getDate()+i);return d;});
-  const wkNum = getISOWeek(nextMon);
-  const wkKey = nextMon.getFullYear()+"-W"+String(wkNum).padStart(2,"0");
-  const weekData = planState[wkKey]||{};
+  // Generăm pentru săptămâna care conține planCurrentDate
+  const wkKey = getPlanWeekKey();
+  const dates = getPlanWeekDates();
+  const weekData = planState[wkKey] || {};
 
-  const cats=[
-    {label:"Permanenți",key:"permanent",color:"#10b981"},
-    {label:"Rotații",   key:"rotatie",  color:"#f59e0b"},
-    {label:"Camion",    key:"camion",   color:"#8b5cf6"},
-    {label:"Urgențe",   key:"urgenta",  color:"#ef4444"},
+  const cats = [
+    {label:"Permanenți", key:"permanent", color:"#10b981"},
+    {label:"Rotații",    key:"rotatie",   color:"#f59e0b"},
+    {label:"Urgențe",    key:"urgenta",   color:"#ef4444"},
   ];
 
-  const workDayIdxs=dates.map((d,i)=>({d,i})).filter(({d})=>d.getDay()!==0&&!getHoliday(d)).map(({i})=>i);
-
-  const fullWeek=[], partial={};
-  cats.filter(c=>c.key!=="camion").forEach(cat=>{
+  const allRuhDrivers = cats.flatMap(cat=>
     (sortState.drivers||[]).filter(d=>d.group==="ruhstorf"&&(cat.key==="permanent"?(!d.category||d.category==="permanent"):d.category===cat.key))
     .sort((a,b)=>a.name.localeCompare(b.name,"ro"))
-    .forEach(dr=>{
-      const concDr=state.drivers.find(sd=>sd.name===dr.name);
-      const dw=weekData[dr.name]||[0,0,0,0,0,0,0];
-      const pz=workDayIdxs.filter(i=>{
-        const d=dates[i];
-        const onLeave=concDr&&((concDr.leaves||[]).some(l=>dateInLeave(d,l))||(concDr.krankLeaves||[]).some(l=>dateInLeave(d,l))||(concDr.unpaidLeaves||[]).some(l=>dateInLeave(d,l)));
-        return dw[i]===1&&!onLeave;
-      });
-      if(!pz.length) return;
-      if(pz.length===workDayIdxs.length) fullWeek.push(dr.name);
-      else partial[dr.name]=pz;
-    });
-  });
+  );
 
-  // Camion separat
-  const camionPrezenti=[];
-  (sortState.drivers||[]).filter(d=>d.group==="ruhstorf"&&d.category==="camion").forEach(dr=>{
-    const dw=weekData[dr.name]||[0,0,0,0,0,0,0];
+  const workDayIdxs = dates.map((d,i)=>({d,i})).filter(({d})=>d.getDay()!==0&&!getHoliday(d)).map(({i})=>i);
+
+  const fullWeek=[], partial={};
+  allRuhDrivers.forEach(dr=>{
     const concDr=state.drivers.find(sd=>sd.name===dr.name);
-    const anyDay=workDayIdxs.some(i=>{
+    const dw=weekData[dr.name]||[0,0,0,0,0,0,0];
+    const prezZile=workDayIdxs.filter(i=>{
       const d=dates[i];
       const onLeave=concDr&&((concDr.leaves||[]).some(l=>dateInLeave(d,l))||(concDr.krankLeaves||[]).some(l=>dateInLeave(d,l))||(concDr.unpaidLeaves||[]).some(l=>dateInLeave(d,l)));
       return dw[i]===1&&!onLeave;
     });
-    if(anyDay) camionPrezenti.push(dr.name);
+    if(!prezZile.length) return;
+    if(prezZile.length===workDayIdxs.length) fullWeek.push(dr.name);
+    else partial[dr.name]=prezZile;
   });
 
   const holidays=dates.filter(d=>getHoliday(d)&&d.getDay()!==0);
-  const mon=dates[0],sun=dates[6];
+  const mon=dates[0], sun=dates[6];
   const fmt=d=>d.getDate()+"."+(d.getMonth()+1);
   const fmtFull=d=>PLAN_DAYS_FULL[(d.getDay()+6)%7]+" "+d.getDate()+"."+(d.getMonth()+1)+"."+d.getFullYear();
+  const wkNum=getISOWeek(mon);
 
   let msg="Bună ziua, colegi! 👋\n\n";
   msg+="Postez programul sortatorilor pentru săptămâna "+fmt(mon)+" – "+fmt(sun)+".\n\n";
   if(fullWeek.length>0){
     let hNote="";
-    if(holidays.length>0){const hl=holidays.map(d=>"*"+PLAN_DAYS_FULL[(d.getDay()+6)%7]+" "+d.getDate()+"."+(d.getMonth()+1)+"*").join(", ");hNote=" (exceptând "+hl+" când suntem cu toții liberi)";}
+    if(holidays.length>0){
+      const hlDays=holidays.map(d=>"*"+PLAN_DAYS_FULL[(d.getDay()+6)%7]+" "+d.getDate()+"."+(d.getMonth()+1)+"*").join(", ");
+      hNote=" (exceptând "+hlDays+" când suntem cu toții liberi)";
+    }
     msg+="🟢 *Prezenți întreaga săptămână"+hNote+":*\n"+fullWeek.map(n=>"• "+n).join("\n")+"\n\n";
   }
   if(Object.keys(partial).length>0){
     msg+="🟡 *Prezenți parțial:*\n";
-    Object.entries(partial).forEach(([name,idxs])=>{msg+="• *"+name+"* — "+idxs.map(i=>PLAN_DAYS_FULL[i].toLowerCase()).join(", ")+"\n";});
+    Object.entries(partial).forEach(([name,idxs])=>{ msg+="• *"+name+"* — "+idxs.map(i=>PLAN_DAYS_FULL[i].toLowerCase()).join(", ")+"\n"; });
     msg+="\n";
   }
-  if(camionPrezenti.length>0) msg+="🚚 *Camion:* "+camionPrezenti.join(", ")+"\n\n";
   if(holidays.length>0){
     msg+="🔴 *Zile libere:*\n";
-    holidays.forEach(d=>{const h=getHoliday(d);msg+="• "+fmtFull(d)+(h?" ("+h.split("(")[0].trim()+")"  :"")+"\n";});
+    holidays.forEach(d=>{ const h=getHoliday(d); msg+="• "+fmtFull(d)+(h?" ("+h.split("(")[0].trim()+")"  :"")+"\n"; });
     msg+="\n";
   }
-  if(fullWeek.length===0&&Object.keys(partial).length===0) msg+="⚠️ Nicio persoană planificată.\n\n";
   msg+="Dacă aveți nelămuriri, vă rog să mi le adresați fără probleme. 🙏";
 
-  document.getElementById("waSubtitle").textContent="Săptămâna viitoare · W"+wkNum+" · "+fmt(mon)+" – "+fmt(sun)+"."+sun.getFullYear();
+  document.getElementById("waSubtitle").textContent="Săptămâna "+wkKey+" · "+fmt(mon)+" – "+fmt(sun)+"."+sun.getFullYear();
   document.getElementById("waText").value=msg;
+
+  // Generăm imaginea
   generatePlanImage(wkKey, dates, weekData, cats, wkNum);
+
   openModal("modalWhatsApp");
 }
 
@@ -5338,165 +5240,151 @@ function generatePlanImage(wkKey, dates, weekData, cats, wkNum){
   const canvas = document.getElementById("waPlanCanvas");
   if(!canvas) return;
 
-  const workDays = dates.filter(d=>d.getDay()!==0); // Lu-Sâ
-  const DOW=["","LUNI","MARȚI","MIERCURI","JOI","VINERI","SÂMBĂTĂ","DUM"];
+  // Zile de lucru (fără duminică)
+  const workDays = dates.filter(d=>d.getDay()!==0);
+  const DOW_RO=["Dum","Lun","Mar","Mie","Joi","Vin","Sâm"];
+  const MONTHS_RO_SHORT=["Ian","Feb","Mar","Apr","Mai","Iun","Iul","Aug","Sep","Oct","Nov","Dec"];
 
-  // Colectăm prezenți per zi sortați alfabetic (fără camion)
-  const mainCats = cats.filter(c=>c.key!=="camion");
-  const camionCat = cats.find(c=>c.key==="camion");
+  // Layout
+  const nameW=140, cellW=70, cellH=22, headerH=38, catLabelH=22, paddingL=8, paddingT=8;
+  const totalW = paddingL*2 + nameW + workDays.length*cellW;
 
-  function getMainPrezentiZi(d){
-    const dow=(d.getDay()+6)%7;
-    const list=[];
-    mainCats.forEach(cat=>{
-      (sortState.drivers||[]).filter(dr=>dr.group==="ruhstorf"&&(cat.key==="permanent"?(!dr.category||dr.category==="permanent"):dr.category===cat.key))
-      .forEach(dr=>{
-        const dw=weekData[dr.name]||[0,0,0,0,0,0,0];
-        const concDr=state.drivers.find(sd=>sd.name===dr.name);
-        const onLeave=concDr&&((concDr.leaves||[]).some(l=>dateInLeave(d,l))||(concDr.krankLeaves||[]).some(l=>dateInLeave(d,l))||(concDr.unpaidLeaves||[]).some(l=>dateInLeave(d,l)));
-        if(dw[dow]===1&&!onLeave) list.push(dr.name);
-      });
-    });
-    list.sort((a,b)=>a.localeCompare(b,"ro"));
-    return list;
-  }
+  // Count rows
+  let totalRows=0;
+  const catData=[];
+  cats.forEach(cat=>{
+    const drivers=(sortState.drivers||[]).filter(d=>d.group==="ruhstorf"&&(cat.key==="permanent"?(!d.category||d.category==="permanent"):d.category===cat.key)).sort((a,b)=>a.name.localeCompare(b.name,"ro"));
+    if(!drivers.length) return;
+    totalRows += 1 + drivers.length; // cat header + rows
+    catData.push({cat, drivers});
+  });
 
-  function getCamionZi(d){
-    if(!camionCat) return null;
-    const dow=(d.getDay()+6)%7;
-    const cDrivers=(sortState.drivers||[]).filter(dr=>dr.group==="ruhstorf"&&dr.category==="camion");
-    for(const dr of cDrivers){
-      const dw=weekData[dr.name]||[0,0,0,0,0,0,0];
-      const concDr=state.drivers.find(sd=>sd.name===dr.name);
-      const onLeave=concDr&&((concDr.leaves||[]).some(l=>dateInLeave(d,l))||(concDr.krankLeaves||[]).some(l=>dateInLeave(d,l))||(concDr.unpaidLeaves||[]).some(l=>dateInLeave(d,l)));
-      if(dw[dow]===1&&!onLeave) return dr.name;
-    }
-    return null;
-  }
+  const totalH = paddingT*2 + headerH + totalRows*cellH + (catData.length-1)*8;
+  canvas.width = totalW;
+  canvas.height = totalH;
+  canvas.style.display="block";
 
-  const MAIN_SLOTS=14;
-  const nCols=workDays.length;
-
-  // Dimensiuni ca în screenshot — compact, clar
-  const padL=10, padT=10;
-  const titleH=36, dayHdrH=28, rowH=26, camionHdrH=30, camionRowH=28;
-  const slotW=32, colW=140;
-  const totalW=padL*2+slotW+nCols*colW;
-  const totalH=padT*2+titleH+dayHdrH+MAIN_SLOTS*rowH+10+camionHdrH+camionRowH+padT;
-
-  // 2x rezoluție
-  canvas.width=totalW*2; canvas.height=totalH*2;
-  canvas.style.width=totalW+"px"; canvas.style.height=totalH+"px"; canvas.style.display="block";
-  const ctx=canvas.getContext("2d"); ctx.scale(2,2);
-
-  // Fundal alb (ca în screenshot)
-  ctx.fillStyle="#ffffff"; ctx.fillRect(0,0,totalW,totalH);
-
-  // Border exterior
-  ctx.strokeStyle="#333"; ctx.lineWidth=2;
-  ctx.strokeRect(padL,padT,totalW-padL*2,totalH-padT*2);
-
-  // ── Titlu săptămână ──
+  const ctx = canvas.getContext("2d");
   ctx.fillStyle="#1a1a2e";
-  ctx.fillRect(padL,padT,totalW-padL*2,titleH);
-  ctx.fillStyle="#ffffff"; ctx.font="bold 15px Arial"; ctx.textAlign="center";
+  ctx.fillRect(0,0,totalW,totalH);
+
+  // Header săptămână
+  ctx.fillStyle="#2d2d4e";
+  ctx.fillRect(paddingL, paddingT, totalW-paddingL*2, headerH);
+  ctx.fillStyle="#ffffff";
+  ctx.font="bold 16px Arial";
+  ctx.textAlign="center";
+  ctx.fillText("SĂPTĂMÂNA "+wkNum, totalW/2, paddingT+18);
+  ctx.font="bold 12px Arial";
   const mon=dates[0],sun=dates[6];
-  ctx.fillText("SĂPTĂMÂNA "+wkNum+"  ·  "+mon.getDate()+"."+(mon.getMonth()+1).toString().padStart(2,"0")+" – "+sun.getDate()+"."+(sun.getMonth()+1).toString().padStart(2,"0")+"."+sun.getFullYear(), totalW/2, padT+titleH/2+5);
+  ctx.fillStyle="#aaaacc";
+  ctx.fillText(DOW_RO[1]+" "+mon.getDate()+"."+(mon.getMonth()+1)+" – "+DOW_RO[6]+" "+sun.getDate()+"."+(sun.getMonth()+1)+"."+sun.getFullYear(), totalW/2, paddingT+38);
 
-  // ── Header zile ──
-  const hdrY=padT+titleH;
-  ctx.fillStyle="#2d3748";
-  ctx.fillRect(padL,hdrY,slotW,dayHdrH);
-  ctx.fillStyle="#999"; ctx.font="bold 9px Arial"; ctx.textAlign="center";
-  ctx.fillText("#", padL+slotW/2, hdrY+dayHdrH/2+3);
-
+  // Day headers
+  const headY = paddingT + headerH;
+  ctx.fillStyle="#2d2d4e";
+  ctx.fillRect(paddingL, headY, nameW, cellH);
   workDays.forEach((d,i)=>{
-    const x=padL+slotW+i*colW;
-    const hol=getHoliday(d),isSat=d.getDay()===6;
-    ctx.fillStyle=hol?"#4a1080":isSat?"#c0392b":"#1a1a2e";
-    ctx.fillRect(x,hdrY,colW,dayHdrH);
-    ctx.strokeStyle="#555"; ctx.lineWidth=1; ctx.strokeRect(x,hdrY,colW,dayHdrH);
-    ctx.fillStyle="#ffffff"; ctx.font="bold 11px Arial"; ctx.textAlign="center";
-    ctx.fillText(DOW[d.getDay()]+" - "+d.getDate()+"."+(d.getMonth()+1).toString().padStart(2,"0"), x+colW/2, hdrY+dayHdrH/2+4);
+    const x = paddingL+nameW+i*cellW;
+    const holiday=getHoliday(d);
+    const isSat=d.getDay()===6;
+    ctx.fillStyle=holiday?"#3d2060":isSat?"#2a1a1a":"#2d2d4e";
+    ctx.fillRect(x, headY, cellW, cellH);
+    ctx.fillStyle=holiday?"#c084fc":isSat?"#ff6b6b":"#ffffff";
+    ctx.font="bold 11px Arial";
+    ctx.textAlign="center";
+    ctx.fillText(DOW_RO[d.getDay()].toUpperCase()+" - "+d.getDate()+"."+(d.getMonth()+1).toString().padStart(2,"0"), x+cellW/2, headY+cellH/2+4);
+    // border
+    ctx.strokeStyle="#404060";
+    ctx.lineWidth=1;
+    ctx.strokeRect(x, headY, cellW, cellH);
   });
-  ctx.strokeStyle="#555"; ctx.lineWidth=1; ctx.strokeRect(padL,hdrY,slotW,dayHdrH);
 
-  // Pre-calculăm prezenți per zi
-  const perDay=workDays.map(d=>({list:getMainPrezentiZi(d),hol:!!getHoliday(d)}));
+  // Rows
+  let rowY = headY + cellH;
+  let catSepExtra = 0;
 
-  // ── Rânduri 1-14 ──
-  const bodyY=hdrY+dayHdrH;
-  for(let s=0;s<MAIN_SLOTS;s++){
-    const y=bodyY+s*rowH;
-    const rowBg=s%2===0?"#e8f5e9":"#ffffff"; // alternating green-white like screenshot
+  catData.forEach((cd, ci)=>{
+    if(ci>0){ rowY+=8; catSepExtra+=8; }
 
-    // Nr slot
-    ctx.fillStyle="#1a1a2e";
-    ctx.fillRect(padL,y,slotW,rowH);
-    ctx.fillStyle="#ffffff"; ctx.font="bold 10px Arial"; ctx.textAlign="center";
-    ctx.fillText(s+1, padL+slotW/2, y+rowH/2+3);
-    ctx.strokeStyle="#ccc"; ctx.lineWidth=0.5; ctx.strokeRect(padL,y,slotW,rowH);
+    // Category label
+    ctx.fillStyle=cd.cat.color+"33";
+    ctx.fillRect(paddingL, rowY, totalW-paddingL*2, catLabelH);
+    ctx.strokeStyle=cd.cat.color;
+    ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(paddingL,rowY); ctx.lineTo(paddingL,rowY+catLabelH); ctx.stroke();
+    ctx.lineWidth=1;
+    ctx.fillStyle=cd.cat.color;
+    ctx.font="bold 11px Arial";
+    ctx.textAlign="left";
+    ctx.fillText(cd.cat.label.toUpperCase()+" ("+cd.drivers.length+")", paddingL+10, rowY+catLabelH/2+4);
+    rowY+=catLabelH;
 
-    workDays.forEach((d,di)=>{
-      const x=padL+slotW+di*colW;
-      const {list,hol}=perDay[di];
-      const name=list[s]||null;
+    cd.drivers.forEach((dr, ri)=>{
+      const concDr=state.drivers.find(sd=>sd.name===dr.name);
+      const dw=weekData[dr.name]||[0,0,0,0,0,0,0];
+      const rowBg=ri%2===0?"#16213e":"#1a2440";
 
-      if(hol) ctx.fillStyle="#f3e0ff";
-      else if(name) ctx.fillStyle=s%2===0?"#27ae60":"#2ecc71"; // verde ca în screenshot
-      else ctx.fillStyle=rowBg;
-      ctx.fillRect(x,y,colW,rowH);
+      ctx.fillStyle=rowBg;
+      ctx.fillRect(paddingL, rowY, nameW, cellH);
+      ctx.fillStyle="#ddddee";
+      ctx.font="12px Arial";
+      ctx.textAlign="left";
+      ctx.fillText(dr.name, paddingL+8, rowY+cellH/2+4);
 
-      if(name){
-        ctx.fillStyle="#ffffff"; ctx.font="bold 11px Arial"; ctx.textAlign="center";
-        let nm=name;
-        while(ctx.measureText(nm).width>colW-8&&nm.length>4) nm=nm.slice(0,-1);
-        if(nm!==name) nm=nm.trim()+"…";
-        ctx.fillText(nm, x+colW/2, y+rowH/2+4);
-      } else if(!hol){
-        ctx.fillStyle="#cccccc"; ctx.font="10px Arial"; ctx.textAlign="center";
-        ctx.fillText("", x+colW/2, y+rowH/2+3);
-      }
-      ctx.strokeStyle="#bbb"; ctx.lineWidth=0.5; ctx.strokeRect(x,y,colW,rowH);
+      workDays.forEach((d, di)=>{
+        const x=paddingL+nameW+di*cellW;
+        const dow=(d.getDay()+6)%7;
+        const holiday=getHoliday(d);
+        const onLeave=concDr&&((concDr.leaves||[]).some(l=>dateInLeave(d,l))||(concDr.krankLeaves||[]).some(l=>dateInLeave(d,l))||(concDr.unpaidLeaves||[]).some(l=>dateInLeave(d,l)));
+        const val=dw[dow];
+        const isPresent=!holiday&&!onLeave&&val===1;
+
+        if(holiday){ ctx.fillStyle="#2a1040"; }
+        else if(onLeave){ ctx.fillStyle="#3d3000"; }
+        else if(isPresent){
+          // Culoare diferită per categorie
+          const catKey=cd.cat.key;
+          if(catKey==="rotatie")      ctx.fillStyle="#7c4a00"; // portocaliu închis
+          else if(catKey==="camion")  ctx.fillStyle="#3b1a7a"; // violet închis
+          else if(catKey==="urgenta") ctx.fillStyle="#7a1a1a"; // roșu închis
+          else                        ctx.fillStyle="#1a6b3a"; // verde (permanent)
+        }
+        else { ctx.fillStyle=ri%2===0?"#16213e":"#1a2440"; }
+
+        ctx.fillRect(x, rowY, cellW, cellH);
+
+        if(isPresent){
+          ctx.fillStyle="#ffffff";
+          ctx.font="bold 11px Arial";
+          ctx.textAlign="center";
+          ctx.fillText(dr.name, x+cellW/2, rowY+cellH/2+4);
+        } else if(onLeave){
+          ctx.fillStyle="#fbbf24";
+          ctx.font="10px Arial";
+          ctx.textAlign="center";
+          ctx.fillText("U", x+cellW/2, rowY+cellH/2+4);
+        }
+
+        ctx.strokeStyle="#303060";
+        ctx.lineWidth=0.5;
+        ctx.strokeRect(x, rowY, cellW, cellH);
+      });
+
+      ctx.strokeStyle="#303060";
+      ctx.lineWidth=0.5;
+      ctx.strokeRect(paddingL, rowY, nameW, cellH);
+
+      rowY+=cellH;
     });
-  }
-
-  // ── Separator + header CAMION ──
-  const camionHdrY=bodyY+MAIN_SLOTS*rowH+6;
-  ctx.fillStyle="#1a1a2e";
-  ctx.fillRect(padL,camionHdrY,totalW-padL*2,camionHdrH);
-  ctx.strokeStyle="#333"; ctx.lineWidth=1.5; ctx.strokeRect(padL,camionHdrY,totalW-padL*2,camionHdrH);
-  ctx.fillStyle="#ffffff"; ctx.font="bold 13px Arial"; ctx.textAlign="center";
-  ctx.fillText("CAMION", totalW/2, camionHdrY+camionHdrH/2+4);
-
-  // ── Rând camion ──
-  const camionRowY=camionHdrY+camionHdrH;
-  // Slot col
-  ctx.fillStyle="#2d3748";
-  ctx.fillRect(padL,camionRowY,slotW,camionRowH);
-  ctx.strokeStyle="#ccc"; ctx.lineWidth=0.5; ctx.strokeRect(padL,camionRowY,slotW,camionRowH);
-
-  workDays.forEach((d,di)=>{
-    const x=padL+slotW+di*colW;
-    const hol=!!getHoliday(d);
-    const name=getCamionZi(d);
-    ctx.fillStyle=hol?"#f3e0ff":name?"#c0392b":"#f9ebeb";
-    ctx.fillRect(x,camionRowY,colW,camionRowH);
-    if(name){
-      ctx.fillStyle="#ffffff"; ctx.font="bold 11px Arial"; ctx.textAlign="center";
-      let nm=name;
-      while(ctx.measureText(nm).width>colW-8&&nm.length>4) nm=nm.slice(0,-1);
-      if(nm!==name) nm=nm.trim()+"…";
-      ctx.fillText(nm, x+colW/2, camionRowY+camionRowH/2+4);
-    }
-    ctx.strokeStyle="#bbb"; ctx.lineWidth=0.5; ctx.strokeRect(x,camionRowY,colW,camionRowH);
   });
 
+  // Convertim la imagine pentru download
   const imgUrl=canvas.toDataURL("image/png");
   const imgEl=document.getElementById("waPlanImg");
-  if(imgEl){imgEl.src=imgUrl;imgEl.style.display="block";}
+  if(imgEl){ imgEl.src=imgUrl; imgEl.style.display="block"; }
   const dlBtn=document.getElementById("waPlanDownloadBtn");
-  if(dlBtn){dlBtn.href=imgUrl;dlBtn.download="plan-sortatori-W"+wkNum+".png";dlBtn.style.display="inline-flex";}
+  if(dlBtn){ dlBtn.href=imgUrl; dlBtn.download="plan-sortatori-W"+wkNum+".png"; dlBtn.style.display="inline-flex"; }
 }
 
 
@@ -5824,6 +5712,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
+<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.07</div>
 
 </body>
 </html>

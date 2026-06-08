@@ -2205,6 +2205,10 @@ function enterApp(userKey){
   if(sortPrintBtn) sortPrintBtn.style.display = isTaniaAdm?"block":"none";
   const sortAdm = document.getElementById("sortAdminControls");
   if(sortAdm) sortAdm.style.display = isTaniaAdm?"inline":"none";
+  // Buton editare sortatori — vizibil pentru Mihaela, Mădălina, Admin, Tania
+  const sortEditBtn = document.getElementById("sortEditModeBtn");
+  const canEditSort = isTaniaAdm || userKey==="mihaela" || userKey==="madalina";
+  if(sortEditBtn) sortEditBtn.style.display = canEditSort?"flex":"none";
 
   // Notificare la login — setăm flag, se afișează după ce datele sunt încărcate din Firebase
   window._pendingLoginNotif = (!isTaniaAdm && !isMihaela) ? userKey : null;
@@ -5058,7 +5062,7 @@ function renderPlanificare(){
           else if(val===1){bg="#10b981";color="#fff";label="✓";cursor="pointer";}
           else{bg=isToday?"rgba(251,191,36,0.08)":rowBg;color="";label="";cursor="pointer";}
           const esc=dr.name.replace(/\\/g,"\\\\").replace(/'/g,"\\'");
-          const click=(!isBlocked&&!onLeave)?`onmousedown="planDragStart('${esc}','${wkStateKey}',${dow})" onmouseenter="planDragEnter('${esc}','${wkStateKey}',${dow})"` :"";
+          const click=(!isBlocked&&!onLeave)?`onmousedown="planDragStart('${esc}','${wkStateKey}',${dow},this)" onmouseenter="planDragEnter('${esc}','${wkStateKey}',${dow},this)"` :"";
           html+=`<td style="width:${dayW}px;min-width:${dayW}px;height:34px;background:${bg};border:1px solid var(--border);text-align:center;vertical-align:middle;font-size:13px;font-weight:900;color:${color};cursor:${cursor};user-select:none" ${click}>${label}</td>`;
         });
         if(wi<weeks.length-1) html+=`<td style="width:8px;background:var(--bg);border-bottom:1px solid var(--border);border-left:2px solid var(--border);border-right:2px solid var(--border)"></td>`;
@@ -5118,24 +5122,41 @@ function togglePlanCell(driverName, weekKey, dayOfWeek){
 }
 
 let _planDrag={active:false,mode:null};
-function planDragStart(name,wkKey,dow){
+function planDragStart(name,wkKey,dow,el){
   const cur=(planState[wkKey]&&planState[wkKey][name]&&planState[wkKey][name][dow])||0;
   _planDrag={active:true,mode:cur===1?0:1};
-  _togglePlanTo(name,wkKey,dow,_planDrag.mode);
+  _applyPlanCell(name,wkKey,dow,_planDrag.mode,el);
 }
-function planDragEnter(name,wkKey,dow){
+function planDragEnter(name,wkKey,dow,el){
   if(!_planDrag.active) return;
-  _togglePlanTo(name,wkKey,dow,_planDrag.mode);
+  _applyPlanCell(name,wkKey,dow,_planDrag.mode,el);
 }
-function _togglePlanTo(name,wkKey,dow,val){
+function _applyPlanCell(name,wkKey,dow,val,el){
   if(!planState[wkKey]) planState[wkKey]={};
   if(!planState[wkKey][name]) planState[wkKey][name]=[0,0,0,0,0,0,0];
-  if(planState[wkKey][name][dow]!==val){
-    planState[wkKey][name][dow]=val;
-    renderPlanificare(); savePlanState();
+  if(planState[wkKey][name][dow]===val) return; // no change
+  planState[wkKey][name][dow]=val;
+  // Actualizăm vizual celula direct fără re-render complet
+  if(el){
+    if(val===1){
+      el.style.background="#064e35";
+      el.style.color="#34d399";
+      el.textContent="✓";
+    } else {
+      el.style.background="";
+      el.style.color="";
+      el.textContent="";
+    }
   }
+  // Salvăm cu debounce
+  if(_planDrag._saveTimer) clearTimeout(_planDrag._saveTimer);
+  _planDrag._saveTimer=setTimeout(()=>{ savePlanState(); renderPlanificare(); },500);
 }
-document.addEventListener("mouseup",()=>{ if(_planDrag.active) _planDrag={active:false,mode:null}; });
+document.addEventListener("mouseup",()=>{ 
+  if(_planDrag.active){ 
+    _planDrag.active=false; 
+  }
+});
 
 function changePlanWeek(delta){
   // Navigare pe luni

@@ -2677,15 +2677,15 @@ function addLeave(){
   if(leaveType==="krank"){
     if(!dr.krankLeaves) dr.krankLeaves=[];
     dr.krankLeaves.push({start,end});
-    dr.krankLeaves = mergeLeaves(dr.krankLeaves);
+    dr.krankLeaves = cleanLeavesFromHolidays(dr.krankLeaves);
   } else if(leaveType==="unpaid"){
     if(!dr.unpaidLeaves) dr.unpaidLeaves=[];
     dr.unpaidLeaves.push({start,end});
-    dr.unpaidLeaves = mergeLeaves(dr.unpaidLeaves);
+    dr.unpaidLeaves = cleanLeavesFromHolidays(dr.unpaidLeaves);
   } else {
     if(!dr.leaves) dr.leaves=[];
     dr.leaves.push({start,end});
-    dr.leaves = mergeLeaves(dr.leaves);
+    dr.leaves = cleanLeavesFromHolidays(dr.leaves);
   }
   openLeaveModal(leaveDriverId,leaveType);
   renderMain();scheduleSave();
@@ -3297,8 +3297,8 @@ function tlDragEnd(){
     if(segStart!==null) segments.push({start:fmtDate(segStart),end:fmtDate(segEnd)});
     if(!segments.length){ tlDrag={active:false,driverId:null,startDay:null,endDay:null,removing:false}; return; }
     segments.forEach(seg=>dr.leaves.push(seg));
-    // Normalizăm imediat — unim perioadele consecutive
-    dr.leaves = mergeLeaves(dr.leaves);
+    // Curățăm sărbătorile și unim perioadele consecutive
+    dr.leaves = cleanLeavesFromHolidays(dr.leaves);
     logActivity("➕ Concediu adăugat",dr.name,startStr2+" → "+endStr2+" ("+newDays+"z)");
     renderAll();scheduleSave();toast("✓ "+dr.name+": "+newDays+" zile lucrătoare");
   }
@@ -4775,21 +4775,50 @@ async function confirmImportExcel(){
 // ============================================================
 // NORMALIZE LEAVES — unește segmentele consecutive din Firestore
 // ============================================================
+// Sparge o perioadă în segmente, sărind zilele de sărbătoare
+function splitLeaveAroundHolidays(leave){
+  const segments=[];
+  let segStart=null, segEnd=null;
+  const start=parseDate(leave.start), end=parseDate(leave.end);
+  for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){
+    const isHoliday=!!getHoliday(d);
+    const isSun=d.getDay()===0;
+    if(isHoliday||isSun){
+      if(segStart){segments.push({start:fmtDate(segStart),end:fmtDate(segEnd)});segStart=null;segEnd=null;}
+    } else {
+      if(!segStart) segStart=new Date(d);
+      segEnd=new Date(d);
+    }
+  }
+  if(segStart) segments.push({start:fmtDate(segStart),end:fmtDate(segEnd)});
+  return segments;
+}
+
+// Curăță toate zilele de sărbătoare din perioadele de concediu
+function cleanLeavesFromHolidays(leaves){
+  const result=[];
+  (leaves||[]).forEach(l=>{
+    const segs=splitLeaveAroundHolidays(l);
+    segs.forEach(s=>result.push(s));
+  });
+  return mergeLeaves(result);
+}
+
 async function normalizeAllLeaves(){
   if(!isAdmin()){toast("Doar Admin",true);return;}
-  if(!confirm("Unești toate perioadele consecutive pentru toți șoferii?\nAcesta va actualiza datele în Firestore.")) return;
+  if(!confirm("Unești perioadele consecutive ȘI scoți zilele de sărbătoare din concedii?\nAcesta va actualiza datele în Firestore.")) return;
   let count=0;
   state.drivers.forEach(dr=>{
     const before=(dr.leaves||[]).length+(dr.krankLeaves||[]).length+(dr.unpaidLeaves||[]).length;
-    dr.leaves      = mergeLeaves(dr.leaves||[]);
-    dr.krankLeaves = mergeLeaves(dr.krankLeaves||[]);
-    dr.unpaidLeaves= mergeLeaves(dr.unpaidLeaves||[]);
+    dr.leaves      = cleanLeavesFromHolidays(dr.leaves||[]);
+    dr.krankLeaves = cleanLeavesFromHolidays(dr.krankLeaves||[]);
+    dr.unpaidLeaves= cleanLeavesFromHolidays(dr.unpaidLeaves||[]);
     const after=(dr.leaves||[]).length+(dr.krankLeaves||[]).length+(dr.unpaidLeaves||[]).length;
-    if(after<before) count++;
+    if(after!==before) count++;
   });
   scheduleSave();
   renderAll();
-  toast("✅ "+count+" persoane normalizate — perioadele consecutive au fost unite");
+  toast("✅ "+count+" persoane actualizate — sărbătorile scoase, perioadele unite");
 }
 
 // ============================================================

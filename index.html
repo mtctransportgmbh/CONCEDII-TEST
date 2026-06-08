@@ -3156,7 +3156,7 @@ function openDayDetail(dateStr){
   openModal("modalDay");
 }
 
-// Fuzionează perioadele consecutive — sare duminici și sărbători
+// Fuzionează perioadele consecutive — dacă nu există nicio zi lucrătoare între ele
 function mergeLeaves(leaves){
   if(!leaves||!leaves.length) return [];
   const sorted=[...leaves].sort((a,b)=>a.start.localeCompare(b.start));
@@ -3165,16 +3165,19 @@ function mergeLeaves(leaves){
     if(!merged.length){merged.push({start:lv.start,end:lv.end});continue;}
     const last=merged[merged.length-1];
     const curStart=parseDate(lv.start);
-    // Avansăm de la last.end până găsim o zi lucrătoare
-    const probe=parseDate(last.end);
-    probe.setDate(probe.getDate()+1);
-    // Sări weekend-uri și sărbători
-    while(isSunday(probe)||!!getHoliday(probe)) probe.setDate(probe.getDate()+1);
-    // Dacă prima zi lucrătoare după last.end = startul curent → consecutive
-    if(fmtDate(probe)===fmtDate(curStart)){
-      if(lv.end>last.end) last.end=lv.end;
-    } else if(curStart<probe){
-      // Suprapunere — extindem
+    const lastEnd=parseDate(last.end);
+    // Verificăm dacă există vreo zi lucrătoare între last.end și lv.start
+    let hasWorkdayGap=false;
+    const check=new Date(lastEnd);
+    check.setDate(check.getDate()+1);
+    while(check<curStart){
+      if(check.getDay()!==0&&check.getDay()!==6&&!getHoliday(check)){
+        hasWorkdayGap=true; break;
+      }
+      check.setDate(check.getDate()+1);
+    }
+    if(!hasWorkdayGap){
+      // Nicio zi lucrătoare între ele → consecutive sau separate doar prin weekend/sărbătoare
       if(lv.end>last.end) last.end=lv.end;
     } else {
       merged.push({start:lv.start,end:lv.end});

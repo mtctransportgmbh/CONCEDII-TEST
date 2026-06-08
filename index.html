@@ -1005,6 +1005,7 @@
     <button class="btn btn-secondary btn-small" id="verifyExcelBtn" onclick="document.getElementById('verifyExcelFile').click()" style="width:100%; margin-bottom:6px; display:none; border-color:#a78bfa; color:#a78bfa">📊 Verifică Excel vs HTML</button>
     <input type="file" id="verifyExcelFile" accept=".xlsx,.xlsm,.xls" style="display:none" onchange="verifyExcelFile(event)">
     <button class="btn btn-secondary btn-small" id="downloadBackupBtn" onclick="downloadBackupNow()" style="width:100%; margin-bottom:6px; display:none">💾 Descarcă backup acum</button>
+    <button class="btn btn-secondary btn-small" id="normalizeBtn" onclick="normalizeAllLeaves()" style="width:100%; margin-bottom:6px; display:none; border-color:#f59e0b; color:#f59e0b">🔧 Unește perioade consecutive</button>
     <button class="btn btn-secondary btn-small" id="uploadBackupBtn" onclick="document.getElementById('uploadBackupFile').click()" style="width:100%; margin-bottom:6px; display:none">📂 Încarcă backup fișier</button>
     <button class="btn btn-secondary btn-small" id="publishVersionBtn" onclick="publishNewVersion()" style="width:100%; margin-bottom:6px; display:none; border-color:#6366f1; color:#6366f1">🚀 Publică versiune nouă</button>
     <input type="file" id="uploadBackupFile" accept=".json" style="display:none" onchange="uploadLocalBackup(event)">
@@ -1123,13 +1124,8 @@
         <span style="font-size:12px;color:var(--text-dim)">✓ = prezent &nbsp;|&nbsp; ✗ = absent &nbsp;|&nbsp; gol = necunoscut</span>
         <div style="display:flex;gap:8px;align-items:center">
           <span id="sortAdminControls" style="display:none"><button class="btn btn-secondary btn-small" onclick="openAddSortator()">+ Sortator nou</button></span>
-          <button id="sortEditModeBtn" onclick="toggleSortEditMode()" style="display:none;padding:7px 16px;font-size:12px;font-weight:700;background:var(--bg-elev-2);border:2px solid var(--border);border-radius:7px;cursor:pointer;color:var(--text-dim);align-items:center;gap:6px">✏️ Editează</button>
           <button id="sortPrintBtn" onclick="openSortPrintModal()" style="display:none;padding:8px 20px;font-size:13px;font-weight:700;background:var(--accent);color:#000;border:none;border-radius:7px;cursor:pointer;box-shadow:0 2px 8px rgba(251,191,36,0.35)">🖨️ Print / Export PDF</button>
         </div>
-      </div>
-      <div id="sortEditBanner" style="display:none;padding:8px 14px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);border-radius:7px;margin-bottom:10px;align-items:center;justify-content:space-between;gap:10px">
-        <span style="font-size:13px;color:#10b981;font-weight:600">✏️ Mod editare activ — bifează prezența, apoi confirmă</span>
-        <button onclick="confirmSortEdit()" style="padding:7px 18px;background:#10b981;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">✅ Confirmă</button>
       </div>
       <div class="timeline-wrap">
         <div class="timeline" id="sortatoriTimeline"></div>
@@ -1490,7 +1486,6 @@ function concediiColl(){ return activeYear===BASE_YEAR?"concedii":"concedii_"+ac
 function sortatoriColl(){ return activeYear===BASE_YEAR?"sortatori":"sortatori_"+activeYear; }
 function prezenteColl(){  return activeYear===BASE_YEAR?"prezente":"prezente_"+activeYear; }
 function backupColl(){    return activeYear===BASE_YEAR?"daily_backup":"daily_backup_"+activeYear; }
-function planificareColl(){ return activeYear===BASE_YEAR?"planificare":"planificare_"+activeYear; }
 function activityColl(){  return activeYear===BASE_YEAR?"activity_log":"activity_log_"+activeYear; }
 let editingDriverId = null;
 let leaveDriverId = null;
@@ -1737,24 +1732,11 @@ function fullReset(){
   unsubAll();
   if(_sortUnsub){ try{_sortUnsub();}catch(e){} _sortUnsub=null; }
   if(_presUnsub){ try{_presUnsub();}catch(e){} _presUnsub=null; }
-  if(typeof _planUnsub!=="undefined"&&_planUnsub){ try{_planUnsub();}catch(e){} _planUnsub=null; }
   state      = {drivers:[], thresholds:{warn:3,crit:5}};
   presState  = {presence:{}};
   sortState  = {drivers:[], presence:{}};
-  planState  = {};
   if(autoLogoutTimer){ clearTimeout(autoLogoutTimer); autoLogoutTimer=null; }
   if(saveTimer){ clearTimeout(saveTimer); saveTimer=null; }
-  // Ascunde toate butoanele specifice rolului
-  ["loadBackupBtn","importExcelBtn","actLogBtn","verifyExcelBtn",
-   "downloadBackupBtn","uploadBackupBtn","publishVersionBtn",
-   "printBtn","sortPrintBtn","modPlanificare","statsBtn","sortAdminControls"
-  ].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display="none";});
-  // Reset mod editare sortatori
-  if(typeof _sortEditMode!=="undefined") _sortEditMode=false;
-  const _eb=document.getElementById("sortEditModeBtn");
-  if(_eb){_eb.textContent="✏️ Editează";_eb.style.borderColor="var(--border)";_eb.style.color="var(--text-dim)";}
-  const _eb2=document.getElementById("sortEditBanner");
-  if(_eb2) _eb2.style.display="none";
   try{
     const tl=document.getElementById("timeline"); if(tl) tl.innerHTML="";
     const st=document.getElementById("sortatoriTimeline"); if(st) st.innerHTML="";
@@ -2185,6 +2167,8 @@ function enterApp(userKey){
   if(importExcelBtn2) importExcelBtn2.style.display = isAdm?"block":"none";
   const downloadBackupBtn = document.getElementById("downloadBackupBtn");
   if(downloadBackupBtn) downloadBackupBtn.style.display = isAdm?"block":"none";
+  const normalizeBtn = document.getElementById("normalizeBtn");
+  if(normalizeBtn) normalizeBtn.style.display = isAdm?"block":"none";
   const actLogBtn2 = document.getElementById("actLogBtn");
   if(actLogBtn2) actLogBtn2.style.display = isAdm?"block":"none";
   const verifyExcelBtn2 = document.getElementById("verifyExcelBtn");
@@ -2210,10 +2194,6 @@ function enterApp(userKey){
   if(sortPrintBtn) sortPrintBtn.style.display = isTaniaAdm?"block":"none";
   const sortAdm = document.getElementById("sortAdminControls");
   if(sortAdm) sortAdm.style.display = isTaniaAdm?"inline":"none";
-  // Buton editare sortatori — vizibil pentru Mihaela, Mădălina, Admin, Tania
-  const sortEditBtn = document.getElementById("sortEditModeBtn");
-  const canEditSort = isTaniaAdm || userKey==="mihaela" || userKey==="madalina";
-  if(sortEditBtn) sortEditBtn.style.display = canEditSort?"flex":"none";
 
   // Notificare la login — setăm flag, se afișează după ce datele sunt încărcate din Firebase
   window._pendingLoginNotif = (!isTaniaAdm && !isMihaela) ? userKey : null;
@@ -3156,7 +3136,7 @@ function openDayDetail(dateStr){
   openModal("modalDay");
 }
 
-// Fuzionează perioadele consecutive — dacă nu există nicio zi lucrătoare între ele
+// Fuzionează perioadele consecutive — unește dacă nu există zi lucrătoare între ele
 function mergeLeaves(leaves){
   if(!leaves||!leaves.length) return [];
   const sorted=[...leaves].sort((a,b)=>a.start.localeCompare(b.start));
@@ -3165,25 +3145,44 @@ function mergeLeaves(leaves){
     if(!merged.length){merged.push({start:lv.start,end:lv.end});continue;}
     const last=merged[merged.length-1];
     const curStart=parseDate(lv.start);
-    const lastEnd=parseDate(last.end);
-    // Verificăm dacă există vreo zi lucrătoare între last.end și lv.start
-    let hasWorkdayGap=false;
-    const check=new Date(lastEnd);
+    const lastEndDate=parseDate(last.end);
+    // Verificăm dacă există vreo zi lucrătoare (Lu-Vi, non-sărbătoare) în gap
+    let hasWorkdayInGap=false;
+    const check=new Date(lastEndDate);
     check.setDate(check.getDate()+1);
     while(check<curStart){
       if(check.getDay()!==0&&check.getDay()!==6&&!getHoliday(check)){
-        hasWorkdayGap=true; break;
+        hasWorkdayInGap=true; break;
       }
       check.setDate(check.getDate()+1);
     }
-    if(!hasWorkdayGap){
-      // Nicio zi lucrătoare între ele → consecutive sau separate doar prin weekend/sărbătoare
+    if(!hasWorkdayInGap){
+      // Nicio zi lucrătoare în gap → consecutive (separați doar prin weekend/sărbătoare)
       if(lv.end>last.end) last.end=lv.end;
     } else {
       merged.push({start:lv.start,end:lv.end});
     }
   }
   return merged;
+}
+
+// Normalizează toate leaves din Firestore — unește segmentele consecutive
+// Apelată o singură dată de admin pentru a curăța datele existente
+async function normalizeAllLeaves(){
+  if(!isAdmin()){toast("Doar Admin",true);return;}
+  if(!confirm("Unești toate perioadele consecutive pentru toți șoferii?\nAcesta va actualiza datele în Firestore.")) return;
+  let count=0;
+  state.drivers.forEach(dr=>{
+    const before=(dr.leaves||[]).length;
+    dr.leaves = mergeLeaves(dr.leaves||[]);
+    dr.krankLeaves = mergeLeaves(dr.krankLeaves||[]);
+    dr.unpaidLeaves = mergeLeaves(dr.unpaidLeaves||[]);
+    const after=dr.leaves.length+dr.krankLeaves.length+dr.unpaidLeaves.length;
+    if(after<before) count++;
+  });
+  scheduleSave();
+  toast("✅ "+count+" persoane normalizate — perioadele consecutive au fost unite");
+  renderAll();
 }
 
 // ============================================================
@@ -3477,7 +3476,6 @@ async function switchYear(year){
     else { initApp(uk); }
   }catch(e){ await initYearFromBase(uk,year); }
   loadPresState(); loadSortState(); loadBackupInfoFromStorage();
-  if(isAdmin()) loadPlanState(); // reload planificare pentru noul an
   toast("📅 Schimbat la "+year);
 }
 
@@ -3663,47 +3661,16 @@ function togglePresence(driverName, day, isRightClick){
 // ---- Drag prezență sortatori ----
 let _sortDrag = {active:false, driverName:null, mode:null}; // mode: "prezent"|"absent"|"clear"
 
-let _sortEditMode = false;
-
-function toggleSortEditMode(){
-  _sortEditMode=!_sortEditMode;
-  const btn=document.getElementById("sortEditModeBtn");
-  const banner=document.getElementById("sortEditBanner");
-  if(_sortEditMode){
-    if(btn){btn.textContent="✏️ Editare activă...";btn.style.borderColor="#10b981";btn.style.color="#10b981";}
-    if(banner) banner.style.display="flex";
-    toast("✏️ Mod editare activat — bifează prezența");
-  } else {
-    if(btn){btn.textContent="✏️ Editează";btn.style.borderColor="var(--border)";btn.style.color="var(--text-dim)";}
-    if(banner) banner.style.display="none";
-  }
-  renderSortatoriTimeline();
-}
-
-function confirmSortEdit(){
-  _sortEditMode=false;
-  const btn=document.getElementById("sortEditModeBtn");
-  const banner=document.getElementById("sortEditBanner");
-  if(btn){btn.textContent="✏️ Editează";btn.style.borderColor="var(--border)";btn.style.color="var(--text-dim)";}
-  if(banner) banner.style.display="none";
-  saveSortState();
-  toast("✅ Modificările au fost salvate!");
-  renderSortatoriTimeline();
-}
-
 function sortDragStart(driverName, day, isRight){
   const _uk=window.activeUserKey||"";
-  const isMih=_uk==="mihaela", isMad=_uk==="madalina";
-  if((isMih||isMad)&&!_sortEditMode){
-    toast("Apasă ✏️ Editează pentru a modifica prezența",true); return;
-  }
+  const isMih=_uk==="mihaela";
   if(isMih){
     const now=new Date();
     if(sortCurrentDate.getFullYear()!==now.getFullYear()||sortCurrentDate.getMonth()!==now.getMonth()){
       toast("Poți marca prezența doar în luna curentă",true); return;
     }
   }
-  if(!isAdminOrTania()&&!isMih&&!isMad) return;
+  if(!isAdminOrTania()&&_uk!=="mihaela"&&_uk!=="madalina") return;
   const mk = getSortKey();
   const cur = (sortState.presence[mk]&&sortState.presence[mk][driverName]&&sortState.presence[mk][driverName][String(day)]);
   // Determinăm modul după butonul apăsat și starea curentă
@@ -4806,7 +4773,7 @@ async function confirmImportExcel(){
 // ============================================================
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.06.07";
+const APP_VERSION = "2026.06.01";
 let _versionUnsub = null;
 
 function startVersionWatch(){
@@ -4919,7 +4886,7 @@ function goTodayPlan(){
 
 function loadPlanState(){
   if(_planUnsub){ try{_planUnsub();}catch(e){} }
-  _planUnsub = db.collection(planificareColl()).doc("ruhstorf").onSnapshot(snap=>{
+  _planUnsub = db.collection("planificare").doc("ruhstorf").onSnapshot(snap=>{
     planState = snap.exists ? (snap.data()||{}) : {};
     if(appMode==="planificare") renderPlanificare();
   }, err=>console.warn("plan snap",err));
@@ -4927,7 +4894,7 @@ function loadPlanState(){
 
 async function savePlanState(){
   try{
-    await db.collection(planificareColl()).doc("ruhstorf").set(JSON.parse(JSON.stringify(planState)));
+    await db.collection("planificare").doc("ruhstorf").set(JSON.parse(JSON.stringify(planState)));
   }catch(e){ console.error("plan save",e); }
 }
 
@@ -4941,11 +4908,10 @@ function renderPlanificare(){
   const MONTHS_RO=["Ianuarie","Februarie","Martie","Aprilie","Mai","Iunie","Iulie","August","Septembrie","Octombrie","Noiembrie","Decembrie"];
   document.getElementById("planWeekLabel").textContent = MONTHS_RO[m]+" "+y;
 
-  // Categorii — cu Camion
+  // Categorii — fără Camion
   const cats = [
     {label:"Permanenți", key:"permanent", color:"#10b981"},
     {label:"Rotații",    key:"rotatie",   color:"#f59e0b"},
-    {label:"Camion",     key:"camion",    color:"#8b5cf6"},
     {label:"Urgențe",    key:"urgenta",   color:"#ef4444"},
   ];
 
@@ -5123,17 +5089,11 @@ function renderPlanificare(){
 
 
 function togglePlanCell(driverName, weekKey, dayOfWeek){
-  if(!planState[weekKey]) planState[weekKey]={};
-  if(!planState[weekKey][driverName]) planState[weekKey][driverName]=[0,0,0,0,0,0,0];
-  planState[weekKey][driverName][dayOfWeek]=planState[weekKey][driverName][dayOfWeek]===1?0:1;
-  renderPlanificare(); savePlanState();
-}
-
-function togglePlanCell(driverName, weekKey, dayOfWeek){
-  if(!planState[weekKey]) planState[weekKey]={};
-  if(!planState[weekKey][driverName]) planState[weekKey][driverName]=[0,0,0,0,0,0,0];
-  planState[weekKey][driverName][dayOfWeek]=planState[weekKey][driverName][dayOfWeek]===1?0:1;
-  renderPlanificare(); savePlanState();
+  if(!planState[weekKey]) planState[weekKey] = {};
+  if(!planState[weekKey][driverName]) planState[weekKey][driverName] = [0,0,0,0,0,0,0];
+  planState[weekKey][driverName][dayOfWeek] = planState[weekKey][driverName][dayOfWeek]===1 ? 0 : 1;
+  renderPlanificare();
+  savePlanState();
 }
 
 function changePlanWeek(delta){
@@ -5341,14 +5301,7 @@ function generatePlanImage(wkKey, dates, weekData, cats, wkNum){
 
         if(holiday){ ctx.fillStyle="#2a1040"; }
         else if(onLeave){ ctx.fillStyle="#3d3000"; }
-        else if(isPresent){
-          // Culoare diferită per categorie
-          const catKey=cd.cat.key;
-          if(catKey==="rotatie")      ctx.fillStyle="#7c4a00"; // portocaliu închis
-          else if(catKey==="camion")  ctx.fillStyle="#3b1a7a"; // violet închis
-          else if(catKey==="urgenta") ctx.fillStyle="#7a1a1a"; // roșu închis
-          else                        ctx.fillStyle="#1a6b3a"; // verde (permanent)
-        }
+        else if(isPresent){ ctx.fillStyle="#1a6b3a"; }
         else { ctx.fillStyle=ri%2===0?"#16213e":"#1a2440"; }
 
         ctx.fillRect(x, rowY, cellW, cellH);
@@ -5710,8 +5663,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 (function(){ applyTheme(); try{localStorage.removeItem("mtc-theme");}catch(e){} })();
 </script>
 
-<button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
-<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.07</div>
+<button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema (Dark/Light)">🌙</button>
 
 </body>
 </html>

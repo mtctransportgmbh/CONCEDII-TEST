@@ -716,7 +716,9 @@
   .tl-cell.pres-p.in-leave { background: #15803d !important; }
   .tl-cell.pres-a { background: #dc2626 !important; color:#fff !important; font-size:12px; font-weight:900; }
   .tl-cell.pres-a.in-leave { background: #b91c1c !important; }
-  .tl-cell.in-leave:not(.pres-p):not(.pres-a) { background: rgba(255,220,0,0.35) !important; color:#7a5800 !important; font-weight:900; }
+  .tl-cell.in-leave:not(.pres-p):not(.pres-a):not(.holiday) { background: rgba(255,220,0,0.35) !important; color:#7a5800 !important; font-weight:900; }
+  /* Sarbatori NU afiseaza niciodata concediu */
+  .tl-cell.holiday { background: rgba(168,85,247,0.12) !important; color: transparent !important; }
   .tl-cell.sort-p { background: var(--green) !important; color: #fff !important; }
   .tl-cell.sort-p:hover { filter: brightness(1.2); }
   .tl-cell.sort-a { background: rgba(239,68,68,0.8) !important; color: #fff !important; }
@@ -3366,7 +3368,7 @@ function renderTimeline(){
       else if(onKrank&&!holiday) cls.push("in-krank");
       else if(onUnpaid&&!holiday) cls.push("in-unpaid");
       else if(onLeave&&!holiday) cls.push("in-leave");
-      if(onLeave&&!isPresP&&!isPresA) dailyCounts[dn]++;
+      if(onLeave&&!isPresP&&!isPresA&&!holiday) dailyCounts[dn]++;
       const ds=fmtDate(d);
       const isOccupied=onLeave||onKrank||onUnpaid;
       const isBlocked=isSun||!!holiday;

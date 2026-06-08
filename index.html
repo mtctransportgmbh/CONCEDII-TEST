@@ -3361,11 +3361,11 @@ function renderTimeline(){
       const isPresP=presVal==="prezent";
       const isPresA=presVal==="absent";
       // Apply colors — presence overrides leave
-      if(isPresP){ cls.push("pres-p"); if(onLeave)cls.push("in-leave"); }
-      else if(isPresA){ cls.push("pres-a"); if(onLeave)cls.push("in-leave"); }
-      else if(onKrank) cls.push("in-krank");
-      else if(onUnpaid) cls.push("in-unpaid");
-      else if(onLeave) cls.push("in-leave");
+      if(isPresP){ cls.push("pres-p"); if(onLeave&&!holiday)cls.push("in-leave"); }
+      else if(isPresA){ cls.push("pres-a"); if(onLeave&&!holiday)cls.push("in-leave"); }
+      else if(onKrank&&!holiday) cls.push("in-krank");
+      else if(onUnpaid&&!holiday) cls.push("in-unpaid");
+      else if(onLeave&&!holiday) cls.push("in-leave");
       if(onLeave&&!isPresP&&!isPresA) dailyCounts[dn]++;
       const ds=fmtDate(d);
       const isOccupied=onLeave||onKrank||onUnpaid;

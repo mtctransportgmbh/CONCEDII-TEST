@@ -726,6 +726,8 @@
   .sort-cat-header { font-size:10px; font-weight:700; text-transform:uppercase; }
   .tl-cell.in-leave:hover { background: #0ea271; }
   .tl-cell.tl-selecting { background: rgba(245,158,11,0.45) !important; }
+  .tl-cell.tl-removing { background: rgba(239,68,68,0.35) !important; }
+  .tl-cell.in-leave.tl-removing { background: rgba(239,68,68,0.6) !important; }
   .tl-driver-row.tl-row-hl { background: rgba(255,255,255,0.15) !important; color: #fff !important; font-weight:700; }
   .tl-day-header.tl-col-highlight { background: rgba(255,255,255,0.18) !important; color: #fff !important; font-weight:700; }
   .tl-cell.in-leave.tl-selecting { background: rgba(239,68,68,0.55) !important; }
@@ -3209,12 +3211,14 @@ function tlDragMove(dn,pageX,pageY){
 function tlDragUpdate(currentDn){
   const s=Math.min(tlDrag.startDay,currentDn),e=Math.max(tlDrag.startDay,currentDn);
   const y=currentDate.getFullYear(),m=currentDate.getMonth();
+  const isRemoving=tlDrag.removing;
   document.querySelectorAll(`.tl-cell[data-driver="${tlDrag.driverId}"]`).forEach(cell=>{
     const dn=parseInt(cell.dataset.day);
-    // Nu evidenția duminici și sărbători
     const d=new Date(y,m,dn);
     const blocked=isSunday(d)||!!getHoliday(d);
-    cell.classList.toggle("tl-selecting",dn>=s&&dn<=e&&!blocked);
+    const inRange=dn>=s&&dn<=e&&!blocked;
+    cell.classList.toggle("tl-selecting", inRange&&!isRemoving);
+    cell.classList.toggle("tl-removing",  inRange&&isRemoving);
   });
 }
 function tlDragEnd(){
@@ -3222,6 +3226,7 @@ function tlDragEnd(){
   tlDrag.active=false;
   document.getElementById("tlSelectTooltip").style.display="none";
   document.querySelectorAll(".tl-selecting").forEach(c=>c.classList.remove("tl-selecting"));
+  document.querySelectorAll(".tl-removing").forEach(c=>c.classList.remove("tl-removing"));
   document.querySelectorAll(".tl-row-active").forEach(el=>el.classList.remove("tl-row-active"));
   const y=currentDate.getFullYear(),m=currentDate.getMonth();
   const s=Math.min(tlDrag.startDay,tlDrag.endDay),e=Math.max(tlDrag.startDay,tlDrag.endDay);

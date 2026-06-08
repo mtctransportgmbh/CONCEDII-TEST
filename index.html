@@ -1005,7 +1005,6 @@
     <button class="btn btn-secondary btn-small" id="verifyExcelBtn" onclick="document.getElementById('verifyExcelFile').click()" style="width:100%; margin-bottom:6px; display:none; border-color:#a78bfa; color:#a78bfa">📊 Verifică Excel vs HTML</button>
     <input type="file" id="verifyExcelFile" accept=".xlsx,.xlsm,.xls" style="display:none" onchange="verifyExcelFile(event)">
     <button class="btn btn-secondary btn-small" id="downloadBackupBtn" onclick="downloadBackupNow()" style="width:100%; margin-bottom:6px; display:none">💾 Descarcă backup acum</button>
-    <button class="btn btn-secondary btn-small" id="normalizeBtn" onclick="normalizeAllLeaves()" style="width:100%; margin-bottom:6px; display:none; border-color:#f59e0b; color:#f59e0b">🔧 Unește perioade consecutive</button>
     <button class="btn btn-secondary btn-small" id="uploadBackupBtn" onclick="document.getElementById('uploadBackupFile').click()" style="width:100%; margin-bottom:6px; display:none">📂 Încarcă backup fișier</button>
     <button class="btn btn-secondary btn-small" id="publishVersionBtn" onclick="publishNewVersion()" style="width:100%; margin-bottom:6px; display:none; border-color:#6366f1; color:#6366f1">🚀 Publică versiune nouă</button>
     <input type="file" id="uploadBackupFile" accept=".json" style="display:none" onchange="uploadLocalBackup(event)">
@@ -2167,8 +2166,6 @@ function enterApp(userKey){
   if(importExcelBtn2) importExcelBtn2.style.display = isAdm?"block":"none";
   const downloadBackupBtn = document.getElementById("downloadBackupBtn");
   if(downloadBackupBtn) downloadBackupBtn.style.display = isAdm?"block":"none";
-  const normalizeBtn = document.getElementById("normalizeBtn");
-  if(normalizeBtn) normalizeBtn.style.display = isAdm?"block":"none";
   const actLogBtn2 = document.getElementById("actLogBtn");
   if(actLogBtn2) actLogBtn2.style.display = isAdm?"block":"none";
   const verifyExcelBtn2 = document.getElementById("verifyExcelBtn");
@@ -2672,12 +2669,15 @@ function addLeave(){
   if(leaveType==="krank"){
     if(!dr.krankLeaves) dr.krankLeaves=[];
     dr.krankLeaves.push({start,end});
+    dr.krankLeaves = mergeLeaves(dr.krankLeaves);
   } else if(leaveType==="unpaid"){
     if(!dr.unpaidLeaves) dr.unpaidLeaves=[];
     dr.unpaidLeaves.push({start,end});
+    dr.unpaidLeaves = mergeLeaves(dr.unpaidLeaves);
   } else {
     if(!dr.leaves) dr.leaves=[];
     dr.leaves.push({start,end});
+    dr.leaves = mergeLeaves(dr.leaves);
   }
   openLeaveModal(leaveDriverId,leaveType);
   renderMain();scheduleSave();
@@ -2795,6 +2795,7 @@ function saveQuickLeave(){
   }
   if(!dr.leaves)dr.leaves=[];
   dr.leaves.push({start,end});
+  dr.leaves = mergeLeaves(dr.leaves);
   closeModal("modalQuick");renderAll();scheduleSave();
   toast("✓ "+dr.name+": "+newDays+" zile lucrătoare");
 }
@@ -3157,32 +3158,12 @@ function mergeLeaves(leaves){
       check.setDate(check.getDate()+1);
     }
     if(!hasWorkdayInGap){
-      // Nicio zi lucrătoare în gap → consecutive (separați doar prin weekend/sărbătoare)
       if(lv.end>last.end) last.end=lv.end;
     } else {
       merged.push({start:lv.start,end:lv.end});
     }
   }
   return merged;
-}
-
-// Normalizează toate leaves din Firestore — unește segmentele consecutive
-// Apelată o singură dată de admin pentru a curăța datele existente
-async function normalizeAllLeaves(){
-  if(!isAdmin()){toast("Doar Admin",true);return;}
-  if(!confirm("Unești toate perioadele consecutive pentru toți șoferii?\nAcesta va actualiza datele în Firestore.")) return;
-  let count=0;
-  state.drivers.forEach(dr=>{
-    const before=(dr.leaves||[]).length;
-    dr.leaves = mergeLeaves(dr.leaves||[]);
-    dr.krankLeaves = mergeLeaves(dr.krankLeaves||[]);
-    dr.unpaidLeaves = mergeLeaves(dr.unpaidLeaves||[]);
-    const after=dr.leaves.length+dr.krankLeaves.length+dr.unpaidLeaves.length;
-    if(after<before) count++;
-  });
-  scheduleSave();
-  toast("✅ "+count+" persoane normalizate — perioadele consecutive au fost unite");
-  renderAll();
 }
 
 // ============================================================
@@ -3308,8 +3289,10 @@ function tlDragEnd(){
     if(segStart!==null) segments.push({start:fmtDate(segStart),end:fmtDate(segEnd)});
     if(!segments.length){ tlDrag={active:false,driverId:null,startDay:null,endDay:null,removing:false}; return; }
     segments.forEach(seg=>dr.leaves.push(seg));
+    // Normalizăm imediat — unim perioadele consecutive
+    dr.leaves = mergeLeaves(dr.leaves);
     logActivity("➕ Concediu adăugat",dr.name,startStr2+" → "+endStr2+" ("+newDays+"z)");
-    renderAll();scheduleSave();toast("✓ "+dr.name+": "+newDays+" zile lucrătoare"+(segments.length>1?" ("+segments.length+" segmente)":""));
+    renderAll();scheduleSave();toast("✓ "+dr.name+": "+newDays+" zile lucrătoare");
   }
   tlDrag={active:false,driverId:null,startDay:null,endDay:null,removing:false};
 }

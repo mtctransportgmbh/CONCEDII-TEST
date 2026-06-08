@@ -1005,6 +1005,7 @@
     <button class="btn btn-secondary btn-small" id="verifyExcelBtn" onclick="document.getElementById('verifyExcelFile').click()" style="width:100%; margin-bottom:6px; display:none; border-color:#a78bfa; color:#a78bfa">📊 Verifică Excel vs HTML</button>
     <input type="file" id="verifyExcelFile" accept=".xlsx,.xlsm,.xls" style="display:none" onchange="verifyExcelFile(event)">
     <button class="btn btn-secondary btn-small" id="downloadBackupBtn" onclick="downloadBackupNow()" style="width:100%; margin-bottom:6px; display:none">💾 Descarcă backup acum</button>
+    <button class="btn btn-secondary btn-small" id="normalizeBtn" onclick="normalizeAllLeaves()" style="width:100%; margin-bottom:6px; display:none; border-color:#f59e0b; color:#f59e0b">🔧 Unește perioade consecutive</button>
     <button class="btn btn-secondary btn-small" id="uploadBackupBtn" onclick="document.getElementById('uploadBackupFile').click()" style="width:100%; margin-bottom:6px; display:none">📂 Încarcă backup fișier</button>
     <button class="btn btn-secondary btn-small" id="publishVersionBtn" onclick="publishNewVersion()" style="width:100%; margin-bottom:6px; display:none; border-color:#6366f1; color:#6366f1">🚀 Publică versiune nouă</button>
     <input type="file" id="uploadBackupFile" accept=".json" style="display:none" onchange="uploadLocalBackup(event)">
@@ -1123,9 +1124,11 @@
         <span style="font-size:12px;color:var(--text-dim)">✓ = prezent &nbsp;|&nbsp; ✗ = absent &nbsp;|&nbsp; gol = necunoscut</span>
         <div style="display:flex;gap:8px;align-items:center">
           <span id="sortAdminControls" style="display:none"><button class="btn btn-secondary btn-small" onclick="openAddSortator()">+ Sortator nou</button></span>
+          <button id="sortEditModeBtn" onclick="toggleSortEditMode()" style="display:none;padding:7px 16px;font-size:12px;font-weight:700;background:var(--bg-elev-2);border:2px solid var(--border);border-radius:7px;cursor:pointer;color:var(--text-dim)">✏️ Editează</button>
           <button id="sortPrintBtn" onclick="openSortPrintModal()" style="display:none;padding:8px 20px;font-size:13px;font-weight:700;background:var(--accent);color:#000;border:none;border-radius:7px;cursor:pointer;box-shadow:0 2px 8px rgba(251,191,36,0.35)">🖨️ Print / Export PDF</button>
         </div>
       </div>
+      <div id="sortEditBanner" style="display:none;padding:8px 14px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);border-radius:7px;margin-bottom:8px;align-items:center;justify-content:space-between;gap:10px"><span style="font-size:13px;color:#10b981;font-weight:600">✏️ Mod editare activ — bifează prezența, apoi confirmă</span><button onclick="confirmSortEdit()" style="padding:7px 18px;background:#10b981;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">✅ Confirmă</button></div>
       <div class="timeline-wrap">
         <div class="timeline" id="sortatoriTimeline"></div>
       </div>
@@ -2166,6 +2169,11 @@ function enterApp(userKey){
   if(importExcelBtn2) importExcelBtn2.style.display = isAdm?"block":"none";
   const downloadBackupBtn = document.getElementById("downloadBackupBtn");
   if(downloadBackupBtn) downloadBackupBtn.style.display = isAdm?"block":"none";
+  const normalizeBtn = document.getElementById("normalizeBtn");
+  if(normalizeBtn) normalizeBtn.style.display = isAdm?"block":"none";
+  const sortEditBtn = document.getElementById("sortEditModeBtn");
+  const canEditSort = isTaniaAdm || userKey==="mihaela" || userKey==="madalina";
+  if(sortEditBtn) sortEditBtn.style.display = canEditSort?"inline-flex":"none";
   const actLogBtn2 = document.getElementById("actLogBtn");
   if(actLogBtn2) actLogBtn2.style.display = isAdm?"block":"none";
   const verifyExcelBtn2 = document.getElementById("verifyExcelBtn");
@@ -3582,7 +3590,14 @@ function setSortView(v){
 }
 
 function changeSortMonth(delta){
-  sortCurrentDate = new Date(sortCurrentDate.getFullYear(), sortCurrentDate.getMonth()+delta, 1);
+  const next=new Date(sortCurrentDate.getFullYear(),sortCurrentDate.getMonth()+delta,1);
+  if(window.activeUserKey==="mihaela"){
+    const now=new Date();
+    const cur=new Date(now.getFullYear(),now.getMonth(),1);
+    const nxt=new Date(now.getFullYear(),now.getMonth()+1,1);
+    if(next<cur||next>nxt){toast("Poți vedea doar luna curentă și luna viitoare",true);return;}
+  }
+  sortCurrentDate=next;
   renderSortatoriTimeline();
 }
 function goSortToday(){ sortCurrentDate = new Date(); renderSortatoriTimeline(); }
@@ -3646,14 +3661,17 @@ let _sortDrag = {active:false, driverName:null, mode:null}; // mode: "prezent"|"
 
 function sortDragStart(driverName, day, isRight){
   const _uk=window.activeUserKey||"";
-  const isMih=_uk==="mihaela";
+  const isMih=_uk==="mihaela", isMad=_uk==="madalina";
+  if((isMih||isMad)&&!_sortEditMode){
+    toast("Apasă ✏️ Editează pentru a modifica prezența",true); return;
+  }
   if(isMih){
     const now=new Date();
     if(sortCurrentDate.getFullYear()!==now.getFullYear()||sortCurrentDate.getMonth()!==now.getMonth()){
       toast("Poți marca prezența doar în luna curentă",true); return;
     }
   }
-  if(!isAdminOrTania()&&_uk!=="mihaela"&&_uk!=="madalina") return;
+  if(!isAdminOrTania()&&!isMih&&!isMad) return;
   const mk = getSortKey();
   const cur = (sortState.presence[mk]&&sortState.presence[mk][driverName]&&sortState.presence[mk][driverName][String(day)]);
   // Determinăm modul după butonul apăsat și starea curentă
@@ -4754,6 +4772,57 @@ async function confirmImportExcel(){
 }
 
 // ============================================================
+// ============================================================
+// NORMALIZE LEAVES — unește segmentele consecutive din Firestore
+// ============================================================
+async function normalizeAllLeaves(){
+  if(!isAdmin()){toast("Doar Admin",true);return;}
+  if(!confirm("Unești toate perioadele consecutive pentru toți șoferii?\nAcesta va actualiza datele în Firestore.")) return;
+  let count=0;
+  state.drivers.forEach(dr=>{
+    const before=(dr.leaves||[]).length+(dr.krankLeaves||[]).length+(dr.unpaidLeaves||[]).length;
+    dr.leaves      = mergeLeaves(dr.leaves||[]);
+    dr.krankLeaves = mergeLeaves(dr.krankLeaves||[]);
+    dr.unpaidLeaves= mergeLeaves(dr.unpaidLeaves||[]);
+    const after=(dr.leaves||[]).length+(dr.krankLeaves||[]).length+(dr.unpaidLeaves||[]).length;
+    if(after<before) count++;
+  });
+  scheduleSave();
+  renderAll();
+  toast("✅ "+count+" persoane normalizate — perioadele consecutive au fost unite");
+}
+
+// ============================================================
+// SORT EDIT MODE — mod editare sortatori pentru Mihaela/Madalina
+// ============================================================
+let _sortEditMode = false;
+
+function toggleSortEditMode(){
+  _sortEditMode=!_sortEditMode;
+  const btn=document.getElementById("sortEditModeBtn");
+  const banner=document.getElementById("sortEditBanner");
+  if(_sortEditMode){
+    if(btn){btn.textContent="✏️ Editare activă...";btn.style.borderColor="#10b981";btn.style.color="#10b981";}
+    if(banner) banner.style.display="flex";
+    toast("✏️ Mod editare activat — bifează prezența");
+  } else {
+    if(btn){btn.textContent="✏️ Editează";btn.style.borderColor="var(--border)";btn.style.color="var(--text-dim)";}
+    if(banner) banner.style.display="none";
+  }
+  renderSortatoriTimeline();
+}
+
+function confirmSortEdit(){
+  _sortEditMode=false;
+  const btn=document.getElementById("sortEditModeBtn");
+  const banner=document.getElementById("sortEditBanner");
+  if(btn){btn.textContent="✏️ Editează";btn.style.borderColor="var(--border)";btn.style.color="var(--text-dim)";}
+  if(banner) banner.style.display="none";
+  saveSortState();
+  toast("✅ Modificările au fost salvate!");
+  renderSortatoriTimeline();
+}
+
 // VERSION UPDATE NOTIFICATION
 // ============================================================
 const APP_VERSION = "2026.06.01";
@@ -5646,7 +5715,8 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 (function(){ applyTheme(); try{localStorage.removeItem("mtc-theme");}catch(e){} })();
 </script>
 
-<button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema (Dark/Light)">🌙</button>
+<button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
+<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.08</div>
 
 </body>
 </html>

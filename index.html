@@ -5246,149 +5246,142 @@ function openWhatsAppExport(){
 
   openModal("modalWhatsApp");
 }
-
 function generatePlanImage(wkKey, dates, weekData, cats, wkNum){
   const canvas = document.getElementById("waPlanCanvas");
   if(!canvas) return;
 
-  // Zile de lucru (fără duminică)
   const workDays = dates.filter(d=>d.getDay()!==0);
-  const DOW_RO=["Dum","Lun","Mar","Mie","Joi","Vin","Sâm"];
-  const MONTHS_RO_SHORT=["Ian","Feb","Mar","Apr","Mai","Iun","Iul","Aug","Sep","Oct","Nov","Dec"];
+  const DOW=["","LUNI","MARȚI","MIERCURI","JOI","VINERI","SÂMBĂTĂ","DUM"];
 
-  // Layout
-  const nameW=140, cellW=70, cellH=22, headerH=38, catLabelH=22, paddingL=8, paddingT=8;
-  const totalW = paddingL*2 + nameW + workDays.length*cellW;
-
-  // Count rows
-  let totalRows=0;
-  const catData=[];
-  cats.forEach(cat=>{
-    const drivers=(sortState.drivers||[]).filter(d=>d.group==="ruhstorf"&&(cat.key==="permanent"?(!d.category||d.category==="permanent"):d.category===cat.key)).sort((a,b)=>a.name.localeCompare(b.name,"ro"));
-    if(!drivers.length) return;
-    totalRows += 1 + drivers.length; // cat header + rows
-    catData.push({cat, drivers});
-  });
-
-  const totalH = paddingT*2 + headerH + totalRows*cellH + (catData.length-1)*8;
-  canvas.width = totalW;
-  canvas.height = totalH;
-  canvas.style.display="block";
-
-  const ctx = canvas.getContext("2d");
-  ctx.fillStyle="#1a1a2e";
-  ctx.fillRect(0,0,totalW,totalH);
-
-  // Header săptămână
-  ctx.fillStyle="#2d2d4e";
-  ctx.fillRect(paddingL, paddingT, totalW-paddingL*2, headerH);
-  ctx.fillStyle="#ffffff";
-  ctx.font="bold 16px Arial";
-  ctx.textAlign="center";
-  ctx.fillText("SĂPTĂMÂNA "+wkNum, totalW/2, paddingT+18);
-  ctx.font="bold 12px Arial";
-  const mon=dates[0],sun=dates[6];
-  ctx.fillStyle="#aaaacc";
-  ctx.fillText(DOW_RO[1]+" "+mon.getDate()+"."+(mon.getMonth()+1)+" – "+DOW_RO[6]+" "+sun.getDate()+"."+(sun.getMonth()+1)+"."+sun.getFullYear(), totalW/2, paddingT+38);
-
-  // Day headers
-  const headY = paddingT + headerH;
-  ctx.fillStyle="#2d2d4e";
-  ctx.fillRect(paddingL, headY, nameW, cellH);
-  workDays.forEach((d,i)=>{
-    const x = paddingL+nameW+i*cellW;
-    const holiday=getHoliday(d);
-    const isSat=d.getDay()===6;
-    ctx.fillStyle=holiday?"#3d2060":isSat?"#2a1a1a":"#2d2d4e";
-    ctx.fillRect(x, headY, cellW, cellH);
-    ctx.fillStyle=holiday?"#c084fc":isSat?"#ff6b6b":"#ffffff";
-    ctx.font="bold 11px Arial";
-    ctx.textAlign="center";
-    ctx.fillText(DOW_RO[d.getDay()].toUpperCase()+" - "+d.getDate()+"."+(d.getMonth()+1).toString().padStart(2,"0"), x+cellW/2, headY+cellH/2+4);
-    // border
-    ctx.strokeStyle="#404060";
-    ctx.lineWidth=1;
-    ctx.strokeRect(x, headY, cellW, cellH);
-  });
-
-  // Rows
-  let rowY = headY + cellH;
-  let catSepExtra = 0;
-
-  catData.forEach((cd, ci)=>{
-    if(ci>0){ rowY+=8; catSepExtra+=8; }
-
-    // Category label
-    ctx.fillStyle=cd.cat.color+"33";
-    ctx.fillRect(paddingL, rowY, totalW-paddingL*2, catLabelH);
-    ctx.strokeStyle=cd.cat.color;
-    ctx.lineWidth=3;
-    ctx.beginPath(); ctx.moveTo(paddingL,rowY); ctx.lineTo(paddingL,rowY+catLabelH); ctx.stroke();
-    ctx.lineWidth=1;
-    ctx.fillStyle=cd.cat.color;
-    ctx.font="bold 11px Arial";
-    ctx.textAlign="left";
-    ctx.fillText(cd.cat.label.toUpperCase()+" ("+cd.drivers.length+")", paddingL+10, rowY+catLabelH/2+4);
-    rowY+=catLabelH;
-
-    cd.drivers.forEach((dr, ri)=>{
-      const concDr=state.drivers.find(sd=>sd.name===dr.name);
-      const dw=weekData[dr.name]||[0,0,0,0,0,0,0];
-      const rowBg=ri%2===0?"#16213e":"#1a2440";
-
-      ctx.fillStyle=rowBg;
-      ctx.fillRect(paddingL, rowY, nameW, cellH);
-      ctx.fillStyle="#ddddee";
-      ctx.font="12px Arial";
-      ctx.textAlign="left";
-      ctx.fillText(dr.name, paddingL+8, rowY+cellH/2+4);
-
-      workDays.forEach((d, di)=>{
-        const x=paddingL+nameW+di*cellW;
-        const dow=(d.getDay()+6)%7;
-        const holiday=getHoliday(d);
+  function getMainPrezentiZi(d){
+    const dow=(d.getDay()+6)%7;
+    const list=[];
+    cats.filter(c=>c.key!=="camion").forEach(cat=>{
+      (sortState.drivers||[]).filter(dr=>dr.group==="ruhstorf"&&(cat.key==="permanent"?(!dr.category||dr.category==="permanent"):dr.category===cat.key))
+      .forEach(dr=>{
+        const dw=weekData[dr.name]||[0,0,0,0,0,0,0];
+        const concDr=state.drivers.find(sd=>sd.name===dr.name);
         const onLeave=concDr&&((concDr.leaves||[]).some(l=>dateInLeave(d,l))||(concDr.krankLeaves||[]).some(l=>dateInLeave(d,l))||(concDr.unpaidLeaves||[]).some(l=>dateInLeave(d,l)));
-        const val=dw[dow];
-        const isPresent=!holiday&&!onLeave&&val===1;
-
-        if(holiday){ ctx.fillStyle="#2a1040"; }
-        else if(onLeave){ ctx.fillStyle="#3d3000"; }
-        else if(isPresent){ ctx.fillStyle="#1a6b3a"; }
-        else { ctx.fillStyle=ri%2===0?"#16213e":"#1a2440"; }
-
-        ctx.fillRect(x, rowY, cellW, cellH);
-
-        if(isPresent){
-          ctx.fillStyle="#ffffff";
-          ctx.font="bold 11px Arial";
-          ctx.textAlign="center";
-          ctx.fillText(dr.name, x+cellW/2, rowY+cellH/2+4);
-        } else if(onLeave){
-          ctx.fillStyle="#fbbf24";
-          ctx.font="10px Arial";
-          ctx.textAlign="center";
-          ctx.fillText("U", x+cellW/2, rowY+cellH/2+4);
-        }
-
-        ctx.strokeStyle="#303060";
-        ctx.lineWidth=0.5;
-        ctx.strokeRect(x, rowY, cellW, cellH);
+        if(dw[dow]===1&&!onLeave) list.push(dr.name);
       });
-
-      ctx.strokeStyle="#303060";
-      ctx.lineWidth=0.5;
-      ctx.strokeRect(paddingL, rowY, nameW, cellH);
-
-      rowY+=cellH;
     });
+    list.sort((a,b)=>a.localeCompare(b,"ro"));
+    return list;
+  }
+
+  function getCamionZi(d){
+    const dow=(d.getDay()+6)%7;
+    const cDrivers=(sortState.drivers||[]).filter(dr=>dr.group==="ruhstorf"&&dr.category==="camion");
+    for(const dr of cDrivers){
+      const dw=weekData[dr.name]||[0,0,0,0,0,0,0];
+      const concDr=state.drivers.find(sd=>sd.name===dr.name);
+      const onLeave=concDr&&((concDr.leaves||[]).some(l=>dateInLeave(d,l))||(concDr.krankLeaves||[]).some(l=>dateInLeave(d,l))||(concDr.unpaidLeaves||[]).some(l=>dateInLeave(d,l)));
+      if(dw[dow]===1&&!onLeave) return dr.name;
+    }
+    return null;
+  }
+
+  const MAIN_SLOTS=14;
+  const nCols=workDays.length;
+  const padL=10,padT=10,titleH=36,dayHdrH=28,rowH=26,camionHdrH=30,camionRowH=28;
+  const slotW=32,colW=Math.max(120, Math.floor((900-padL*2-slotW)/nCols));
+  const totalW=padL*2+slotW+nCols*colW;
+  const totalH=padT*2+titleH+dayHdrH+MAIN_SLOTS*rowH+10+camionHdrH+camionRowH+padT;
+
+  canvas.width=totalW*2; canvas.height=totalH*2;
+  canvas.style.width=totalW+"px"; canvas.style.height=totalH+"px"; canvas.style.display="block";
+  const ctx=canvas.getContext("2d"); ctx.scale(2,2);
+
+  // Fundal alb
+  ctx.fillStyle="#ffffff"; ctx.fillRect(0,0,totalW,totalH);
+  ctx.strokeStyle="#333333"; ctx.lineWidth=2;
+  ctx.strokeRect(padL,padT,totalW-padL*2,totalH-padT*2);
+
+  // Header
+  ctx.fillStyle="#1a1a2e";
+  ctx.fillRect(padL,padT,totalW-padL*2,titleH);
+  ctx.fillStyle="#ffffff"; ctx.font="bold 14px Arial"; ctx.textAlign="center";
+  const mon=dates[0],sun=dates[6];
+  ctx.fillText("SĂPTĂMÂNA "+wkNum+"  ·  "+mon.getDate()+"."+(mon.getMonth()+1).toString().padStart(2,"0")+" – "+sun.getDate()+"."+(sun.getMonth()+1).toString().padStart(2,"0")+"."+sun.getFullYear(),totalW/2,padT+titleH/2+5);
+
+  // Header zile
+  const hdrY=padT+titleH;
+  ctx.fillStyle="#2d3748"; ctx.fillRect(padL,hdrY,slotW,dayHdrH);
+  ctx.fillStyle="#aaaaaa"; ctx.font="bold 9px Arial"; ctx.textAlign="center";
+  ctx.fillText("#",padL+slotW/2,hdrY+dayHdrH/2+3);
+  workDays.forEach((d,i)=>{
+    const x=padL+slotW+i*colW;
+    const hol=getHoliday(d),isSat=d.getDay()===6;
+    ctx.fillStyle=hol?"#4a1080":isSat?"#c0392b":"#1a1a2e";
+    ctx.fillRect(x,hdrY,colW,dayHdrH);
+    ctx.strokeStyle="#555555"; ctx.lineWidth=1; ctx.strokeRect(x,hdrY,colW,dayHdrH);
+    ctx.fillStyle="#ffffff"; ctx.font="bold 10px Arial"; ctx.textAlign="center";
+    ctx.fillText(DOW[d.getDay()]+" - "+d.getDate()+"."+(d.getMonth()+1).toString().padStart(2,"0"),x+colW/2,hdrY+dayHdrH/2+4);
+  });
+  ctx.strokeStyle="#555555"; ctx.lineWidth=1; ctx.strokeRect(padL,hdrY,slotW,dayHdrH);
+
+  const perDay=workDays.map(d=>({list:getMainPrezentiZi(d),hol:!!getHoliday(d)}));
+  const bodyY=hdrY+dayHdrH;
+
+  for(let s=0;s<MAIN_SLOTS;s++){
+    const y=bodyY+s*rowH;
+    const rowBg=s%2===0?"#e8f5e9":"#ffffff";
+    ctx.fillStyle="#1a1a2e"; ctx.fillRect(padL,y,slotW,rowH);
+    ctx.fillStyle="#ffffff"; ctx.font="bold 10px Arial"; ctx.textAlign="center";
+    ctx.fillText(s+1,padL+slotW/2,y+rowH/2+3);
+    ctx.strokeStyle="#cccccc"; ctx.lineWidth=0.5; ctx.strokeRect(padL,y,slotW,rowH);
+    workDays.forEach((d,di)=>{
+      const x=padL+slotW+di*colW;
+      const {list,hol}=perDay[di];
+      const name=list[s]||null;
+      if(hol) ctx.fillStyle="#f3e0ff";
+      else if(name) ctx.fillStyle="#27ae60";
+      else ctx.fillStyle=rowBg;
+      ctx.fillRect(x,y,colW,rowH);
+      if(name){
+        ctx.fillStyle="#ffffff"; ctx.font="bold 10px Arial"; ctx.textAlign="center";
+        let nm=name; ctx.font="bold 10px Arial";
+        while(ctx.measureText(nm).width>colW-6&&nm.length>4) nm=nm.slice(0,-1);
+        if(nm!==name) nm=nm.trim()+"…";
+        ctx.fillText(nm,x+colW/2,y+rowH/2+4);
+      }
+      ctx.strokeStyle="#bbbbbb"; ctx.lineWidth=0.5; ctx.strokeRect(x,y,colW,rowH);
+    });
+  }
+
+  // Camion header
+  const camionHdrY=bodyY+MAIN_SLOTS*rowH+6;
+  ctx.fillStyle="#1a1a2e";
+  ctx.fillRect(padL,camionHdrY,totalW-padL*2,camionHdrH);
+  ctx.strokeStyle="#333333"; ctx.lineWidth=1.5; ctx.strokeRect(padL,camionHdrY,totalW-padL*2,camionHdrH);
+  ctx.fillStyle="#ffffff"; ctx.font="bold 12px Arial"; ctx.textAlign="center";
+  ctx.fillText("CAMION",totalW/2,camionHdrY+camionHdrH/2+4);
+
+  // Camion row
+  const camionRowY=camionHdrY+camionHdrH;
+  ctx.fillStyle="#2d3748"; ctx.fillRect(padL,camionRowY,slotW,camionRowH);
+  ctx.strokeStyle="#cccccc"; ctx.lineWidth=0.5; ctx.strokeRect(padL,camionRowY,slotW,camionRowH);
+  workDays.forEach((d,di)=>{
+    const x=padL+slotW+di*colW;
+    const hol=!!getHoliday(d);
+    const name=getCamionZi(d);
+    ctx.fillStyle=hol?"#f3e0ff":name?"#c0392b":"#f9ebeb";
+    ctx.fillRect(x,camionRowY,colW,camionRowH);
+    if(name){
+      ctx.fillStyle="#ffffff"; ctx.font="bold 10px Arial"; ctx.textAlign="center";
+      let nm=name;
+      while(ctx.measureText(nm).width>colW-6&&nm.length>4) nm=nm.slice(0,-1);
+      if(nm!==name) nm=nm.trim()+"…";
+      ctx.fillText(nm,x+colW/2,camionRowY+camionRowH/2+4);
+    }
+    ctx.strokeStyle="#bbbbbb"; ctx.lineWidth=0.5; ctx.strokeRect(x,camionRowY,colW,camionRowH);
   });
 
-  // Convertim la imagine pentru download
   const imgUrl=canvas.toDataURL("image/png");
   const imgEl=document.getElementById("waPlanImg");
-  if(imgEl){ imgEl.src=imgUrl; imgEl.style.display="block"; }
+  if(imgEl){imgEl.src=imgUrl;imgEl.style.display="block";}
   const dlBtn=document.getElementById("waPlanDownloadBtn");
-  if(dlBtn){ dlBtn.href=imgUrl; dlBtn.download="plan-sortatori-W"+wkNum+".png"; dlBtn.style.display="inline-flex"; }
+  if(dlBtn){dlBtn.href=imgUrl;dlBtn.download="plan-sortatori-W"+wkNum+".png";dlBtn.style.display="inline-flex";}
 }
 
 

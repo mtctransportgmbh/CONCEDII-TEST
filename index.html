@@ -1123,8 +1123,13 @@
         <span style="font-size:12px;color:var(--text-dim)">✓ = prezent &nbsp;|&nbsp; ✗ = absent &nbsp;|&nbsp; gol = necunoscut</span>
         <div style="display:flex;gap:8px;align-items:center">
           <span id="sortAdminControls" style="display:none"><button class="btn btn-secondary btn-small" onclick="openAddSortator()">+ Sortator nou</button></span>
+          <button id="sortEditModeBtn" onclick="toggleSortEditMode()" style="display:none;padding:7px 16px;font-size:12px;font-weight:700;background:var(--bg-elev-2);border:2px solid var(--border);border-radius:7px;cursor:pointer;color:var(--text-dim);align-items:center;gap:6px">✏️ Editează</button>
           <button id="sortPrintBtn" onclick="openSortPrintModal()" style="display:none;padding:8px 20px;font-size:13px;font-weight:700;background:var(--accent);color:#000;border:none;border-radius:7px;cursor:pointer;box-shadow:0 2px 8px rgba(251,191,36,0.35)">🖨️ Print / Export PDF</button>
         </div>
+      </div>
+      <div id="sortEditBanner" style="display:none;padding:8px 14px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);border-radius:7px;margin-bottom:10px;align-items:center;justify-content:space-between;gap:10px">
+        <span style="font-size:13px;color:#10b981;font-weight:600">✏️ Mod editare activ — bifează prezența, apoi confirmă</span>
+        <button onclick="confirmSortEdit()" style="padding:7px 18px;background:#10b981;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">✅ Confirmă</button>
       </div>
       <div class="timeline-wrap">
         <div class="timeline" id="sortatoriTimeline"></div>
@@ -5062,7 +5067,7 @@ function renderPlanificare(){
           else if(val===1){bg="#10b981";color="#fff";label="✓";cursor="pointer";}
           else{bg=isToday?"rgba(251,191,36,0.08)":rowBg;color="";label="";cursor="pointer";}
           const esc=dr.name.replace(/\\/g,"\\\\").replace(/'/g,"\\'");
-          const click=(!isBlocked&&!onLeave)?`onmousedown="planDragStart('${esc}','${wkStateKey}',${dow},this)" onmouseenter="planDragEnter('${esc}','${wkStateKey}',${dow},this)"` :"";
+          const click=(!isBlocked&&!onLeave)?`onclick="togglePlanCell('${esc}','${wkStateKey}',${dow})"` :"";
           html+=`<td style="width:${dayW}px;min-width:${dayW}px;height:34px;background:${bg};border:1px solid var(--border);text-align:center;vertical-align:middle;font-size:13px;font-weight:900;color:${color};cursor:${cursor};user-select:none" ${click}>${label}</td>`;
         });
         if(wi<weeks.length-1) html+=`<td style="width:8px;background:var(--bg);border-bottom:1px solid var(--border);border-left:2px solid var(--border);border-right:2px solid var(--border)"></td>`;
@@ -5121,42 +5126,12 @@ function togglePlanCell(driverName, weekKey, dayOfWeek){
   renderPlanificare(); savePlanState();
 }
 
-let _planDrag={active:false,mode:null};
-function planDragStart(name,wkKey,dow,el){
-  const cur=(planState[wkKey]&&planState[wkKey][name]&&planState[wkKey][name][dow])||0;
-  _planDrag={active:true,mode:cur===1?0:1};
-  _applyPlanCell(name,wkKey,dow,_planDrag.mode,el);
+function togglePlanCell(driverName, weekKey, dayOfWeek){
+  if(!planState[weekKey]) planState[weekKey]={};
+  if(!planState[weekKey][driverName]) planState[weekKey][driverName]=[0,0,0,0,0,0,0];
+  planState[weekKey][driverName][dayOfWeek]=planState[weekKey][driverName][dayOfWeek]===1?0:1;
+  renderPlanificare(); savePlanState();
 }
-function planDragEnter(name,wkKey,dow,el){
-  if(!_planDrag.active) return;
-  _applyPlanCell(name,wkKey,dow,_planDrag.mode,el);
-}
-function _applyPlanCell(name,wkKey,dow,val,el){
-  if(!planState[wkKey]) planState[wkKey]={};
-  if(!planState[wkKey][name]) planState[wkKey][name]=[0,0,0,0,0,0,0];
-  if(planState[wkKey][name][dow]===val) return; // no change
-  planState[wkKey][name][dow]=val;
-  // Actualizăm vizual celula direct fără re-render complet
-  if(el){
-    if(val===1){
-      el.style.background="#064e35";
-      el.style.color="#34d399";
-      el.textContent="✓";
-    } else {
-      el.style.background="";
-      el.style.color="";
-      el.textContent="";
-    }
-  }
-  // Salvăm cu debounce
-  if(_planDrag._saveTimer) clearTimeout(_planDrag._saveTimer);
-  _planDrag._saveTimer=setTimeout(()=>{ savePlanState(); renderPlanificare(); },500);
-}
-document.addEventListener("mouseup",()=>{ 
-  if(_planDrag.active){ 
-    _planDrag.active=false; 
-  }
-});
 
 function changePlanWeek(delta){
   // Navigare pe luni

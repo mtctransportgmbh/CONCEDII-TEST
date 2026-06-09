@@ -3574,11 +3574,12 @@ function getMonthDrivers(mk){
 function setMonthDrivers(drivers, mk){
   if(!mk) mk=getSortKey();
   if(!sortState.drivers||Array.isArray(sortState.drivers)){
-    // Migrare din format vechi
     const old=Array.isArray(sortState.drivers)?sortState.drivers:[];
     sortState.drivers={};
-    if(old.length) sortState.drivers[mk]=old; // prima lună primește lista veche
+    if(old.length) sortState.drivers[mk]=old;
   }
+  // Sortează mereu alfabetic
+  drivers.sort((a,b)=>(a.name||'').localeCompare(b.name||'','ro'));
   sortState.drivers[mk]=drivers;
 }
 
@@ -3659,6 +3660,15 @@ function loadSortState(){
         sortState.drivers = data.drivers||{};
       }
       sortState.presence = data.presence || {};
+      // Sortăm alfabetic toți sortatorii
+      if(Array.isArray(sortState.drivers)){
+        sortState.drivers.sort((a,b)=>(a.name||"").localeCompare(b.name||"","ro"));
+      } else {
+        Object.keys(sortState.drivers).forEach(mk=>{
+          if(Array.isArray(sortState.drivers[mk]))
+            sortState.drivers[mk].sort((a,b)=>(a.name||"").localeCompare(b.name||"","ro"));
+        });
+      }
     } else {
       // Prima dată — init cu liste default
       sortState.drivers = [
@@ -5113,6 +5123,8 @@ function renderPlanificare(){
 
   // ── BODY ──
   html+=`<tbody>`;
+  // Cheia lunii curente din planificare — sortatorii sunt per lună
+  const planKey = y+"-"+String(m+1).padStart(2,"0");
 
   let isFirstCat=true;
   cats.forEach(cat=>{

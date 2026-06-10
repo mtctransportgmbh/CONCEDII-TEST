@@ -957,9 +957,9 @@
       <button class="user-btn" onclick="loginAsUser('mihaela')"><div class="user-btn-avatar" style="background:linear-gradient(135deg,#8b5cf6,#ec4899);font-size:14px">Mi</div><span class="user-btn-name">Mihaela</span></button>
     </div>
 
-    <div class="auth-divider">sau</div>
+    <div class="auth-divider" id="adminDivider" style="display:none">sau</div>
 
-    <button class="admin-toggle" onclick="toggleAdminForm()">🔐 Login Admin</button>
+    <button class="admin-toggle" id="adminToggleBtn" onclick="toggleAdminForm()" style="display:none">🔐 Login Admin</button>
 
     <div class="admin-form" id="adminForm">
       <label>Email</label>
@@ -2068,6 +2068,36 @@ window.adminResetPin = async function(uk){
 function showErr(msg){ const el=document.getElementById("authErr"); el.textContent=msg; el.style.display="block"; }
 function hideErr(){ document.getElementById("authErr").style.display="none"; }
 window.toggleAdminForm = function(){ document.getElementById("adminForm").classList.toggle("show"); };
+
+// Admin login ascuns — activat prin:
+// 1. URL: ?admin (ex: https://site.com/?admin)
+// 2. Secvență tastatură: tastezi "admin" pe ecranul de login
+(function(){
+  // Verifică URL la încărcare
+  if(window.location.search.includes("admin")||window.location.hash==="#admin"){
+    const d=document.getElementById("adminDivider");
+    const b=document.getElementById("adminToggleBtn");
+    if(d) d.style.display="";
+    if(b) b.style.display="";
+    // Curăță URL-ul după ce l-am detectat
+    history.replaceState(null,"",window.location.pathname);
+  }
+
+  // Secvență tastatură — tastezi "admin" pe ecranul de login
+  let _seq="";
+  document.addEventListener("keydown",function(e){
+    if(document.getElementById("authScreen")?.style.display==="none") return;
+    if(e.target.tagName==="INPUT") return; // nu intercepta în input-uri
+    _seq=(_seq+e.key).slice(-5).toLowerCase();
+    if(_seq==="admin"){
+      _seq="";
+      const d=document.getElementById("adminDivider");
+      const b=document.getElementById("adminToggleBtn");
+      if(d) d.style.display="";
+      if(b){ b.style.display=""; b.click(); } // deschide direct
+    }
+  });
+})();
 window.loginAdmin = async function(){
   hideErr();
   const pass = document.getElementById("adminPass").value.trim();
@@ -2192,6 +2222,7 @@ function enterApp(userKey){
   const publishVersionBtn = document.getElementById("publishVersionBtn");
   if(publishVersionBtn) publishVersionBtn.style.display = isAdm?"block":"none";
   startVersionWatch();
+  if(isAdm) autoPublishVersionIfNew();
   if(isAdm) loadPlanState();
   if(legendUnpaid) legendUnpaid.style.display = isTaniaAdm?"flex":"none";
 
@@ -2207,7 +2238,7 @@ function enterApp(userKey){
   if(sortAdm) sortAdm.style.display = isTaniaAdm?"inline":"none";
 
   // Notificare la login — setăm flag, se afișează după ce datele sunt încărcate din Firebase
-  window._pendingLoginNotif = (!isTaniaAdm && !isMihaela) ? userKey : null;
+  window._pendingLoginNotif = !isMihaela ? userKey : null;
 
   // Load sortatori — onSnapshot va re-renderi automat la orice schimbare
   loadSortState();
@@ -3842,7 +3873,18 @@ function makeSortRow(dr, presence, daysInMonth, y, m, gridCols, canAdd, canEdit)
   if(canEdit===undefined) canEdit=canAdd;
   const dp = presence[dr.name]||{};
   const delBtn = canAdd ? `<span onclick="deleteSortator('${dr.id}')" style="color:var(--red);cursor:pointer;font-size:10px;margin-left:4px" title="Șterge">✕</span>` : "";
-  let dRow = `<div class='tl-driver-row' style='font-size:12px'>${escapeHtml(dr.name)}${delBtn}</div>`;
+
+  // Badge zile prezente — vizibil pentru Admin, Tania, Mădălina
+  const uk = window.activeUserKey||"";
+  const showBadge = isAdminOrTania() || uk==="madalina";
+  const prezCount = Object.values(dp).filter(v=>v==="prezent").length;
+  const badge = showBadge
+    ? (prezCount>0
+        ? `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;background:#10b981;color:#fff;border-radius:4px;font-size:10px;font-weight:900;padding:0 3px;margin-right:5px;vertical-align:middle">${prezCount}</span>`
+        : `<span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border:1px solid var(--border);border-radius:4px;margin-right:5px;vertical-align:middle"></span>`)
+    : "";
+
+  let dRow = `<div class='tl-driver-row' style='font-size:12px'>${badge}${escapeHtml(dr.name)}${delBtn}</div>`;
   let gRow = `<div class='tl-row' style='grid-template-columns:${gridCols}'>`;
 
   // Găsim persoana în modulul concedii pentru a prelua zilele de concediu
@@ -4921,7 +4963,28 @@ function confirmSortEdit(){
 
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.06.01";
+const APP_VERSION = "2026.06.09-01";
+
+// La login admin — publică automat dacă versiunea din cod e nouă față de Firestore
+async function autoPublishVersionIfNew(){
+  if(!isAdmin()) return;
+  try{
+    const snap = await db.collection("app_meta").doc("version").get();
+    const currentInFirestore = snap.exists ? (snap.data().version||"") : "";
+    if(currentInFirestore === APP_VERSION) return; // deja publicat
+
+    // Versiune nouă — publicăm automat
+    await db.collection("app_meta").doc("version").set({
+      version: APP_VERSION,
+      message: "Versiune nouă — v"+APP_VERSION,
+      publishedAt: new Date().toISOString(),
+      publishedBy: "auto"
+    });
+    // Marcăm că admin-ul a văzut deja această versiune
+    try{ localStorage.setItem("mtc_version_current", APP_VERSION); }catch(e){}
+    console.log("Auto-published version:", APP_VERSION);
+  }catch(e){ console.warn("autoPublishVersionIfNew error:", e.message); }
+}
 let _versionUnsub = null;
 
 function startVersionWatch(){
@@ -4954,7 +5017,8 @@ function showVersionBanner(newVersion, msg){
     :"";
   overlay.innerHTML=`<div style="background:linear-gradient(135deg,#4f46e5,#7c3aed);border-radius:16px;padding:36px 40px;max-width:440px;width:90%;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,0.5)">
     <div style="font-size:48px;margin-bottom:12px">🚀</div>
-    <div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:8px">Versiune nouă!</div>
+    <div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:8px">🚀 Versiune nouă!</div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.9);background:rgba(255,255,255,0.15);border-radius:6px;padding:4px 12px;display:inline-block;margin-bottom:10px;font-weight:700">v${newVersion}</div>
     ${msg?`<div style="font-size:14px;color:rgba(255,255,255,0.8);margin-bottom:20px">${msg}</div>`:'<div style="margin-bottom:20px"></div>'}
     <div style="font-size:13px;color:rgba(255,255,255,0.65);margin-bottom:28px">Aplicația a fost actualizată.<br>Trebuie să reîncarci pagina pentru a continua.</div>
     <button onclick="try{localStorage.setItem('mtc_version_current','${newVersion}');}catch(e){}window.location.reload(true)" style="background:#fff;color:#4f46e5;border:none;border-radius:10px;padding:14px 40px;font-size:16px;font-weight:800;cursor:pointer;width:100%;margin-bottom:10px;box-shadow:0 4px 14px rgba(0,0,0,0.2)">↻ Actualizează acum</button>
@@ -4974,11 +5038,26 @@ async function publishNewVersion(){
   if(!isAdmin()) return;
   const action=confirm("Publică versiune nouă?\n\nOK = publică (toți userii vor vedea notificarea)\nCancel = resetează (oprește notificarea curentă)");
   if(action){
-    const msg=prompt("Mesaj pentru utilizatori:","Funcționalități noi disponibile");
+    const msg=prompt("Mesaj pentru utilizatori (versiunea se adaugă automat):","Funcționalități noi disponibile");
     if(msg===null) return;
-    const version=new Date().toISOString().slice(0,10).replace(/-/g,".")+"."+Date.now().toString().slice(-4);
+    const today=new Date().toISOString().slice(0,10).replace(/-/g,".");
+    // Citim build-ul curent pentru ziua de azi din Firestore
+    let buildNum=1;
     try{
-      await db.collection("app_meta").doc("version").set({version,message:msg,publishedAt:new Date().toISOString(),publishedBy:"admin"});
+      const verSnap=await db.collection("app_meta").doc("version").get();
+      if(verSnap.exists){
+        const prev=verSnap.data().version||"";
+        if(prev.startsWith(today)){
+          const parts=prev.split("-");
+          buildNum=(parseInt(parts[1]||"0")+1)||1;
+        }
+      }
+    }catch(e){}
+    const buildStr=String(buildNum).padStart(2,"0");
+    const version=today+"-"+buildStr;
+    const fullMsg=msg+" — v"+version;
+    try{
+      await db.collection("app_meta").doc("version").set({version,message:fullMsg,publishedAt:new Date().toISOString(),publishedBy:"admin"});
       try{ localStorage.setItem("mtc_version_current",version); }catch(e){}
       toast("✅ Versiune "+version+" publicată");
     }catch(e){ toast("Eroare: "+e.message,true); }
@@ -5599,6 +5678,7 @@ function openSortPrintModal(){
     html+=`<h1>MTC Transport — SORTATORI</h1>`;
     html+=`<h2>${MONTHS[m]} ${y} · ${groupLabel}</h2>`;
     html+=`<table><thead><tr><th class="name-col">Sortator</th>`;
+    if(isAdminOrTania()) html+=`<th style="width:28px;font-size:9px;text-align:center">Prez.</th>`;
     for(let dn=1;dn<=days;dn++){
       const d=new Date(y,m,dn);
       const isSun=isSunday(d),isTd=sameDay(d,today);
@@ -5612,7 +5692,11 @@ function openSortPrintModal(){
         const dr=row.dr;
         const dp=(presence[dr.name])||{};
         const concediuDr=state.drivers.find(d=>d.name===dr.name);
-        html+=`<tr><td class="name-col">${escapeHtml(dr.name)}</td>`;
+        const prezCount=Object.values(dp).filter(v=>v==="prezent").length;
+        const badgeCell=isAdminOrTania()
+          ?`<td style="text-align:center;font-weight:900;font-size:11px;background:${prezCount>0?"#e8f5e9":"#fff"};color:#2e7d32">${prezCount||""}</td>`
+          :"";
+        html+=`<tr><td class="name-col">${escapeHtml(dr.name)}</td>${badgeCell}`;
         for(let dn=1;dn<=days;dn++){
           const d=new Date(y,m,dn);
           if(isSunday(d)||getHoliday(d)){html+=`<td class="sun"></td>`;continue;}
@@ -5808,7 +5892,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
-<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.08</div>
+<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.09-01</div>
 
 </body>
 </html>

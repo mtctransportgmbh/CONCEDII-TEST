@@ -5082,7 +5082,7 @@ function confirmSortEdit(){
 
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.06.09-03";
+const APP_VERSION = "2026.06.09-04";
 
 // La login admin — publică automat dacă versiunea din cod e nouă față de Firestore
 async function autoPublishVersionIfNew(){
@@ -5188,7 +5188,10 @@ async function publishNewVersion(){
   }
 }
 // ============================================================
-let planCurrentDate = new Date(); // orice zi din saptamana curenta
+// Planificarea pornește implicit pe săptămâna VIITOARE
+const _planNextWeek = new Date();
+_planNextWeek.setDate(_planNextWeek.getDate() + 7);
+let planCurrentDate = _planNextWeek;
 let planState = {}; // { "2026-W23": { "NumeDriver": [0,1,0,1,1,1,0] } } (7 zile Lu-Du)
 let _planUnsub = null;
 
@@ -5226,7 +5229,8 @@ function changePlanWeek(delta){
 }
 
 function goTodayPlan(){
-  planCurrentDate = new Date();
+  const _nw=new Date(); _nw.setDate(_nw.getDate()+7);
+  planCurrentDate = _nw;
   renderPlanificare();
 }
 
@@ -5451,7 +5455,8 @@ function changePlanWeek(delta){
 }
 
 function goTodayPlan(){
-  planCurrentDate = new Date();
+  const _nw=new Date(); _nw.setDate(_nw.getDate()+7);
+  planCurrentDate = _nw;
   renderPlanificare();
 }
 
@@ -6019,7 +6024,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
-<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.09-03</div>
+<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.09-04</div>
 
 </body>
 </html>

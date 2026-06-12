@@ -1146,7 +1146,10 @@
       <div style="margin-bottom:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between">
         <span style="font-size:12px;color:var(--text-dim)">✓ = prezent &nbsp;|&nbsp; ✗ = absent &nbsp;|&nbsp; gol = necunoscut</span>
         <div style="display:flex;gap:8px;align-items:center">
-          <span id="sortAdminControls" style="display:none"><button class="btn btn-secondary btn-small" onclick="openAddSortator()">+ Sortator nou</button></span>
+          <span id="sortAdminControls" style="display:none">
+            <button class="btn btn-secondary btn-small" onclick="openAddSortator()">+ Sortator nou</button>
+            <button class="btn btn-secondary btn-small" id="copyPrevMonthBtn" onclick="copySortatoriFromPrevMonth()" title="Copiază lista din luna precedentă" style="border-color:#6366f1;color:#6366f1">📋 Copiază luna prec.</button>
+          </span>
           <button id="sortEditModeBtn" onclick="toggleSortEditMode()" style="display:none;padding:7px 16px;font-size:12px;font-weight:700;background:var(--bg-elev-2);border:2px solid var(--border);border-radius:7px;cursor:pointer;color:var(--text-dim)">✏️ Editează</button>
           <button id="sortPrintBtn" onclick="openSortPrintModal()" style="display:none;padding:8px 20px;font-size:13px;font-weight:700;background:var(--accent);color:#000;border:none;border-radius:7px;cursor:pointer;box-shadow:0 2px 8px rgba(251,191,36,0.35)">🖨️ Print / Export PDF</button>
         </div>
@@ -3922,6 +3925,27 @@ function sortDragEnd(){
 document.addEventListener("mouseup", ()=>{ if(_sortDrag.active) sortDragEnd(); });
 document.addEventListener("mousemove", e=>{ if(_sortDrag.active && e.buttons===0) sortDragEnd(); });
 
+// ---- Copiaza din luna precedenta ----
+function copySortatoriFromPrevMonth(){
+  if(!isAdminOrTania()){toast("Doar Admin/Tania",true);return;}
+  const curMk=getSortKey();
+  const prev=new Date(sortCurrentDate.getFullYear(),sortCurrentDate.getMonth()-1,1);
+  const prevMk=prev.getFullYear()+"-"+String(prev.getMonth()+1).padStart(2,"0");
+  const prevDrivers=getMonthDrivers(prevMk);
+  if(!prevDrivers||prevDrivers.length===0){
+    toast("Luna precedentă ("+prevMk+") nu are sortatori salvați",true); return;
+  }
+  const curDrivers=getMonthDrivers(curMk);
+  if(curDrivers&&curDrivers.length>0){
+    if(!confirm("Luna "+curMk+" are deja "+curDrivers.length+" sortatori.\nSuprascriem cu lista din "+prevMk+" ("+prevDrivers.length+" persoane)?")) return;
+  }
+  const copied=prevDrivers.map(d=>({...d,id:uid()}));
+  setMonthDrivers(copied,curMk);
+  saveSortState();
+  renderSortatoriTimeline();
+  toast("✅ "+copied.length+" sortatori copiați din "+prevMk+" → "+curMk);
+}
+
 // ---- Adaugare sortatori ----
 let _pickAvail=[], _pickGroup="", _pickCat="";
 
@@ -5082,7 +5106,7 @@ function confirmSortEdit(){
 
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.06.09-04";
+const APP_VERSION = "2026.06.09-05";
 
 // La login admin — publică automat dacă versiunea din cod e nouă față de Firestore
 async function autoPublishVersionIfNew(){
@@ -6024,7 +6048,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
-<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.09-04</div>
+<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.09-05</div>
 
 </body>
 </html>

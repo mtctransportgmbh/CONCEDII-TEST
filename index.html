@@ -1629,8 +1629,10 @@ function scheduleSave(){
 
 function buildCompleteBackup(){
   const backup = {
-    version: 2,
+    version: 3,
+    year: activeYear,
     savedAt: new Date().toISOString(),
+    thresholds: state.thresholds||{warn:3,crit:5},
     drivers: (state.drivers||[]).map(dr=>({
       id:            dr.id,
       name:          dr.name,
@@ -1641,7 +1643,19 @@ function buildCompleteBackup(){
       leaves:        dr.leaves||[],
       krankLeaves:   dr.krankLeaves||[],
       unpaidLeaves:  dr.unpaidLeaves||[]
-    }))
+    })),
+    prezente: (presState.presence&&Object.keys(presState.presence).length>0)
+      ? JSON.parse(JSON.stringify(presState.presence)) : {},
+    sortatori: (()=>{
+      const hasSortData = Array.isArray(sortState.drivers)
+        ? sortState.drivers.length>0
+        : Object.values(sortState.drivers||{}).some(a=>a&&a.length>0);
+      if(!hasSortData) return null;
+      return {
+        drivers: JSON.parse(JSON.stringify(sortState.drivers||{})),
+        presence: JSON.parse(JSON.stringify(sortState.presence||{}))
+      };
+    })()
   };
   return backup;
 }
@@ -1665,33 +1679,50 @@ function restoreCompleteBackup(bk){
 }
 
 async function triggerAutoBackup(time){
+  const snapshotYear = activeYear;
+  const snapshotUser = window.activeUserKey||"unknown";
   try{
+    if(!state.drivers||state.drivers.length===0){ console.warn("triggerAutoBackup: empty drivers — ABORTED"); return; }
+    if(activeYear!==snapshotYear){ console.warn("triggerAutoBackup: year changed — ABORTED"); return; }
+
     const now = new Date();
     const today = fmtDate(now);
-    const hour = String(now.getHours()).padStart(2,"0");
-    // Slot: morning(0-8), midday(8-16), evening(16-24)
     const slot = now.getHours()<8?"A":now.getHours()<16?"B":"C";
-    const docId = today+"_"+slot; // max 3 versions per day
-    // Salvează DOAR concedii/krank/unpaid per sofer
-    const leavesOnly = {};
+    const docId = today+"_"+slot;
+
+    const driversData={};
     (state.drivers||[]).forEach(dr=>{
-      leavesOnly[dr.name]={
-        leaves:      (dr.leaves||[]),
-        krankLeaves: (dr.krankLeaves||[]),
-        unpaidLeaves:(dr.unpaidLeaves||[])
+      driversData[dr.id||dr.name]={
+        name:dr.name, visibleTo:dr.visibleTo||[],
+        maxDays:dr.maxDays||0, carryOverDays:dr.carryOverDays||0,
+        carryOverByYear:dr.carryOverByYear||{},
+        leaves:dr.leaves||[], krankLeaves:dr.krankLeaves||[], unpaidLeaves:dr.unpaidLeaves||[]
       };
     });
-    await db.collection(backupColl()).doc(docId).set({
-      leaves:    leavesOnly,
-      savedAt:   now.toISOString(),
-      time:      time,
-      date:      today,
-      slot:      slot,
-      count:     Object.keys(leavesOnly).length,
-      savedBy:   window.activeUserKey||"unknown"
-    });
-    localStorage.setItem("mtc_last_backup_time", time);
-    localStorage.setItem("mtc_last_backup_date", today);
+
+    const hasSortData = Array.isArray(sortState.drivers)
+      ? sortState.drivers.length>0
+      : Object.values(sortState.drivers||{}).some(a=>a&&a.length>0);
+    const sortatoriSnap = hasSortData
+      ? {drivers:sortState.drivers, presence:sortState.presence||{}} : null;
+    const prezenteSnap = (presState.presence&&Object.keys(presState.presence).length>0)
+      ? presState.presence : null;
+
+    const backupDoc = {
+      version:3, year:activeYear,
+      savedAt:now.toISOString(), time, date:today, slot,
+      savedBy:snapshotUser,
+      driverCount:state.drivers.length,
+      thresholds:state.thresholds||{warn:3,crit:5},
+      drivers:driversData,
+      ...(sortatoriSnap?{sortatori:sortatoriSnap}:{}),
+      ...(prezenteSnap?{prezente:prezenteSnap}:{})
+    };
+
+    await db.collection(backupColl()).doc(docId).set(backupDoc);
+    const lsKey = "mtc_last_backup_";
+    localStorage.setItem(lsKey+"time", time);
+    localStorage.setItem(lsKey+"date", today);
     updateBackupInfoLine(today, time);
     if(isAdmin()) setSaveStatus("ok","Salvat la "+time+" · backup ✓");
   }catch(e){ console.error("backup err",e); }
@@ -2503,6 +2534,7 @@ function deleteDriver(id){
   const dr=state.drivers.find(d=>d.id===id);if(!dr)return;
   if(!confirm("Ștergi "+dr.name+" și toate datele sale?"))return;
   state.drivers=state.drivers.filter(d=>d.id!==id);
+  logActivity("🗑 Persoană ștearsă",dr.name,"eliminată din sistem");
   renderAll();scheduleSave();toast("🗑 "+dr.name+" șters");
 }
 
@@ -2841,6 +2873,9 @@ function saveQuickLeave(){
   if(!dr.leaves)dr.leaves=[];
   dr.leaves.push({start,end});
   dr.leaves = mergeLeaves(dr.leaves);
+  const _qType=document.getElementById("modalQuick")?.dataset?.quickType||"leaves";
+  const _qLabel=_qType==="krank"?"Krank adăugat rapid":_qType==="unpaid"?"S adăugat rapid":"Concediu adăugat rapid";
+  logActivity("➕ "+_qLabel,dr.name,start+" → "+end+" ("+newDays+"z)");
   closeModal("modalQuick");renderAll();scheduleSave();
   toast("✓ "+dr.name+": "+newDays+" zile lucrătoare");
 }
@@ -3023,9 +3058,14 @@ function downloadBackupNow(){
   const blob=new Blob([data],{type:"application/json"});
   const url=URL.createObjectURL(blob);
   const a=document.createElement("a");
-  a.href=url; a.download="mtc-backup-complet-"+fmtDate(new Date())+".json"; a.click();
+  const fname="mtc-backup-"+fmtDate(new Date())+"-manual.json";
+  a.href=url; a.download=fname; a.click();
   URL.revokeObjectURL(url);
-  toast("💾 Backup complet descărcat ("+backup.drivers.length+" persoane)");
+  const sortCount=backup.sortatori
+    ?(Array.isArray(backup.sortatori.drivers)?backup.sortatori.drivers.length:Object.values(backup.sortatori.drivers||{}).reduce((s,a)=>s+(a||[]).length,0))
+    :0;
+  const prezCount=Object.keys(backup.prezente||{}).length;
+  toast("💾 Backup complet: "+backup.drivers.length+" persoane, "+prezCount+" luni prezențe, "+sortCount+" sortatori");
 }
 
 // Auto backup zilnic pentru Admin — salvat în Firestore col "daily_backup"

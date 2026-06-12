@@ -1040,7 +1040,7 @@
   
   <main class="main">
     <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
-      <button id="sidebarCollapseBtn" onclick="toggleSidebarCollapse()" title="Ascunde/arată meniul" style="display:none;padding:5px 10px;background:var(--bg-elev-2);border:1px solid var(--border);border-radius:7px;cursor:pointer;font-size:16px;color:var(--text-dim);line-height:1">◀</button>
+      <button id="sidebarCollapseBtn" onclick="toggleSidebarCollapse()" title="Ascunde meniul" style="display:none;padding:6px 12px;background:var(--bg-elev-2);border:1px solid var(--border);border-radius:7px;cursor:pointer;font-size:15px;color:var(--text-dim);line-height:1;flex-shrink:0">◀</button>
       <button id="modConcedii" class="mod-tab mod-tab-active" onclick="setAppMode('concedii')">📅 CONCEDII</button>
       <button id="modSortatori" class="mod-tab" onclick="setAppMode('sortatori')" style="display:none">📦 SORTATORI</button>
       <button id="modPlanificare" class="mod-tab" onclick="setAppMode('planificare')" style="display:none">🗓️ PLANIFICARE</button>
@@ -1123,7 +1123,9 @@
           <button onclick="clearSearch('tlSearch');renderTimeline()" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px;line-height:1;padding:2px">✕</button>
         </div>
       </div>
-      <div class="timeline" id="timeline"></div>
+      <div class="timeline-wrap">
+        <div class="timeline" id="timeline"></div>
+      </div>
     </div>
     </div><!-- /concediiModule -->
 
@@ -2277,6 +2279,11 @@ function enterApp(userKey){
   if(modPlanificare2) modPlanificare2.style.display = isAdm?"block":"none";
   const sidebarCollapseBtn = document.getElementById("sidebarCollapseBtn");
   if(sidebarCollapseBtn) sidebarCollapseBtn.style.display = isTaniaAdm?"inline-flex":"none";
+  // Asigurăm vizibilitatea și după render
+  setTimeout(()=>{
+    const btn=document.getElementById("sidebarCollapseBtn");
+    if(btn) btn.style.display=isTaniaAdm?"inline-flex":"none";
+  },300);
   const publishVersionBtn = document.getElementById("publishVersionBtn");
   if(publishVersionBtn) publishVersionBtn.style.display = isAdm?"block":"none";
   startVersionWatch();
@@ -5075,7 +5082,7 @@ function confirmSortEdit(){
 
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.06.09-02";
+const APP_VERSION = "2026.06.09-03";
 
 // La login admin — publică automat dacă versiunea din cod e nouă față de Firestore
 async function autoPublishVersionIfNew(){
@@ -6012,7 +6019,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
-<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.09-02</div>
+<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.09-03</div>
 
 </body>
 </html>

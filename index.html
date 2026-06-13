@@ -5165,7 +5165,7 @@ function confirmSortEdit(){
 
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.06.13-03";
+const APP_VERSION = "2026.06.13-05";
 
 // La login admin — publică automat dacă versiunea din cod e nouă față de Firestore
 async function autoPublishVersionIfNew(){
@@ -5472,8 +5472,8 @@ function renderPlanificare(){
           else if(val===1){bg="#10b981";color="#fff";label="✓";cursor="pointer";}
           else{bg=isToday?"rgba(251,191,36,0.08)":rowBg;color="";label="";cursor="pointer";}
           const esc=dr.name.replace(/\\/g,"\\\\").replace(/'/g,"\\'");
-          const click=(!isBlocked&&!onLeave)?`onclick="togglePlanCell('${esc}','${wkStateKey}',${dow})"` :"";
-          html+=`<td style="width:${dayW}px;min-width:${dayW}px;height:34px;background:${bg};border:1px solid var(--border);text-align:center;vertical-align:middle;font-size:13px;font-weight:900;color:${color};cursor:${cursor};user-select:none" ${click}>${label}</td>`;
+          const click=(!isBlocked&&!onLeave)?`onmousedown="planDragStart('${esc}','${wkStateKey}',${dow})" onmouseenter="planDragEnter('${esc}','${wkStateKey}',${dow})"` :"";
+          html+=`<td class="plan-cell" data-name="${escapeHtml(dr.name)}" data-wk="${wkStateKey}" data-dow="${dow}" style="width:${dayW}px;min-width:${dayW}px;height:34px;background:${bg};border:1px solid var(--border);text-align:center;vertical-align:middle;font-size:13px;font-weight:900;color:${color};cursor:${cursor};user-select:none" ${click}>${label}</td>`;
         });
         if(wi<weeks.length-1) html+=`<td style="width:8px;background:var(--bg);border-bottom:1px solid var(--border);border-left:2px solid var(--border);border-right:2px solid var(--border)"></td>`;
       });
@@ -5600,13 +5600,59 @@ function renderPlanCompliance(){
   content.innerHTML=html;
 }
 
-function togglePlanCell(driverName, weekKey, dayOfWeek){
-  if(!planState[weekKey]) planState[weekKey] = {};
-  if(!planState[weekKey][driverName]) planState[weekKey][driverName] = [0,0,0,0,0,0,0];
-  planState[weekKey][driverName][dayOfWeek] = planState[weekKey][driverName][dayOfWeek]===1 ? 0 : 1;
-  renderPlanificare();
-  savePlanState();
+let _planDrag={active:false,mode:null,changed:false};
+
+function planDragStart(name,wkKey,dow){
+  const cur=(planState[wkKey]&&planState[wkKey][name]&&planState[wkKey][name][dow])||0;
+  _planDrag={active:true,mode:cur===1?0:1,changed:false};
+  _setPlanCell(name,wkKey,dow,_planDrag.mode);
 }
+
+function planDragEnter(name,wkKey,dow){
+  if(!_planDrag.active) return;
+  _setPlanCell(name,wkKey,dow,_planDrag.mode);
+}
+
+function _setPlanCell(name,wkKey,dow,val){
+  if(!planState[wkKey]) planState[wkKey]={};
+  if(!planState[wkKey][name]) planState[wkKey][name]=[0,0,0,0,0,0,0];
+  if(planState[wkKey][name][dow]===val) return;
+  planState[wkKey][name][dow]=val;
+  _planDrag.changed=true;
+  // Actualizăm vizual celula direct fără re-render complet
+  const cell=document.querySelector(`.plan-cell[data-name="${CSS.escape(name)}"][data-wk="${wkKey}"][data-dow="${dow}"]`);
+  if(cell){
+    if(val===1){
+      cell.style.background="#10b981";
+      cell.style.color="#fff";
+      cell.textContent="✓";
+    } else {
+      cell.style.background="";
+      cell.style.color="";
+      cell.textContent="";
+    }
+  }
+}
+
+function togglePlanCell(name,wkKey,dow){
+  if(!planState[wkKey]) planState[wkKey]={};
+  if(!planState[wkKey][name]) planState[wkKey][name]=[0,0,0,0,0,0,0];
+  planState[wkKey][name][dow]=planState[wkKey][name][dow]===1?0:1;
+  renderPlanificare(); savePlanState();
+}
+
+document.addEventListener("mouseup",()=>{
+  if(_planDrag.active&&_planDrag.changed){
+    renderPlanificare(); savePlanState();
+  }
+  _planDrag={active:false,mode:null,changed:false};
+});
+document.addEventListener("mouseleave",()=>{
+  if(_planDrag.active&&_planDrag.changed){
+    renderPlanificare(); savePlanState();
+  }
+  _planDrag={active:false,mode:null,changed:false};
+});
 
 function changePlanWeek(delta){
   // Navigare pe luni
@@ -5693,7 +5739,11 @@ function openWhatsAppExport(){
   const fmtFull=d=>PLAN_DAYS_FULL[(d.getDay()+6)%7]+" "+d.getDate()+"."+(d.getMonth()+1)+"."+d.getFullYear();
   const wkNum=getISOWeek(mon);
 
-  let msg="Bună ziua, colegi! 👋\n\n";
+  // Salut dinamic în funcție de ora trimiterii
+  const _hour = new Date().getHours();
+  const _salut = _hour>=6&&_hour<12 ? "Bună dimineața" : _hour>=12&&_hour<18 ? "Bună ziua" : _hour>=18 ? "Bună seara" : "Bună ziua";
+
+  let msg=_salut+", colegi! 👋\n\n";
   msg+="Postez programul sortatorilor Ruhstorf pentru săptămâna *"+fmt(mon)+" – "+fmt(sun)+"."+sun.getFullYear()+"* (W"+wkNum+").\n\n";
 
   if(fullWeek.length>0){
@@ -5722,7 +5772,7 @@ function openWhatsAppExport(){
   if(fullWeek.length===0&&Object.keys(partial).length===0&&!camionName){
     msg+="⚠️ Nicio persoană planificată pentru această săptămână.\n\n";
   }
-  msg+="Vă mulțumim pentru colaborare! 🙏";
+  msg+="Dacă aveți nelămuriri, vă rog să mi le adresați fără probleme. 🙏";
 
   document.getElementById("waSubtitle").textContent="Săptămâna "+wkKey+" · "+fmt(mon)+" – "+fmt(sun)+"."+sun.getFullYear();
   document.getElementById("waText").value=msg;
@@ -6207,7 +6257,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
-<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.13-03</div>
+<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.13-05</div>
 
 </body>
 </html>

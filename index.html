@@ -697,6 +697,9 @@
   .tl-driver-row { padding: 0 12px; height: 34px; min-height: 34px; display: flex; align-items: center; border-bottom: 1px solid var(--border); font-size: 12px; cursor: pointer; flex-shrink: 0; box-sizing: border-box; }
   .tl-driver-row:hover { background: var(--bg-elev-2); }
   .tl-grid-wrap { overflow: visible; }
+  .tl-sticky-header { position: sticky; top: 0; z-index: 10; background: var(--bg-elev); display: flex; min-width: 100%; border-bottom: 2px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+  .tl-sticky-header-name { width: 200px; min-width: 200px; flex-shrink: 0; padding: 0 12px; height: 42px; display: flex; align-items: center; font-size: 11px; text-transform: uppercase; color: var(--text-dim); font-weight: 600; letter-spacing: 0.5px; border-right: 2px solid var(--border); }
+  .tl-sticky-header-days { display: flex; overflow: hidden; }
   .tl-day-headers { display: grid; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg-elev); z-index: 3; height: 42px; }
   .tl-day-header { padding: 4px 0; font-size: 10px; text-align: center; border-right: 1px solid var(--border); color: var(--text-dim); }
   .tl-day-header.sunday { background: repeating-linear-gradient(45deg,rgba(239,68,68,0.08),rgba(239,68,68,0.08) 4px,rgba(239,68,68,0.16) 4px,rgba(239,68,68,0.16) 8px); }
@@ -1155,6 +1158,13 @@
         </div>
       </div>
       <div id="sortEditBanner" style="display:none;padding:8px 14px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);border-radius:7px;margin-bottom:8px;align-items:center;justify-content:space-between;gap:10px"><span style="font-size:13px;color:#10b981;font-weight:600">✏️ Mod editare activ — bifează prezența, apoi confirmă</span><button onclick="confirmSortEdit()" style="padding:7px 18px;background:#10b981;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">✅ Confirmă</button></div>
+
+      <!-- Panou concedii azi — vizibil pentru Mihaela -->
+      <div id="todayLeavePanel" style="display:none;margin-bottom:10px;padding:10px 14px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:8px">
+        <div style="font-size:11px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">🏖️ În concediu astăzi</div>
+        <div id="todayLeaveList" style="font-size:13px;color:var(--text)">—</div>
+      </div>
+
       <div class="timeline-wrap">
         <div class="timeline" id="sortatoriTimeline"></div>
       </div>
@@ -1175,7 +1185,14 @@
         </div>
       </div>
       <div id="planificareGrid" style="overflow-x:auto"></div>
-    </div>
+      <!-- Panou verificare respectare planificare -->
+      <div id="planCompliancePanel" style="margin-top:16px;display:none">
+        <div style="font-size:13px;font-weight:700;color:var(--text-dim);margin-bottom:8px;display:flex;align-items:center;gap:8px">
+          📊 Verificare respectare planificare
+          <span id="planCompliancePeriod" style="font-size:11px;font-weight:400;color:var(--text-dim)"></span>
+        </div>
+        <div id="planComplianceContent"></div>
+      </div>
 
   </main>
 </div>
@@ -3481,23 +3498,26 @@ function renderTimeline(){
   const ROW_H=34;
   const HEADER_H=42;
 
+  // ── Header sticky separat (deasupra scroll-ului) ──
+  let stickyHtml=`<div class='tl-sticky-header' id='tlStickyHeader'>`;
+  stickyHtml+=`<div class='tl-sticky-header-name'>Persoană</div>`;
+  stickyHtml+=`<div class='tl-sticky-header-days' id='tlStickyDays' style='min-width:${daysInMonth*colWidthPx}px'>`;
+  for(let dn=1;dn<=daysInMonth;dn++){
+    const d=new Date(y,m,dn),isSun=isSunday(d),holiday=getHoliday(d),isTd=sameDay(d,today);
+    const cls=["tl-day-header"];if(isSun)cls.push("sunday");if(holiday)cls.push("holiday");if(isTd)cls.push("today");
+    stickyHtml+=`<div class='${cls.join(" ")}' style='width:${colWidthPx}px;min-width:${colWidthPx}px'${holiday?` title="${escapeHtml(holiday)}"`:""} ><div class='dnum'>${dn}</div><div class='dow'>${DOW_MIN[(d.getDay()+6)%7]}</div></div>`;
+  }
+  stickyHtml+=`</div></div>`;
+
   let driverHtml="<div class='tl-driver-col'>";
-  driverHtml+=`<div class='tl-driver-header'>Persoană</div>`;
   sortedDrivers.forEach(dr=>{
     driverHtml+=`<div class='tl-driver-row' data-driver-row='${dr.id}' onclick="openLeaveModal('${dr.id}','leaves')">${escapeHtml(dr.name)}</div>`;
   });
   driverHtml+=`<div class='tl-driver-row' style='background:var(--bg-elev-2);font-weight:700;font-size:11px;text-transform:uppercase;color:var(--text-dim);cursor:default'>Total / zi</div>`;
   driverHtml+="</div>";
 
-  // Build grid
+  // Build grid (fără header — e sticky separat)
   let gridHtml="<div class='tl-grid-wrap'>";
-  gridHtml+=`<div class='tl-day-headers' style='grid-template-columns:${gridCols}'>`;
-  for(let dn=1;dn<=daysInMonth;dn++){
-    const d=new Date(y,m,dn),isSun=isSunday(d),holiday=getHoliday(d),isTd=sameDay(d,today);
-    const cls=["tl-day-header"];if(isSun)cls.push("sunday");if(holiday)cls.push("holiday");if(isTd)cls.push("today");
-    gridHtml+=`<div class='${cls.join(" ")}'${holiday?` title="${escapeHtml(holiday)}"`:""} ><div class='dnum'>${dn}</div><div class='dow'>${DOW_MIN[(d.getDay()+6)%7]}</div></div>`;
-  }
-  gridHtml+="</div>";
 
   const dailyCounts=new Array(daysInMonth+1).fill(0);
   sortedDrivers.forEach(dr=>{
@@ -3563,6 +3583,21 @@ function renderTimeline(){
     gridHtml+=`<div class='${cls.join(" ")}' ${onClick}>${isSun?"—":(c||"·")}</div>`;
   }
   gridHtml+="</div></div>";
+
+  // Punem sticky header ÎNAINTE de timeline în timeline-wrap
+  const wrap = tl.closest(".timeline-wrap");
+  if(wrap){
+    // Scoatem sticky header vechi dacă există
+    const oldSticky=wrap.querySelector(".tl-sticky-header");
+    if(oldSticky) oldSticky.remove();
+    wrap.insertAdjacentHTML("afterbegin", stickyHtml);
+    // Sincronizăm scroll orizontal între header și grid
+    const stickyDays = wrap.querySelector("#tlStickyDays");
+    const gridWrap = tl.querySelector(".tl-grid-wrap");
+    if(stickyDays && gridWrap){
+      gridWrap.addEventListener("scroll", ()=>{ stickyDays.scrollLeft=gridWrap.scrollLeft; });
+    }
+  }
 
   tl.innerHTML=driverHtml+gridHtml;
   tl.onmouseup=()=>tlDragEnd();
@@ -3926,6 +3961,29 @@ document.addEventListener("mouseup", ()=>{ if(_sortDrag.active) sortDragEnd(); }
 document.addEventListener("mousemove", e=>{ if(_sortDrag.active && e.buttons===0) sortDragEnd(); });
 
 // ---- Copiaza din luna precedenta ----
+function updateTodayLeavePanel(){
+  const panel = document.getElementById("todayLeavePanel");
+  const list  = document.getElementById("todayLeaveList");
+  if(!panel||!list) return;
+  // Afișăm doar pentru Mihaela
+  const uk = window.activeUserKey||"";
+  if(uk!=="mihaela"){ panel.style.display="none"; return; }
+  panel.style.display="block";
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  // Găsim persoanele în concediu azi din modulul concedii
+  const onLeave = (state.drivers||[]).filter(dr=>
+    (dr.leaves||[]).some(l=>dateInLeave(today,l))
+  ).map(dr=>dr.name).sort((a,b)=>a.localeCompare(b,"ro"));
+  if(onLeave.length===0){
+    list.textContent="Nimeni nu este în concediu astăzi ✓";
+    list.style.color="var(--text-dim)";
+  } else {
+    list.innerHTML = onLeave.map(n=>`<span style="display:inline-block;background:rgba(99,102,241,0.15);border-radius:5px;padding:2px 8px;margin:2px 3px 2px 0;font-weight:600">${escapeHtml(n)}</span>`).join("");
+    list.style.color="var(--text)";
+  }
+}
+
 function copySortatoriFromPrevMonth(){
   if(!isAdminOrTania()){toast("Doar Admin/Tania",true);return;}
   const curMk=getSortKey();
@@ -4072,6 +4130,7 @@ function makeCatHeader(label, color, count, gridCols, canEdit, group, cat, daysI
 }
 
 function renderSortatoriTimeline(){
+  updateTodayLeavePanel();
   // Re-render planificare dacă e activ (sortatorii s-au schimbat)
   if(appMode==="planificare"){ renderPlanificare(); return; }
   const y=sortCurrentDate.getFullYear(), m=sortCurrentDate.getMonth();
@@ -5106,7 +5165,7 @@ function confirmSortEdit(){
 
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.06.09-05";
+const APP_VERSION = "2026.06.13-02";
 
 // La login admin — publică automat dacă versiunea din cod e nouă față de Firestore
 async function autoPublishVersionIfNew(){
@@ -5447,6 +5506,8 @@ function renderPlanificare(){
     return;
   }
   grid.innerHTML=html;
+  // Actualizăm și panoul de conformitate
+  renderPlanCompliance();
 }
 
   // Zile lunii ca array de Date
@@ -5463,6 +5524,80 @@ function renderPlanificare(){
   if(week.length) weeks.push(week);
 
 
+
+function renderPlanCompliance(){
+  const panel = document.getElementById("planCompliancePanel");
+  const content = document.getElementById("planComplianceContent");
+  const period = document.getElementById("planCompliancePeriod");
+  if(!panel||!content) return;
+
+  const y = planCurrentDate.getFullYear();
+  const m = planCurrentDate.getMonth();
+  const mk = y+"-"+String(m+1).padStart(2,"0");
+  const days = Array.from({length:new Date(y,m+1,0).getDate()},(_,i)=>new Date(y,m,i+1));
+  const today = new Date(); today.setHours(0,0,0,0);
+  const pastDays = days.filter(d=>d<=today && d.getDay()!==0 && !getHoliday(d));
+  if(!pastDays.length){ panel.style.display="none"; return; }
+
+  const MONTHS_RO=["Ian","Feb","Mar","Apr","Mai","Iun","Iul","Aug","Sep","Oct","Nov","Dec"];
+  if(period) period.textContent="— "+MONTHS_RO[m]+" "+y+" (zile trecute)";
+
+  const sortDrivers = getMonthDrivers(mk)||[];
+  const ruhDrivers = sortDrivers.filter(d=>d.group==="ruhstorf");
+  if(!ruhDrivers.length){ panel.style.display="none"; return; }
+
+  const report = [];
+  ruhDrivers.forEach(dr=>{
+    const rows = {planned:0, present:0, issues:[], unexpected:0};
+    pastDays.forEach(d=>{
+      const dow=(d.getDay()+6)%7;
+      const wkKey=d.getFullYear()+"-W"+String(getISOWeek(d)).padStart(2,"0");
+      const wkData=(planState[wkKey]&&planState[wkKey][dr.name])||[0,0,0,0,0,0,0];
+      const wasPlanned = wkData[dow]===1;
+      const dayStr = String(d.getDate());
+      const pres = (sortState.presence[mk]&&sortState.presence[mk][dr.name]&&sortState.presence[mk][dr.name][dayStr]);
+      const wasPresent = pres==="prezent";
+      const wasAbsent  = pres==="absent";
+      if(wasPlanned) rows.planned++;
+      if(wasPresent) rows.present++;
+      if(wasPlanned && wasAbsent) rows.issues.push({label:d.getDate()+"."+(d.getMonth()+1),type:"absent"});
+      else if(wasPlanned && !wasPresent && !wasAbsent) rows.issues.push({label:d.getDate()+"."+(d.getMonth()+1),type:"unknown"});
+      if(!wasPlanned && wasPresent) rows.unexpected++;
+    });
+    if(rows.planned>0||rows.present>0) report.push({dr,...rows});
+  });
+
+  if(!report.length){ panel.style.display="none"; return; }
+  panel.style.display="block";
+
+  let html=`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:var(--bg-elev-2)">
+      <th style="text-align:left;padding:6px 10px;border:1px solid var(--border)">Sortator</th>
+      <th style="padding:6px 8px;border:1px solid var(--border);text-align:center">Planificat</th>
+      <th style="padding:6px 8px;border:1px solid var(--border);text-align:center">Bifat prezent</th>
+      <th style="padding:6px 8px;border:1px solid var(--border);text-align:center;color:#10b981">✓ OK</th>
+      <th style="padding:6px 8px;border:1px solid var(--border);text-align:center;color:#ef4444">✗ Probleme</th>
+      <th style="padding:6px 8px;border:1px solid var(--border);text-align:center;color:#f59e0b">+ Neplanificat</th>
+      <th style="padding:6px 8px;border:1px solid var(--border);text-align:left">Zile cu probleme</th>
+    </tr></thead><tbody>`;
+
+  report.sort((a,b)=>b.issues.length-a.issues.length).forEach((r,i)=>{
+    const rowBg=i%2===0?"var(--bg)":"var(--bg-elev)";
+    const respected=r.planned-r.issues.length;
+    const issueLabels=r.issues.map(x=>`<span style="background:rgba(239,68,68,0.12);border-radius:4px;padding:1px 5px;font-size:11px;color:#ef4444;margin:1px">${x.label}${x.type==="unknown"?" ❓":""}</span>`).join(" ");
+    html+=`<tr style="background:${rowBg}">
+      <td style="padding:5px 10px;border:1px solid var(--border);font-weight:600">${escapeHtml(r.dr.name)}</td>
+      <td style="padding:5px 8px;border:1px solid var(--border);text-align:center">${r.planned}</td>
+      <td style="padding:5px 8px;border:1px solid var(--border);text-align:center">${r.present}</td>
+      <td style="padding:5px 8px;border:1px solid var(--border);text-align:center;font-weight:700;color:#10b981">${respected}</td>
+      <td style="padding:5px 8px;border:1px solid var(--border);text-align:center;font-weight:700;color:${r.issues.length>0?"#ef4444":"var(--text-dim)"}">${r.issues.length||"—"}</td>
+      <td style="padding:5px 8px;border:1px solid var(--border);text-align:center;color:#f59e0b">${r.unexpected||"—"}</td>
+      <td style="padding:5px 8px;border:1px solid var(--border)">${issueLabels||'<span style="color:var(--text-dim);font-size:11px">fără probleme ✓</span>'}</td>
+    </tr>`;
+  });
+  html+=`</tbody></table></div>`;
+  content.innerHTML=html;
+}
 
 function togglePlanCell(driverName, weekKey, dayOfWeek){
   if(!planState[weekKey]) planState[weekKey] = {};
@@ -6048,7 +6183,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
-<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.09-05</div>
+<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.13-02</div>
 
 </body>
 </html>

@@ -2232,9 +2232,15 @@ function enterApp(userKey){
     if(legend)         legend.style.display="none";
     if(sidebarToggle)  sidebarToggle.style.display="none";
     if(sidebarColl)    sidebarColl.style.display="none";
-    // Forțează sortatori
+    // Forțează sortatori — ascunde toate celelalte module
     appMode="sortatori";
     if(sortatoriModule) sortatoriModule.style.display="block";
+    const _planMod=document.getElementById("planificareModule");
+    if(_planMod) _planMod.style.display="none";
+    const _planComp=document.getElementById("planCompliancePanel");
+    if(_planComp) _planComp.style.display="none";
+    const _concMod=document.getElementById("concediiModule");
+    if(_concMod) _concMod.style.display="none";
     // Setează grup
     sortView="ruhstorf";
     const tabEis=document.getElementById("sortTabEiselfing");
@@ -3965,18 +3971,28 @@ function updateTodayLeavePanel(){
   const panel = document.getElementById("todayLeavePanel");
   const list  = document.getElementById("todayLeaveList");
   if(!panel||!list) return;
-  // Afișăm doar pentru Mihaela
   const uk = window.activeUserKey||"";
   if(uk!=="mihaela"){ panel.style.display="none"; return; }
   panel.style.display="block";
   const today = new Date();
   today.setHours(0,0,0,0);
-  // Găsim persoanele în concediu azi din modulul concedii
-  const onLeave = (state.drivers||[]).filter(dr=>
-    (dr.leaves||[]).some(l=>dateInLeave(today,l))
-  ).map(dr=>dr.name).sort((a,b)=>a.localeCompare(b,"ro"));
+
+  // Luăm doar sortatorii Ruhstorf din luna curentă
+  const mk = getSortKey();
+  const ruhNames = new Set(
+    (getMonthDrivers(mk)||[])
+      .filter(d=>d.group==="ruhstorf")
+      .map(d=>d.name)
+  );
+
+  // Filtrăm persoanele în concediu azi — doar cele din Ruhstorf
+  const onLeave = (state.drivers||[])
+    .filter(dr=> ruhNames.has(dr.name) && (dr.leaves||[]).some(l=>dateInLeave(today,l)))
+    .map(dr=>dr.name)
+    .sort((a,b)=>a.localeCompare(b,"ro"));
+
   if(onLeave.length===0){
-    list.textContent="Nimeni nu este în concediu astăzi ✓";
+    list.textContent="Nimeni din Ruhstorf nu este în concediu astăzi ✓";
     list.style.color="var(--text-dim)";
   } else {
     list.innerHTML = onLeave.map(n=>`<span style="display:inline-block;background:rgba(99,102,241,0.15);border-radius:5px;padding:2px 8px;margin:2px 3px 2px 0;font-weight:600">${escapeHtml(n)}</span>`).join("");
@@ -5165,7 +5181,7 @@ function confirmSortEdit(){
 
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.06.13-05";
+const APP_VERSION = "2026.06.13-07";
 
 // La login admin — publică automat dacă versiunea din cod e nouă față de Firestore
 async function autoPublishVersionIfNew(){
@@ -6257,7 +6273,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
-<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.13-05</div>
+<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.13-07</div>
 
 </body>
 </html>

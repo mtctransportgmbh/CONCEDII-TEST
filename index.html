@@ -5165,7 +5165,7 @@ function confirmSortEdit(){
 
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.06.13-02";
+const APP_VERSION = "2026.06.13-03";
 
 // La login admin — publică automat dacă versiunea din cod e nouă față de Firestore
 async function autoPublishVersionIfNew(){
@@ -5344,7 +5344,8 @@ function renderPlanificare(){
   // Categorii — fără Camion
   const cats = [
     {label:"Permanenți", key:"permanent", color:"#10b981"},
-    {label:"Rotații",    key:"rotatie",   color:"#f59e0b"},
+    {label:"Rotații",    key:"rotatie",   color:"#7f1d1d"},
+    {label:"Camion",     key:"camion",    color:"#8b5cf6"},
     {label:"Urgențe",    key:"urgenta",   color:"#ef4444"},
   ];
 
@@ -5638,38 +5639,53 @@ function clearPlanWeek(){
 }
 
 function openWhatsAppExport(){
-  // Generăm pentru săptămâna care conține planCurrentDate
   const wkKey = getPlanWeekKey();
   const dates = getPlanWeekDates();
   const weekData = planState[wkKey] || {};
 
   const cats = [
     {label:"Permanenți", key:"permanent", color:"#10b981"},
-    {label:"Rotații",    key:"rotatie",   color:"#f59e0b"},
+    {label:"Rotații",    key:"rotatie",   color:"#7f1d1d"},
+    {label:"Camion",     key:"camion",    color:"#8b5cf6"},
     {label:"Urgențe",    key:"urgenta",   color:"#ef4444"},
   ];
 
   const _planMk=getSortKey();
-  const allRuhDrivers = cats.flatMap(cat=>
-    (getMonthDrivers(_planMk)||[]).filter(d=>d.group==="ruhstorf"&&(cat.key==="permanent"?(!d.category||d.category==="permanent"):d.category===cat.key))
-    .sort((a,b)=>a.name.localeCompare(b.name,"ro"))
-  );
-
   const workDayIdxs = dates.map((d,i)=>({d,i})).filter(({d})=>d.getDay()!==0&&!getHoliday(d)).map(({i})=>i);
 
+  // Permanenți + Rotații + Urgențe (nu Camion)
+  const mainCats = cats.filter(c=>c.key!=="camion");
   const fullWeek=[], partial={};
-  allRuhDrivers.forEach(dr=>{
-    const concDr=state.drivers.find(sd=>sd.name===dr.name);
+  mainCats.forEach(cat=>{
+    (getMonthDrivers(_planMk)||[]).filter(d=>d.group==="ruhstorf"&&(cat.key==="permanent"?(!d.category||d.category==="permanent"):d.category===cat.key))
+    .sort((a,b)=>a.name.localeCompare(b.name,"ro"))
+    .forEach(dr=>{
+      const concDr=state.drivers.find(sd=>sd.name===dr.name);
+      const dw=weekData[dr.name]||[0,0,0,0,0,0,0];
+      const pz=workDayIdxs.filter(i=>{
+        const d=dates[i];
+        const onLeave=concDr&&((concDr.leaves||[]).some(l=>dateInLeave(d,l))||(concDr.krankLeaves||[]).some(l=>dateInLeave(d,l))||(concDr.unpaidLeaves||[]).some(l=>dateInLeave(d,l)));
+        return dw[i]===1&&!onLeave;
+      });
+      if(!pz.length) return;
+      if(pz.length===workDayIdxs.length) fullWeek.push(dr.name);
+      else partial[dr.name]=pz;
+    });
+  });
+
+  // Camion — o singură persoană
+  let camionName=null;
+  const camionDrivers=(getMonthDrivers(_planMk)||[]).filter(d=>d.group==="ruhstorf"&&d.category==="camion");
+  for(const dr of camionDrivers){
     const dw=weekData[dr.name]||[0,0,0,0,0,0,0];
-    const prezZile=workDayIdxs.filter(i=>{
+    const hasAny=workDayIdxs.some(i=>{
       const d=dates[i];
+      const concDr=state.drivers.find(sd=>sd.name===dr.name);
       const onLeave=concDr&&((concDr.leaves||[]).some(l=>dateInLeave(d,l))||(concDr.krankLeaves||[]).some(l=>dateInLeave(d,l))||(concDr.unpaidLeaves||[]).some(l=>dateInLeave(d,l)));
       return dw[i]===1&&!onLeave;
     });
-    if(!prezZile.length) return;
-    if(prezZile.length===workDayIdxs.length) fullWeek.push(dr.name);
-    else partial[dr.name]=prezZile;
-  });
+    if(hasAny){camionName=dr.name;break;}
+  }
 
   const holidays=dates.filter(d=>getHoliday(d)&&d.getDay()!==0);
   const mon=dates[0], sun=dates[6];
@@ -5678,33 +5694,39 @@ function openWhatsAppExport(){
   const wkNum=getISOWeek(mon);
 
   let msg="Bună ziua, colegi! 👋\n\n";
-  msg+="Postez programul sortatorilor pentru săptămâna "+fmt(mon)+" – "+fmt(sun)+".\n\n";
+  msg+="Postez programul sortatorilor Ruhstorf pentru săptămâna *"+fmt(mon)+" – "+fmt(sun)+"."+sun.getFullYear()+"* (W"+wkNum+").\n\n";
+
   if(fullWeek.length>0){
     let hNote="";
     if(holidays.length>0){
       const hlDays=holidays.map(d=>"*"+PLAN_DAYS_FULL[(d.getDay()+6)%7]+" "+d.getDate()+"."+(d.getMonth()+1)+"*").join(", ");
-      hNote=" (exceptând "+hlDays+" când suntem cu toții liberi)";
+      hNote=" (cu excepția "+hlDays+")";
     }
-    msg+="🟢 *Prezenți întreaga săptămână"+hNote+":*\n"+fullWeek.map(n=>"• "+n).join("\n")+"\n\n";
+    msg+="🟢 *Prezenți toată săptămâna"+hNote+":*\n"+fullWeek.map(n=>"  • "+n).join("\n")+"\n\n";
   }
   if(Object.keys(partial).length>0){
     msg+="🟡 *Prezenți parțial:*\n";
-    Object.entries(partial).forEach(([name,idxs])=>{ msg+="• *"+name+"* — "+idxs.map(i=>PLAN_DAYS_FULL[i].toLowerCase()).join(", ")+"\n"; });
+    Object.entries(partial).forEach(([name,idxs])=>{
+      msg+="  • *"+name+"* — "+idxs.map(i=>PLAN_DAYS_FULL[i].toLowerCase()).join(", ")+"\n";
+    });
     msg+="\n";
+  }
+  if(camionName){
+    msg+="🚚 *Ajutor camion săptămâna viitoare:*\n  • *"+camionName+"*\n\n";
   }
   if(holidays.length>0){
     msg+="🔴 *Zile libere:*\n";
-    holidays.forEach(d=>{ const h=getHoliday(d); msg+="• "+fmtFull(d)+(h?" ("+h.split("(")[0].trim()+")"  :"")+"\n"; });
+    holidays.forEach(d=>{ const h=getHoliday(d); msg+="  • "+fmtFull(d)+(h?" ("+h.split("(")[0].trim()+")" :"")+"\n"; });
     msg+="\n";
   }
-  msg+="Dacă aveți nelămuriri, vă rog să mi le adresați fără probleme. 🙏";
+  if(fullWeek.length===0&&Object.keys(partial).length===0&&!camionName){
+    msg+="⚠️ Nicio persoană planificată pentru această săptămână.\n\n";
+  }
+  msg+="Vă mulțumim pentru colaborare! 🙏";
 
   document.getElementById("waSubtitle").textContent="Săptămâna "+wkKey+" · "+fmt(mon)+" – "+fmt(sun)+"."+sun.getFullYear();
   document.getElementById("waText").value=msg;
-
-  // Generăm imaginea
   generatePlanImage(wkKey, dates, weekData, cats, wkNum);
-
   openModal("modalWhatsApp");
 }
 function generatePlanImage(wkKey, dates, weekData, cats, wkNum){
@@ -5723,10 +5745,10 @@ function generatePlanImage(wkKey, dates, weekData, cats, wkNum){
         const dw=weekData[dr.name]||[0,0,0,0,0,0,0];
         const concDr=state.drivers.find(sd=>sd.name===dr.name);
         const onLeave=concDr&&((concDr.leaves||[]).some(l=>dateInLeave(d,l))||(concDr.krankLeaves||[]).some(l=>dateInLeave(d,l))||(concDr.unpaidLeaves||[]).some(l=>dateInLeave(d,l)));
-        if(dw[dow]===1&&!onLeave) list.push(dr.name);
+        if(dw[dow]===1&&!onLeave) list.push({name:dr.name, cat:cat.key});
       });
     });
-    list.sort((a,b)=>a.localeCompare(b,"ro"));
+    list.sort((a,b)=>a.name.localeCompare(b.name,"ro"));
     return list;
   }
 
@@ -5794,9 +5816,11 @@ function generatePlanImage(wkKey, dates, weekData, cats, wkNum){
     workDays.forEach((d,di)=>{
       const x=padL+slotW+di*colW;
       const {list,hol}=perDay[di];
-      const name=list[s]||null;
+      const entry=list[s]||null;
+      const name=entry?entry.name:null;
+      const cat=entry?entry.cat:null;
       if(hol) ctx.fillStyle="#f3e0ff";
-      else if(name) ctx.fillStyle="#27ae60";
+      else if(name) ctx.fillStyle=cat==="rotatie"?"#7f1d1d":cat==="urgenta"?"#7f1111":"#27ae60";
       else ctx.fillStyle=rowBg;
       ctx.fillRect(x,y,colW,rowH);
       if(name){
@@ -6183,7 +6207,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
-<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.13-02</div>
+<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.13-03</div>
 
 </body>
 </html>

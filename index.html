@@ -1821,6 +1821,8 @@ function fullReset(){
   state      = {drivers:[], thresholds:{warn:3,crit:5}};
   presState  = {presence:{}};
   sortState  = {drivers:[], presence:{}};
+  // Resetăm luna curentă pentru sortatori — fiecare login începe pe luna curentă reală
+  sortCurrentDate = new Date();
   if(autoLogoutTimer){ clearTimeout(autoLogoutTimer); autoLogoutTimer=null; }
   if(saveTimer){ clearTimeout(saveTimer); saveTimer=null; }
   try{
@@ -5181,7 +5183,7 @@ function confirmSortEdit(){
 
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.06.13-07";
+const APP_VERSION = "2026.06.13-08";
 
 // La login admin — publică automat dacă versiunea din cod e nouă față de Firestore
 async function autoPublishVersionIfNew(){
@@ -6273,7 +6275,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
-<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.13-07</div>
+<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.13-08</div>
 
 </body>
 </html>

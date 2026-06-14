@@ -1577,6 +1577,27 @@ function initApp(userKey){
       }, err=>{ console.error("snap",dk,err); });
       unsubListeners.push(unsub);
     });
+  } else if(userKey==="mihaela"){
+    // Mihaela nu are propriul document — citește read-only din "tania" (lista completă)
+    // pentru a putea afișa corect panoul "În concediu astăzi"
+    let first = true;
+    const unsub = db.collection(concediiColl()).doc("tania").onSnapshot(snap=>{
+      if(snap.exists){
+        state = snap.data();
+        if(!state.drivers) state.drivers=[];
+        state.thresholds = {warn:3,crit:5};
+      } else {
+        state = {drivers:[], thresholds:{warn:3,crit:5}};
+      }
+      if(first){first=false;finishInit();}
+      else{
+        finishInit();
+        updateTodayLeavePanel();
+        const mod=document.getElementById("sortatoriModule");
+        if(mod&&mod.style.display!=="none") renderSortatoriTimeline();
+      }
+    }, err=>{ console.error("snap tania (mihaela)",err); state={drivers:[],thresholds:{warn:3,crit:5}}; finishInit(); });
+    unsubListeners.push(unsub);
   } else {
     let first = true;
     const unsub = db.collection(concediiColl()).doc(userKey).onSnapshot(snap=>{
@@ -5183,7 +5204,7 @@ function confirmSortEdit(){
 
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.06.13-08";
+const APP_VERSION = "2026.06.13-09";
 
 // La login admin — publică automat dacă versiunea din cod e nouă față de Firestore
 async function autoPublishVersionIfNew(){
@@ -6275,7 +6296,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
-<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.13-08</div>
+<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.13-09</div>
 
 </body>
 </html>

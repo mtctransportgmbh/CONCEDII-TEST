@@ -1030,6 +1030,7 @@
     <button class="btn btn-secondary btn-small" id="addDriverBtn" onclick="openAddDriver()" style="width:100%; margin-bottom:6px">+ Persoană nouă</button>
     <button class="btn btn-secondary btn-small" id="pinMgrBtn" onclick="openPinAdmin()" style="width:100%; margin-bottom:6px; display:none">🔐 Coduri PIN</button>
     <button class="btn btn-secondary btn-small" id="loadBackupBtn" onclick="openBackupManager()" style="width:100%; margin-bottom:6px; display:none">🔄 Manager Backup / Restaurare</button>
+    <button class="btn btn-secondary btn-small" id="archiveBtn" onclick="openArchive()" style="width:100%; margin-bottom:6px; display:none; border-color:#8b5cf6; color:#8b5cf6">📦 Arhivă persoane</button>
     <button class="btn btn-secondary btn-small" id="importExcelBtn" onclick="document.getElementById('importExcelFile').click()" style="width:100%; margin-bottom:6px; display:none; border-color:#34d399; color:#34d399">📥 Import Excel → HTML</button>
     <input type="file" id="importExcelFile" accept=".xlsx,.xlsm,.xls" style="display:none" multiple onchange="importExcelFile(event)">
     <button class="btn btn-secondary btn-small" id="actLogBtn" onclick="openActivityLog()" style="width:100%; margin-bottom:6px; display:none; border-color:#818cf8; color:#818cf8">📋 Istoric activitate</button>
@@ -1319,9 +1320,20 @@
       </label>
     </div>
     <div class="modal-actions">
+      <button class="btn btn-secondary" id="archiveDriverBtn" onclick="archiveDriver(editingDriverId)" style="display:none;border-color:#8b5cf6;color:#8b5cf6">📦 Arhivează</button>
       <button class="btn btn-secondary" onclick="closeModal('modalDriver')">Anulează</button>
       <button class="btn" onclick="saveDriver()">Salvează</button>
     </div>
+  </div>
+</div>
+
+<!-- ARHIVĂ MODAL -->
+<div class="modal-bg" id="modalArchive">
+  <div class="modal" style="max-width:760px;max-height:92vh;overflow-y:auto">
+    <h3>📦 Arhivă persoane</h3>
+    <div class="modal-sub" id="archiveSub">Persoane care nu mai lucrează la noi — istoricul rămâne salvat.</div>
+    <div id="archiveContent" style="margin-top:12px"></div>
+    <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal('modalArchive')">Închide</button></div>
   </div>
 </div>
 
@@ -1648,8 +1660,8 @@ function finishInit(){
       setTimeout(()=>showLoginNotification(uk), 400);
     }
   }catch(e){ console.warn("notif err",e); }
-  // Backup automat zilnic pentru admin
-  setTimeout(()=>autoSaveDailyBackup(), 3000);
+  // Backup automat programat (06:00, 14:00, 22:00) — doar admin
+  setTimeout(()=>startScheduledBackups(), 3000);
   // Load prezente state
   loadPresState();
   document.querySelectorAll(".modal-bg").forEach(m=>{
@@ -1721,6 +1733,8 @@ function buildCompleteBackup(){
       carryOverByYear: dr.carryOverByYear||{},
       startDate:     dr.startDate||null,
       endDate:       dr.endDate||null,
+      archived:      dr.archived||false,
+      archivedAt:    dr.archivedAt||null,
       leaves:        dr.leaves||[],
       krankLeaves:   dr.krankLeaves||[],
       unpaidLeaves:  dr.unpaidLeaves||[]
@@ -2329,6 +2343,8 @@ function enterApp(userKey){
 
   const loadBackupBtn = document.getElementById("loadBackupBtn");
   if(loadBackupBtn) loadBackupBtn.style.display = isAdm?"block":"none";
+  const archiveBtn = document.getElementById("archiveBtn");
+  if(archiveBtn) archiveBtn.style.display = isTaniaAdm?"block":"none";
   const importExcelBtn2 = document.getElementById("importExcelBtn");
   if(importExcelBtn2) importExcelBtn2.style.display = isAdm?"block":"none";
   const downloadBackupBtn = document.getElementById("downloadBackupBtn");
@@ -2504,7 +2520,7 @@ function getVisibleDrivers(){
   const y = currentDate.getFullYear(), m = currentDate.getMonth();
   let drivers;
   if(uk==="tania"||uk==="admin"){
-    let drivers = state.drivers;
+    let drivers = state.drivers.filter(dr=>!dr.archived);
     if(activeGroup!=="total"){
       const groupUserKey = activeGroup==="eiselfing"?"madalina":activeGroup==="ruhstorf"?"raluca":activeGroup==="camion"?"corina":null;
       if(groupUserKey){
@@ -2519,6 +2535,7 @@ function getVisibleDrivers(){
     return drivers.filter(dr=>isDriverActiveInMonth(dr,y,m));
   } else {
     drivers = state.drivers.filter(dr=>{
+      if(dr.archived) return false;
       if(!dr.visibleTo||dr.visibleTo.length===0){
         if(uk==="raluca")   return DRIVERS_RALUCA.includes(dr.name);
         if(uk==="madalina") return DRIVERS_MADALINA.includes(dr.name);
@@ -2622,6 +2639,7 @@ function openAddDriver(){
   document.getElementById("driverStartDate").value="";
   document.getElementById("driverEndDate").value="";
   ["visRaluca","visMadalina","visCorina"].forEach(id=>{ document.getElementById(id).checked=false; });
+  const _archBtn=document.getElementById("archiveDriverBtn"); if(_archBtn) _archBtn.style.display="none";
   openModal("modalDriver");
   setTimeout(()=>document.getElementById("driverNameInput").focus(),50);
 }
@@ -2638,6 +2656,7 @@ function openEditDriver(id){
   document.getElementById("visRaluca").checked=vis.includes("raluca");
   document.getElementById("visMadalina").checked=vis.includes("madalina");
   document.getElementById("visCorina").checked=vis.includes("corina");
+  const _archBtn=document.getElementById("archiveDriverBtn"); if(_archBtn) _archBtn.style.display="inline-block";
   openModal("modalDriver");
   setTimeout(()=>document.getElementById("driverNameInput").focus(),50);
 }
@@ -2672,6 +2691,77 @@ function saveDriver(){
   }
   closeModal("modalDriver");renderAll();scheduleSave();
 }
+function archiveDriver(id){
+  if(!isAdmin()){toast("Doar Admin poate arhiva persoane",true);return;}
+  const dr=state.drivers.find(d=>d.id===id);if(!dr)return;
+  if(!confirm("Arhivezi pe "+dr.name+"?\n\nVa dispărea din toate listele active, dar istoricul (concedii, krank, fără plată) rămâne salvat în Arhivă."))return;
+  dr.archived=true;
+  dr.archivedAt=fmtDate(new Date());
+  logActivity("📦 Persoană arhivată",dr.name,"arhivat la "+dr.archivedAt);
+  closeModal("modalDriver");
+  renderAll();scheduleSave();
+  toast("📦 "+dr.name+" arhivat — vezi tab-ul Arhivă");
+}
+
+function unarchiveDriver(id){
+  if(!isAdmin()){toast("Doar Admin poate restaura persoane",true);return;}
+  const dr=state.drivers.find(d=>d.id===id);if(!dr)return;
+  delete dr.archived;
+  delete dr.archivedAt;
+  logActivity("📤 Persoană restaurată din arhivă",dr.name,"");
+  renderAll();renderArchiveList();scheduleSave();
+  toast("✅ "+dr.name+" restaurat din arhivă");
+}
+
+function openArchive(){
+  if(!isAdminOrTania()) return;
+  renderArchiveList();
+  openModal("modalArchive");
+}
+
+function renderArchiveList(){
+  const archived=(state.drivers||[]).filter(dr=>dr.archived).sort((a,b)=>(b.archivedAt||"").localeCompare(a.archivedAt||""));
+  const y=currentDate.getFullYear();
+  const sub=document.getElementById("archiveSub");
+  if(sub) sub.textContent=archived.length+" persoane arhivate";
+  const cont=document.getElementById("archiveContent");
+  if(!cont) return;
+  if(!archived.length){
+    cont.innerHTML='<div style="color:var(--text-dim);padding:20px;text-align:center">Nicio persoană arhivată momentan.</div>';
+    return;
+  }
+  let html=`<div style="max-height:420px;overflow-y:auto;border:1px solid var(--border);border-radius:6px">
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead style="position:sticky;top:0;background:var(--bg-elev-2);z-index:1"><tr>
+        <th style="text-align:left;padding:5px 8px;border-bottom:1px solid var(--border)">Nume</th>
+        <th style="padding:5px 6px;border-bottom:1px solid var(--border)">Arhivat la</th>
+        <th style="padding:5px 6px;border-bottom:1px solid var(--border)" title="Total disponibil">Disp.</th>
+        <th style="padding:5px 6px;border-bottom:1px solid var(--border);color:#f59e0b">Conc.</th>
+        <th style="padding:5px 6px;border-bottom:1px solid var(--border);color:#ef4444">Krank</th>
+        <th style="padding:5px 6px;border-bottom:1px solid var(--border);color:#3b82f6">S</th>
+        <th style="padding:5px 6px;border-bottom:1px solid var(--border)"></th>
+      </tr></thead><tbody>`;
+  archived.forEach((d,i)=>{
+    const usedConc=usedDaysThisYear(d,"leaves",y);
+    const usedKrank=(d.krankLeaves||[]).reduce((s,l)=>s+countWorkdays(parseDate(l.start),parseDate(l.end)),0);
+    const usedUnpaid=(d.unpaidLeaves||[]).reduce((s,l)=>s+countWorkdays(parseDate(l.start),parseDate(l.end)),0);
+    const carry=getCarryOverForYear(d,y);
+    const total=(d.maxDays||0)+carry;
+    const rowBg=i%2===0?"var(--bg)":"var(--bg-elev)";
+    html+=`<tr style="background:${rowBg}">
+      <td style="padding:4px 8px;font-weight:600">${escapeHtml(d.name)}${d.endDate?`<div style="font-size:10px;color:var(--text-dim)">plecat: ${d.endDate}</div>`:""}</td>
+      <td style="text-align:center;padding:4px 6px;color:var(--text-dim)">${d.archivedAt||"—"}</td>
+      <td style="text-align:center;padding:4px 6px">${total||"—"}</td>
+      <td style="text-align:center;padding:4px 6px;color:#f59e0b">${usedConc||"—"}</td>
+      <td style="text-align:center;padding:4px 6px;color:#ef4444">${usedKrank||"—"}</td>
+      <td style="text-align:center;padding:4px 6px;color:#3b82f6">${usedUnpaid||"—"}</td>
+      <td style="text-align:center;padding:4px 6px"><button class="btn btn-secondary btn-small" onclick="unarchiveDriver('${d.id}')" title="Restaurează în lista activă">↩️ Restaurează</button></td>
+    </tr>`;
+  });
+  html+=`</tbody></table></div>`;
+  cont.innerHTML=html;
+}
+
 function deleteDriver(id){
   if(!isAdmin()){toast("Doar Admin poate șterge persoane",true);return;}
   const dr=state.drivers.find(d=>d.id===id);if(!dr)return;
@@ -3214,21 +3304,29 @@ function downloadBackupNow(){
 }
 
 // Auto backup zilnic pentru Admin — salvat în Firestore col "daily_backup"
-async function autoSaveDailyBackup(){
+// Backup automat la ore fixe: 06:00, 14:00, 22:00
+// Verifică la fiecare minut; salvează doar dacă nu s-a salvat deja pentru ora respectivă
+// și doar dacă există date (guard în triggerAutoBackup previne backup gol)
+const SCHEDULED_BACKUP_HOURS = [6,14,22];
+let _schedBackupInterval = null;
+function startScheduledBackups(){
   if(!isAdmin()) return;
-  const today = fmtDate(new Date());
-  const lastBackupDay = localStorage.getItem("mtc_last_daily_backup");
-  if(lastBackupDay===today) return; // deja salvat azi
-  try{
-    await db.collection(backupColl()).doc(today).set({
-      data: JSON.parse(JSON.stringify(state)),
-      savedAt: new Date().toISOString(),
-      drivers: state.drivers.length
-    });
-    localStorage.setItem("mtc_last_daily_backup", today);
-    toast("✅ Backup automat salvat pentru "+today);
-    console.log("Daily backup saved:", today);
-  }catch(e){ console.error("Daily backup failed:", e); }
+  if(_schedBackupInterval) clearInterval(_schedBackupInterval);
+  const check=()=>{
+    if(!state.drivers||state.drivers.length===0) return; // nimic de salvat
+    const now=new Date();
+    const today=fmtDate(now);
+    const h=now.getHours();
+    if(!SCHEDULED_BACKUP_HOURS.includes(h)) return;
+    const key="mtc_sched_backup_"+today+"_"+h;
+    if(localStorage.getItem(key)) return; // deja salvat pentru această oră
+    localStorage.setItem(key,"1");
+    const time=String(h).padStart(2,"0")+":00";
+    triggerAutoBackup(time);
+    console.log("Scheduled backup triggered:",today,time);
+  };
+  check(); // verificare imediată — recuperare dacă ora a trecut cât tab-ul era închis
+  _schedBackupInterval = setInterval(check, 60000); // verificare la fiecare minut
 }
 
 function exportBackup(){
@@ -4089,6 +4187,7 @@ function openAddSortatorCat(group, cat){
   const existingNames = new Set(getMonthDrivers().filter(d=>d.group===group).map(d=>d.name));
   const groupKey = group==="eiselfing"?"madalina":"raluca";
   const avail = (state.drivers||[]).filter(d=>{
+    if(d.archived) return false;
     const vis = d.visibleTo||[];
     return (vis.includes(groupKey)||vis.includes("tania")) && !existingNames.has(d.name);
   }).sort((a,b)=>a.name.localeCompare(b.name,"ro"));
@@ -5475,7 +5574,7 @@ function confirmSortEdit(){
 
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.06.14-01";
+const APP_VERSION = "2026.06.14-03";
 
 // La login admin — publică automat dacă versiunea din cod e nouă față de Firestore
 async function autoPublishVersionIfNew(){
@@ -6567,7 +6666,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
-<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.14-01</div>
+<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.14-03</div>
 
 </body>
 </html>

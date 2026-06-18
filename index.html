@@ -2427,7 +2427,7 @@ function enterApp(userKey){
   if(sortAdm) sortAdm.style.display = isTaniaAdm?"inline":"none";
 
   // Notificare la login — setăm flag, se afișează după ce datele sunt încărcate din Firebase
-  window._pendingLoginNotif = !isMihaela ? userKey : null;
+  window._pendingLoginNotif = userKey;
 
   // Load sortatori — onSnapshot va re-renderi automat la orice schimbare
   loadSortState();
@@ -5635,7 +5635,7 @@ function confirmSortEdit(){
 
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.06.18-01";
+const APP_VERSION = "2026.06.18-02";
 
 // La login admin — publică automat dacă versiunea din cod e nouă față de Firestore
 async function autoPublishVersionIfNew(){
@@ -6412,8 +6412,12 @@ function showLoginNotification(userKey){
   const dateStr = dayNames[today.getDay()]+", "+today.getDate()+" "+monthNames[today.getMonth()]+" "+today.getFullYear();
   const userName = USERS[userKey]?.name || userKey;
 
-  // Find drivers on leave today visible to this user
+  // Lista de persoane vizibilă: pentru Mihaela = grupul Ruhstorf (ca la Raluca), altfel = visibleTo
   const visibleDrivers = (state.drivers||[]).filter(d=>{
+    if(userKey==="mihaela"){
+      if(d.visibleTo && d.visibleTo.length>0) return d.visibleTo.includes("raluca");
+      return DRIVERS_RALUCA.includes(d.name);
+    }
     const vis = d.visibleTo||[];
     return vis.includes(userKey)||vis.includes("tania");
   });
@@ -6731,7 +6735,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
-<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.18-01</div>
+<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.18-02</div>
 
 </body>
 </html>

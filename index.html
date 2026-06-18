@@ -2427,7 +2427,7 @@ function enterApp(userKey){
   if(sortAdm) sortAdm.style.display = isTaniaAdm?"inline":"none";
 
   // Notificare la login — setăm flag, se afișează după ce datele sunt încărcate din Firebase
-  window._pendingLoginNotif = userKey;
+  window._pendingLoginNotif = !isMihaela ? userKey : null;
 
   // Load sortatori — onSnapshot va re-renderi automat la orice schimbare
   loadSortState();
@@ -5635,7 +5635,7 @@ function confirmSortEdit(){
 
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.06.18-02";
+const APP_VERSION = "2026.06.18-03";
 
 // La login admin — publică automat dacă versiunea din cod e nouă față de Firestore
 async function autoPublishVersionIfNew(){
@@ -6735,7 +6735,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
-<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.18-02</div>
+<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.18-03</div>
 
 </body>
 </html>

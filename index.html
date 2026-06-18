@@ -587,26 +587,27 @@
   .cal-day:hover { border-color: var(--accent); }
   .cal-day.other-month { opacity: 0.3; }
   .cal-day.today {
-    border: 2px solid var(--accent) !important;
-    box-shadow: 0 6px 18px rgba(217,119,6,0.4), 0 0 0 3px rgba(217,119,6,0.18);
-    transform: scale(1.1);
+    border: 3px solid #2563eb !important;
+    box-shadow: 0 6px 20px rgba(37,99,235,0.55), 0 0 0 4px rgba(37,99,235,0.25);
+    transform: scale(1.12);
     z-index: 5;
     border-radius: 6px;
   }
-  .cal-day.today .cal-day-num { color: var(--accent); font-weight: 900; font-size: 12px; }
+  .cal-day.today .cal-day-num { color: #fff; font-weight: 900; font-size: 12px; background: #2563eb; padding: 1px 4px; border-radius: 3px; }
   .cal-day.today::after {
     content: "AZI";
     position: absolute;
-    top: -7px; right: -7px;
-    background: var(--accent);
+    top: -9px; right: -9px;
+    background: #2563eb;
     color: #fff;
     font-size: 8px;
     font-weight: 900;
     letter-spacing: 0.5px;
-    padding: 1px 5px;
+    padding: 2px 6px;
     border-radius: 4px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.25);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.35);
     z-index: 6;
+    border: 1.5px solid #fff;
   }
   .cal-day-num { font-size: 10px; font-weight: 600; }
   
@@ -738,20 +739,20 @@
   .tl-day-header .dow { font-size: 9px; color: var(--text-dim); }
   .tl-day-header .dnum { font-size: 11px; font-weight: 600; color: var(--text); }
   .tl-day-header.today {
-    background: var(--accent) !important;
+    background: #2563eb !important;
     border-radius: 6px;
-    box-shadow: 0 2px 8px rgba(217,119,6,0.45);
+    box-shadow: 0 2px 10px rgba(37,99,235,0.55);
     position: relative;
     z-index: 2;
   }
   .tl-day-header.today .dnum { color: #fff; font-weight: 900; font-size: 12px; }
-  .tl-day-header.today .dow { color: rgba(255,255,255,0.85); font-weight: 700; }
+  .tl-day-header.today .dow { color: rgba(255,255,255,0.9); font-weight: 700; }
   /* Coloana zilei curente — dungă verticală pe tot tabelul, ca să se vadă unde ești */
   .tl-cell.today-col {
-    box-shadow: inset 2px 0 0 rgba(217,119,6,0.55), inset -2px 0 0 rgba(217,119,6,0.55);
+    box-shadow: inset 3px 0 0 #2563eb, inset -3px 0 0 #2563eb;
   }
   .tl-cell.today-col:not(.in-leave):not(.in-krank):not(.in-unpaid):not(.pres-p):not(.pres-a):not(.sort-p):not(.sort-a) {
-    background: rgba(217,119,6,0.10) !important;
+    background: rgba(37,99,235,0.12) !important;
   }
   .tl-row { display: grid; height: 34px; border-bottom: 1px solid var(--border); position: relative; box-sizing: border-box; }
   .tl-row.tl-row-active { background: rgba(245,158,11,0.06); }
@@ -5634,7 +5635,7 @@ function confirmSortEdit(){
 
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.06.15-02";
+const APP_VERSION = "2026.06.18-01";
 
 // La login admin — publică automat dacă versiunea din cod e nouă față de Firestore
 async function autoPublishVersionIfNew(){
@@ -5869,8 +5870,8 @@ function renderPlanificare(){
       const holiday=getHoliday(d);
       const dow=(d.getDay()+6)%7;
       const col=isToday?"#fff":holiday?"var(--holiday)":isSun||isSat?"rgba(239,68,68,0.8)":"var(--text)";
-      const bg=isToday?"var(--accent)":holiday?"rgba(168,85,247,0.18)":isSun||isSat?"rgba(239,68,68,0.04)":"var(--bg-elev-2)";
-      const extra=isToday?"box-shadow:0 2px 8px rgba(217,119,6,0.45);border-radius:6px;position:relative;z-index:2;":"";
+      const bg=isToday?"#2563eb":holiday?"rgba(168,85,247,0.18)":isSun||isSat?"rgba(239,68,68,0.04)":"var(--bg-elev-2)";
+      const extra=isToday?"box-shadow:0 2px 10px rgba(37,99,235,0.55);border-radius:6px;position:relative;z-index:2;":"";
       html+=`<th style="width:${dayW}px;min-width:${dayW}px;background:${bg};border:1px solid var(--border);border-bottom:2px solid var(--border);font-size:9px;font-weight:700;color:${col};text-align:center;padding:2px 0;${extra}" title="${holiday||""}">${DOW_SHORT[dow]}<div style="font-size:11px;font-weight:900">${d.getDate()}</div></th>`;
     });
     if(wi<weeks.length-1) html+=`<th style="width:8px;background:var(--bg);border-bottom:2px solid var(--border)"></th>`;
@@ -5940,8 +5941,8 @@ function renderPlanificare(){
           if(isBlocked){bg="rgba(239,68,68,0.06)";color="";label="";cursor="not-allowed";}
           else if(onLeave){bg="rgba(255,220,0,0.25)";color="#7a5800";label="U";cursor="not-allowed";}
           else if(val===1){bg="#10b981";color="#fff";label="✓";cursor="pointer";}
-          else{bg=isToday?"rgba(217,119,6,0.10)":rowBg;color="";label="";cursor="pointer";}
-          const todayStripe=isToday?"box-shadow:inset 2px 0 0 rgba(217,119,6,0.55), inset -2px 0 0 rgba(217,119,6,0.55);":"";
+          else{bg=isToday?"rgba(37,99,235,0.12)":rowBg;color="";label="";cursor="pointer";}
+          const todayStripe=isToday?"box-shadow:inset 3px 0 0 #2563eb, inset -3px 0 0 #2563eb;":"";
           const esc=dr.name.replace(/\\/g,"\\\\").replace(/'/g,"\\'");
           const click=(!isBlocked&&!onLeave)?`onmousedown="planDragStart('${esc}','${wkStateKey}',${dow})" onmouseenter="planDragEnter('${esc}','${wkStateKey}',${dow})"` :"";
           html+=`<td class="plan-cell" data-name="${escapeHtml(dr.name)}" data-wk="${wkStateKey}" data-dow="${dow}" style="width:${dayW}px;min-width:${dayW}px;height:34px;background:${bg};border:1px solid var(--border);text-align:center;vertical-align:middle;font-size:13px;font-weight:900;color:${color};cursor:${cursor};user-select:none;${todayStripe}" ${click}>${label}</td>`;
@@ -6730,7 +6731,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
-<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.15-02</div>
+<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.18-01</div>
 
 </body>
 </html>

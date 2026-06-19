@@ -4240,17 +4240,42 @@ let _pickAvail=[], _pickGroup="", _pickCat="";
 
 // ---- Drag & drop: mutare sortator între categorii (Permanenți/Rotații/Camion/Urgențe) ----
 let _sortRowDrag = {driverId:null};
+let _dragAutoScrollTimer = null;
+
+// Auto-scroll generic în timpul drag-ului, pe orice container cu overflow
+function _startDragAutoScroll(getContainer){
+  _stopDragAutoScroll();
+  const EDGE=60, SPEED=14;
+  const onDragOver=(ev)=>{
+    const container=getContainer();
+    if(!container) return;
+    const rect=container.getBoundingClientRect();
+    const y=ev.clientY;
+    if(y - rect.top < EDGE && y - rect.top > -20){
+      container.scrollTop -= SPEED;
+    } else if(rect.bottom - y < EDGE && rect.bottom - y > -20){
+      container.scrollTop += SPEED;
+    }
+  };
+  document.addEventListener("dragover", onDragOver);
+  _dragAutoScrollTimer = onDragOver; // stocăm referința ca să o putem elimina
+}
+function _stopDragAutoScroll(){
+  if(_dragAutoScrollTimer){ document.removeEventListener("dragover", _dragAutoScrollTimer); _dragAutoScrollTimer=null; }
+}
 
 function sortRowDragStart(ev, driverId){
   _sortRowDrag.driverId = driverId;
   ev.dataTransfer.effectAllowed = "move";
   try{ ev.dataTransfer.setData("text/plain", driverId); }catch(e){}
   ev.currentTarget.style.opacity = "0.4";
+  _startDragAutoScroll(()=>document.querySelector("#sortatoriModule .timeline-wrap"));
 }
 
 function sortRowDragEnd(ev){
   ev.currentTarget.style.opacity = "";
   document.querySelectorAll(".sort-cat-drop.drag-over").forEach(el=>el.classList.remove("drag-over"));
+  _stopDragAutoScroll();
 }
 
 function sortCatDragOver(ev){
@@ -4266,6 +4291,7 @@ function sortCatDragLeave(ev){
 function sortCatDrop(ev, newCat){
   ev.preventDefault();
   ev.currentTarget.classList.remove("drag-over");
+  _stopDragAutoScroll();
   const driverId = _sortRowDrag.driverId;
   _sortRowDrag.driverId = null;
   if(!driverId) return;
@@ -5744,7 +5770,7 @@ function confirmSortEdit(){
 
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.06.19-02";
+const APP_VERSION = "2026.06.19-03";
 
 // La login admin — publică automat dacă versiunea din cod e nouă față de Firestore
 async function autoPublishVersionIfNew(){
@@ -5918,11 +5944,13 @@ function planRowDragStart(ev, driverId){
   ev.dataTransfer.effectAllowed = "move";
   try{ ev.dataTransfer.setData("text/plain", driverId); }catch(e){}
   ev.currentTarget.style.opacity = "0.4";
+  _startDragAutoScroll(()=>document.querySelector(".main"));
 }
 
 function planRowDragEnd(ev){
   ev.currentTarget.style.opacity = "";
   document.querySelectorAll(".plan-cat-drop.drag-over").forEach(el=>el.classList.remove("drag-over"));
+  _stopDragAutoScroll();
 }
 
 function planCatDragOver(ev){
@@ -5938,6 +5966,7 @@ function planCatDragLeave(ev){
 function planCatDrop(ev, newCat){
   ev.preventDefault();
   ev.currentTarget.classList.remove("drag-over");
+  _stopDragAutoScroll();
   const driverId = _planRowDrag.driverId;
   _planRowDrag.driverId = null;
   if(!driverId) return;
@@ -6894,7 +6923,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
-<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.19-02</div>
+<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.19-03</div>
 
 </body>
 </html>

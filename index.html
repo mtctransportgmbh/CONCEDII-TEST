@@ -1571,6 +1571,11 @@ const FIREBASE_CONFIGS = {
 const firebaseConfig = USE_TEST ? FIREBASE_CONFIGS.test : FIREBASE_CONFIGS.production;
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
+// IMPORTANT: implicit Firebase folosește persistență LOCAL (supraviețuiește
+// la închiderea browserului/tab-ului) — exact opusul comportamentului dorit
+// pentru Admin. Setăm SESSION: sesiunea de autentificare ține doar cât tab-ul
+// curent e deschis și dispare garantat la închiderea lui reală.
+auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(e=>console.warn("auth persistence err",e));
 const db   = firebase.firestore();
 
 const ADMIN_EMAIL = "paulandreimacarie@yahoo.com";
@@ -1944,6 +1949,9 @@ const HEARTBEAT_STALE_MS = 5000;
       // Tab anterior chiar a fost închis (sau prima deschidere) — curățăm orice rest
       ["raluca","tania","madalina","corina","mihaela","admin"].forEach(uk=>clearSession(uk));
       try{ localStorage.removeItem("mtc_admin_was_active"); }catch(e){}
+      // Forțăm și delogarea din Firebase Auth — cu persistență SESSION ar trebui
+      // să fie deja delogat automat, dar verificăm explicit ca plasă de siguranță
+      try{ auth.signOut().catch(()=>{}); }catch(e){}
     }
   }catch(e){}
 })();
@@ -1959,6 +1967,7 @@ window.addEventListener("pageshow", function(ev){
   if(ev.persisted && window.activeUserKey==="admin"){
     clearSession("admin");
     window.activeUserKey = null;
+    try{ auth.signOut(); }catch(e){}
     fullReset();
     const appRoot=document.getElementById("appRoot"), authScreen=document.getElementById("authScreen");
     if(appRoot) appRoot.style.display="none";
@@ -5850,7 +5859,7 @@ function confirmSortEdit(){
 
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.06.19-05";
+const APP_VERSION = "2026.06.19-06";
 
 // La login admin — publică automat dacă versiunea din cod e nouă față de Firestore
 async function autoPublishVersionIfNew(){
@@ -7003,7 +7012,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
-<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.19-05</div>
+<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.06.19-06</div>
 
 </body>
 </html>

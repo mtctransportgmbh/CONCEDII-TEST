@@ -459,33 +459,37 @@
   
   .mod-tabs-bar {
     display: inline-flex;
-    gap: 4px;
+    gap: 3px;
     background: var(--bg-elev-2);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: 14px;
     padding: 4px;
   }
   .mod-tab {
-    padding: 9px 18px;
-    font-size: 13px;
-    font-weight: 800;
-    letter-spacing: 0.3px;
+    padding: 9px 16px;
+    font-size: 11.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
     border: 1px solid transparent;
-    border-radius: 9px;
+    border-radius: 10px;
     cursor: pointer;
     background: transparent;
     color: var(--text-dim);
-    transition: all 0.15s ease;
+    transition: all 0.18s cubic-bezier(.4,0,.2,1);
     display: inline-flex;
     align-items: center;
-    gap: 7px;
+    gap: 6px;
   }
-  .mod-tab-icon { font-size: 15px; line-height: 1; }
+  .mod-tab-icon { font-size: 14px; line-height: 1; opacity: 0.65; filter: grayscale(35%); transition: opacity 0.18s ease, filter 0.18s ease; }
   .mod-tab:hover { color: var(--text); background: rgba(0,0,0,0.045); }
+  .mod-tab:hover .mod-tab-icon { opacity: 0.9; }
+  .mod-tab.mod-tab-active .mod-tab-icon { opacity: 1; filter: none; }
 
-  .mod-tab[data-color="amber"].mod-tab-active  { background: #fff; color: #d97706; border-color: rgba(217,119,6,0.35);  box-shadow: 0 2px 6px rgba(217,119,6,0.18); }
-  .mod-tab[data-color="indigo"].mod-tab-active { background: #fff; color: #6366f1; border-color: rgba(99,102,241,0.35); box-shadow: 0 2px 6px rgba(99,102,241,0.18); }
-  .mod-tab[data-color="red"].mod-tab-active  { background: #fff; color: #ef4444; border-color: rgba(239,68,68,0.35); box-shadow: 0 2px 6px rgba(239,68,68,0.18); }
+  .mod-tab[data-color="amber"].mod-tab-active  { background: #fff; color: #d97706; border-color: rgba(217,119,6,0.35);  box-shadow: 0 1px 3px rgba(217,119,6,0.15), 0 0 0 1px rgba(217,119,6,0.08) inset; }
+  .mod-tab[data-color="indigo"].mod-tab-active { background: #fff; color: #6366f1; border-color: rgba(99,102,241,0.35); box-shadow: 0 1px 3px rgba(99,102,241,0.15), 0 0 0 1px rgba(99,102,241,0.08) inset; }
+  .mod-tab[data-color="red"].mod-tab-active  { background: #fff; color: #ef4444; border-color: rgba(239,68,68,0.35); box-shadow: 0 1px 3px rgba(239,68,68,0.15), 0 0 0 1px rgba(239,68,68,0.08) inset; }
+  .mod-tab[data-color="green"].mod-tab-active { background: #fff; color: #10b981; border-color: rgba(16,185,129,0.35); box-shadow: 0 1px 3px rgba(16,185,129,0.15), 0 0 0 1px rgba(16,185,129,0.08) inset; }
 
   .view-tabs {
     display: flex;
@@ -721,7 +725,7 @@
   
   .timeline-wrap { background: var(--bg-elev); border-radius: 8px; border: 1px solid var(--border); overflow: auto; max-height: calc(100vh - 110px); }
   .tl-names { position: sticky; left: 0; z-index: 4; background: var(--bg-elev); }
-  .timeline { display: grid; grid-template-columns: 200px 1fr 52px; min-width: 100%; }
+  .timeline { display: grid; grid-template-columns: 200px 1fr 128px; min-width: 100%; }
   .tl-driver-col { position: sticky; left: 0; background: var(--bg-elev); z-index: 2; border-right: 2px solid var(--border); display: flex; flex-direction: column; }
   .tl-driver-header { padding: 0 12px; height: 42px; display: flex; align-items: center; font-size: 11px; text-transform: uppercase; color: var(--text-dim); border-bottom: 1px solid var(--border); font-weight: 600; letter-spacing: 0.5px; position: sticky; top: 0; background: var(--bg-elev); z-index: 3; flex-shrink: 0; }
   .tl-driver-row { padding: 0 12px; height: 34px; min-height: 34px; display: flex; align-items: center; border-bottom: 1px solid var(--border); font-size: 12px; cursor: pointer; flex-shrink: 0; box-sizing: border-box; }
@@ -760,8 +764,10 @@
     0%,100% { outline-color: #ef4444; box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
     50% { outline-color: #ff6b6b; box-shadow: 0 0 0 3px rgba(239,68,68,0); }
   } background: var(--bg-elev); z-index: 2; border-left: 2px solid var(--border); display: flex; flex-direction: column; min-width: 52px; }
-  .tl-rem-col { position: sticky; right: 0; background: var(--bg-elev); z-index: 2; border-left: 2px solid var(--border); display: flex; flex-direction: column; min-width: 52px; }
-  .tl-rem-cell { height: 34px; min-height: 34px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; border-bottom: 1px solid var(--border); box-sizing: border-box; }
+  .tl-rem-col { position: sticky; right: 0; background: var(--bg-elev); z-index: 2; border-left: 2px solid var(--border); display: flex; flex-direction: column; min-width: 128px; width: 128px; }
+  .tl-rem-cell { height: 34px; min-height: 34px; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 10px; font-size: 11px; font-weight: 800; border-bottom: 1px solid var(--border); box-sizing: border-box; }
+  .tl-rem-name { font-size: 10px; font-weight: 500; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; text-align: left; }
+  .tl-rem-val { flex-shrink: 0; }
   .tl-rem-header { height: 42px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; text-transform: uppercase; color: var(--text-dim); letter-spacing: 0.3px; border-bottom: 2px solid var(--border); }
   .tl-rem-cell.pos { color: #10b981; }
   .tl-rem-cell.warn { color: #f59e0b; }
@@ -769,6 +775,7 @@
   .tl-rem-cell.none { color: var(--text-dim); font-weight: 400; }
   .tl-sticky-header { position: sticky; top: 0; z-index: 10; background: var(--bg-elev); display: flex; min-width: 100%; border-bottom: 2px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
   .tl-sticky-header-name { width: 200px; min-width: 200px; flex-shrink: 0; padding: 0 12px; height: 42px; display: flex; align-items: center; font-size: 11px; text-transform: uppercase; color: var(--text-dim); font-weight: 600; letter-spacing: 0.5px; border-right: 2px solid var(--border); }
+  .tl-sticky-header-rem { position: sticky; right: 0; width: 128px; min-width: 128px; flex-shrink: 0; margin-left: auto; padding: 0 10px; height: 42px; display: flex; align-items: center; justify-content: center; font-size: 10px; text-transform: uppercase; color: var(--text-dim); font-weight: 700; letter-spacing: 0.5px; border-left: 2px solid var(--border); background: var(--bg-elev); z-index: 3; }
   .tl-sticky-header-days { display: flex; overflow: hidden; }
   .tl-day-headers { display: grid; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg-elev); z-index: 3; height: 42px; }
   .tl-day-header { padding: 4px 0; font-size: 10px; text-align: center; border-right: 1px solid var(--border); color: var(--text-dim); }
@@ -1109,6 +1116,7 @@
     <button class="btn btn-secondary btn-small" id="pinMgrBtn" onclick="openPinAdmin()" style="width:100%; margin-bottom:6px; display:none">🔐 Coduri PIN</button>
     <button class="btn btn-secondary btn-small" id="loadBackupBtn" onclick="openBackupManager()" style="width:100%; margin-bottom:6px; display:none">🔄 Manager Backup / Restaurare</button>
     <button class="btn btn-secondary btn-small" id="archiveBtn" onclick="openArchive()" style="width:100%; margin-bottom:6px; display:none; border-color:#8b5cf6; color:#8b5cf6">📦 Arhivă persoane</button>
+    <button class="btn btn-secondary btn-small" id="permissionsBtn" onclick="openPermissionsPanel()" style="width:100%; margin-bottom:6px; display:none; border-color:#0ea5e9; color:#0ea5e9">🔑 Permisiuni acces</button>
     <button class="btn btn-secondary btn-small" id="importExcelBtn" onclick="document.getElementById('importExcelFile').click()" style="width:100%; margin-bottom:6px; display:none; border-color:#34d399; color:#34d399">📥 Import Excel → HTML</button>
     <input type="file" id="importExcelFile" accept=".xlsx,.xlsm,.xls" style="display:none" multiple onchange="importExcelFile(event)">
     <button class="btn btn-secondary btn-small" id="actLogBtn" onclick="openActivityLog()" style="width:100%; margin-bottom:6px; display:none; border-color:#818cf8; color:#818cf8">📋 Istoric activitate</button>
@@ -1289,6 +1297,7 @@
       <div class="modal" style="max-width:520px">
         <h3>⚙️ Persoane afișate în tab Libere Springeri</h3>
         <div class="modal-sub">Selectează angajații care apar în tab-ul Libere Springeri. Aceștia pot fi marcați cu Lucrat/Liber.</div>
+        <input type="text" id="liberePersonSearch" placeholder="🔍 Caută după nume..." oninput="filterLiberePersonList()" style="width:100%;padding:8px 12px;margin-top:10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;box-sizing:border-box">
         <div id="liberePersonList" style="max-height:360px;overflow-y:auto;margin:12px 0;display:grid;grid-template-columns:1fr 1fr;gap:6px"></div>
         <div class="modal-actions">
           <button class="btn btn-secondary" onclick="closeModal('modalLibereSelect')">Anulează</button>
@@ -1453,6 +1462,19 @@
       <button class="btn" id="conflictKeepApp" style="width:100%;background:#6366f1;border-color:#6366f1" onclick="resolveConflict('keepApp')">✅ Păstrează aplicația (ignoră Excel)</button>
       <button class="btn" id="conflictApplyExcel" style="width:100%;background:#f59e0b;border-color:#f59e0b;color:#000" onclick="resolveConflict('applyExcel')">📥 Aplică ce zice Excel</button>
       <button class="btn btn-secondary" onclick="closeModal('modalConflict');_currentConflict=null">Amână (lasă ❓ vizibil)</button>
+    </div>
+  </div>
+</div>
+
+<!-- PERMISIUNI MODAL -->
+<div class="modal-bg" id="modalPermissions">
+  <div class="modal" style="max-width:700px">
+    <h3>🔑 Permisiuni acces</h3>
+    <div class="modal-sub">Acordă acces suplimentar pe modul, pentru orice utilizator — pe lângă accesul implicit (care rămâne neschimbat). Modificările se aplică la următoarea logare a utilizatorului respectiv.</div>
+    <div id="permissionsContent" style="max-height:480px;overflow-y:auto;margin:14px 0"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modalPermissions')">Închide</button>
+      <button class="btn" onclick="savePermissionsFromPanel()">💾 Salvează permisiunile</button>
     </div>
   </div>
 </div>
@@ -1659,6 +1681,10 @@ const auth = firebase.auth();
 // curent e deschis și dispare garantat la închiderea lui reală.
 auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(e=>console.warn("auth persistence err",e));
 const db   = firebase.firestore();
+// Pornim încărcarea permisiunilor cât mai devreme posibil — de regulă se
+// termină cu mult înainte ca userul să apuce să se logheze (PIN/parolă),
+// ca enterApp() să aibă deja datele disponibile sincron.
+setTimeout(()=>{ if(typeof loadPermOverrides==="function") loadPermOverrides(); }, 0);
 
 const ADMIN_EMAIL = "paulandreimacarie@yahoo.com";
 
@@ -2525,36 +2551,42 @@ function enterApp(userKey){
     if(_planComp) _planComp.style.display="none";
     const _concMod=document.getElementById("concediiModule");
     if(_concMod) _concMod.style.display="none";
-    // Setează grup
-    sortView="ruhstorf";
+    // Setează grup — implicit doar Ruhstorf, dar Admin poate acorda și Eiselfing
+    const mihOverrideGroups = hasModuleView(userKey,"sortatori") ? (permFor(userKey,"sortatori").groups||[]) : [];
     const tabEis=document.getElementById("sortTabEiselfing");
     const tabRuh=document.getElementById("sortTabRuhstorf");
-    if(tabEis) tabEis.style.display="none";
+    if(mihOverrideGroups.includes("eiselfing")){
+      if(tabEis) tabEis.style.display="block";
+      sortView="ruhstorf"; // rămâne implicit pe Ruhstorf, dar poate comuta
+    } else {
+      if(tabEis) tabEis.style.display="none";
+      sortView="ruhstorf";
+    }
     if(tabRuh){tabRuh.classList.add("active");tabRuh.style.display="block";}
   } else {
     // Ceilalți useri — arată normal
     if(sidebarColl)    sidebarColl.style.display=""; // reset from Mihaela hide
     if(sidebarToggle)  sidebarToggle.style.display=""; // reset
     if(concediiModule) concediiModule.style.display="block";
-    const canSeeSortatori2 = ["madalina","tania","admin"].includes(userKey);
+    const sortOverrideView = hasModuleView(userKey,"sortatori");
+    const canSeeSortatori2 = ["madalina","tania","admin"].includes(userKey) || sortOverrideView;
     if(modSortatori)   modSortatori.style.display = canSeeSortatori2?"block":"none";
     if(modConcedii)    modConcedii.style.display="block";
     if(quickAction)    quickAction.style.display = userKey==="tania" ? "none" : "";
     if(statsBar)       statsBar.style.display="";
     if(legend)         legend.style.display="";
     appMode="concedii";
-    // Filter tabs pentru sortatori
+    // Filter tabs pentru sortatori — combinăm grupurile implicite cu cele acordate suplimentar de Admin
     const tabEis=document.getElementById("sortTabEiselfing");
     const tabRuh=document.getElementById("sortTabRuhstorf");
-    if(userKey==="madalina"){
-      sortView="eiselfing";
-      if(tabRuh) tabRuh.style.display="none";
-      if(tabEis){tabEis.classList.add("active");tabEis.style.display="block";}
-    } else {
-      sortView="eiselfing";
-      if(tabEis){tabEis.style.display="block";}
-      if(tabRuh){tabRuh.style.display="block";}
-    }
+    const defaultSortGroups = userKey==="madalina" ? ["eiselfing"] : (isTaniaAdm ? ["eiselfing","ruhstorf"] : []);
+    const overrideSortGroups = sortOverrideView ? (permFor(userKey,"sortatori").groups||[]) : [];
+    const allowedSortGroups = new Set([...defaultSortGroups, ...overrideSortGroups]);
+    if(tabEis) tabEis.style.display = allowedSortGroups.has("eiselfing") ? "block" : "none";
+    if(tabRuh) tabRuh.style.display = allowedSortGroups.has("ruhstorf") ? "block" : "none";
+    sortView = allowedSortGroups.has("eiselfing") ? "eiselfing" : (allowedSortGroups.has("ruhstorf") ? "ruhstorf" : "eiselfing");
+    if(tabEis) tabEis.classList.toggle("active", sortView==="eiselfing");
+    if(tabRuh) tabRuh.classList.toggle("active", sortView==="ruhstorf");
   }
 
   document.getElementById("addDriverBtn").style.display = isAdm?"block":"none";
@@ -2570,6 +2602,8 @@ function enterApp(userKey){
   if(loadBackupBtn) loadBackupBtn.style.display = isAdm?"block":"none";
   const archiveBtn = document.getElementById("archiveBtn");
   if(archiveBtn) archiveBtn.style.display = isAdm?"block":"none";
+  const permissionsBtn2 = document.getElementById("permissionsBtn");
+  if(permissionsBtn2) permissionsBtn2.style.display = isAdm?"block":"none";
   const importExcelBtn2 = document.getElementById("importExcelBtn");
   if(importExcelBtn2) importExcelBtn2.style.display = isAdm?"block":"none";
   const downloadBackupBtn = document.getElementById("downloadBackupBtn");
@@ -2577,7 +2611,7 @@ function enterApp(userKey){
   const normalizeBtn = document.getElementById("normalizeBtn");
   if(normalizeBtn) normalizeBtn.style.display = isAdm?"block":"none";
   const sortEditBtn = document.getElementById("sortEditModeBtn");
-  const canEditSort = isAdm || userKey==="mihaela" || userKey==="madalina";
+  const canEditSort = isAdm || userKey==="mihaela" || userKey==="madalina" || hasModuleEdit(userKey,"sortatori");
   if(sortEditBtn) sortEditBtn.style.display = canEditSort?"inline-flex":"none";
   const actLogBtn2 = document.getElementById("actLogBtn");
   if(actLogBtn2) actLogBtn2.style.display = isAdm?"block":"none";
@@ -2587,9 +2621,9 @@ function enterApp(userKey){
   if(uploadBackupBtn) uploadBackupBtn.style.display = isAdm?"block":"none";
 
   const modPlanificare2 = document.getElementById("modPlanificare");
-  if(modPlanificare2) modPlanificare2.style.display = isAdm?"block":"none";
+  if(modPlanificare2) modPlanificare2.style.display = (isAdm||hasModuleView(userKey,"planificare"))?"block":"none";
   const modLibere2 = document.getElementById("modLibere");
-  if(modLibere2) modLibere2.style.display = (isAdm||userKey==="raluca"||userKey==="mihaela"||userKey==="tania")?"block":"none";
+  if(modLibere2) modLibere2.style.display = (isAdm||userKey==="raluca"||userKey==="mihaela"||userKey==="tania"||hasModuleView(userKey,"libere"))?"block":"none";
   const sidebarCollapseBtn = document.getElementById("sidebarCollapseBtn");
   if(sidebarCollapseBtn) sidebarCollapseBtn.style.display = isTaniaAdm?"inline-flex":"none";
   // Asigurăm vizibilitatea și după render
@@ -2613,7 +2647,7 @@ function enterApp(userKey){
   const sortPrintBtn = document.getElementById("sortPrintBtn");
   if(sortPrintBtn) sortPrintBtn.style.display = isTaniaAdm?"block":"none";
   const sortAdm = document.getElementById("sortAdminControls");
-  if(sortAdm) sortAdm.style.display = isAdm?"inline":"none";
+  if(sortAdm) sortAdm.style.display = (isAdm||hasModuleEdit(userKey,"sortatori"))?"inline":"none";
 
   // Notificare la login — setăm flag, se afișează după ce datele sunt încărcate din Firebase
   window._pendingLoginNotif = !isMihaela ? userKey : null;
@@ -3988,10 +4022,12 @@ function renderTimeline(){
     const cls=["tl-day-header"];if(isSun)cls.push("sunday");if(holiday)cls.push("holiday");if(isTd)cls.push("today");
     stickyHtml+=`<div class='${cls.join(" ")}' style='width:${colWidthPx}px;min-width:${colWidthPx}px'${holiday?` title="${escapeHtml(holiday)}"`:""} ><div class='dnum'>${dn}</div><div class='dow'>${DOW_MIN[(d.getDay()+6)%7]}</div></div>`;
   }
-  stickyHtml+=`</div></div>`;
+  stickyHtml+=`</div>`;
+  stickyHtml+=`<div class='tl-sticky-header-rem'>Rămas</div>`;
+  stickyHtml+=`</div>`;
 
   let driverHtml="<div class='tl-driver-col'>";
-  let remHtml="<div class='tl-rem-col'><div class='tl-rem-header'>Rămas</div>";
+  let remHtml="<div class='tl-rem-col'>";
 
   sortedDrivers.forEach(dr=>{
     driverHtml+=`<div class='tl-driver-row' data-driver-row='${dr.id}' onclick="openLeaveModal('${dr.id}','leaves')">${escapeHtml(dr.name)}</div>`;
@@ -4002,7 +4038,7 @@ function renderTimeline(){
     const maxD=dr.maxDays||0;
     const total=maxD+carry;
     if(total===0){
-      remHtml+=`<div class='tl-rem-cell none'>—</div>`;
+      remHtml+=`<div class='tl-rem-cell none'><span class='tl-rem-name'>${escapeHtml(dr.name)}</span><span class='tl-rem-val'>—</span></div>`;
     } else {
       // Folosite înainte de luna curentă (inclusiv porțiunea din concedii care traversează)
       const ms=new Date(y,m,1);
@@ -4022,7 +4058,7 @@ function renderTimeline(){
       },0);
       const rem=total-usedBefore-usedThis;
       const cls=rem<0?"neg":rem<3?"warn":"pos";
-      remHtml+=`<div class='tl-rem-cell ${cls}' title='Disponibil: ${total} · Folosit: ${usedBefore+usedThis}'>${rem}</div>`;
+      remHtml+=`<div class='tl-rem-cell ${cls}' title='Disponibil: ${total} · Folosit: ${usedBefore+usedThis}'><span class='tl-rem-name'>${escapeHtml(dr.name)}</span><span class='tl-rem-val'>${rem}</span></div>`;
     }
   });
 
@@ -4181,7 +4217,7 @@ async function switchYear(year){
     if(!testSnap.exists){ await initYearFromBase(uk,year); }
     else { initApp(uk); }
   }catch(e){ await initYearFromBase(uk,year); }
-  loadPresState(); loadSortState(); loadBackupInfoFromStorage(); loadLibereState();
+  loadPresState(); loadSortState(); loadBackupInfoFromStorage(); loadLibereState(); loadPermOverrides();
   toast("📅 Schimbat la "+year);
 }
 
@@ -4328,6 +4364,128 @@ function setAppMode(mode){
 // Stare: { persons: ["Nume1",...], days: {"2026-07": {"Nume1": {"1":"lucrat","2":"liber",...}}} }
 // ============================================================
 let libereState = { persons: [], days: {} };
+
+// ============================================================
+// SISTEM DE PERMISIUNI FLEXIBILE (acordate de Admin)
+// Suprapune (nu înlocuiește) accesul implicit hardcodat — admin poate
+// acorda acces suplimentar oricărui user, pe modul (sortatori/planificare/
+// libere) și, pentru sortatori, pe grup (eiselfing/ruhstorf).
+// Structură: { userKey: { sortatori:{access,groups}, planificare:{access}, libere:{access} } }
+// access: "none" | "view" | "edit"
+// ============================================================
+let permOverrides = {};
+let _permUnsub = null;
+
+function permColl(){ return "permissions"; }
+
+async function loadPermOverrides(){
+  try{
+    const snap = await db.collection(permColl()).doc("overrides").get();
+    permOverrides = snap.exists ? (snap.data()||{}) : {};
+  }catch(e){ console.warn("perm load err",e); permOverrides={}; }
+}
+
+async function savePermOverrides(){
+  try{
+    await db.collection(permColl()).doc("overrides").set(JSON.parse(JSON.stringify(permOverrides)));
+    return true;
+  }catch(e){
+    console.error("perm save err",e);
+    toast("❌ Eroare la salvare permisiuni: "+(e.message||e.code||"necunoscută"),true);
+    return false;
+  }
+}
+
+function permFor(userKey, module){
+  return (permOverrides[userKey]&&permOverrides[userKey][module]) || {access:"none",groups:[]};
+}
+function hasModuleView(userKey, module){
+  const a=permFor(userKey,module).access;
+  return a==="view"||a==="edit";
+}
+function hasModuleEdit(userKey, module){
+  return permFor(userKey,module).access==="edit";
+}
+function hasModuleGroup(userKey, module, group){
+  return (permFor(userKey,module).groups||[]).includes(group);
+}
+function canEditPlanificare(){
+  return isAdmin()||hasModuleEdit(window.activeUserKey||"","planificare");
+}
+
+// ── Panou Admin: acordare permisiuni suplimentare pe modul/grup ──
+const PERM_USERS = [
+  {key:"raluca",   name:"Raluca",    initial:"R", color:"#c026d3"},
+  {key:"madalina", name:"Mădălina",  initial:"M", color:"#10b981"},
+  {key:"corina",   name:"Corina",    initial:"C", color:"#f59e0b"},
+  {key:"mihaela",  name:"Mihaela",   initial:"Mi",color:"#a855f7"},
+  {key:"tania",    name:"Tania",     initial:"T", color:"#2563eb"},
+];
+const PERM_MODULES = [
+  {key:"sortatori",   label:"📦 Sortatori",   groups:["eiselfing","ruhstorf"]},
+  {key:"planificare", label:"🗓️ Planificare", groups:null},
+  {key:"libere",      label:"🏠 Libere",       groups:null},
+];
+
+function openPermissionsPanel(){
+  if(!isAdmin()) return;
+  const cont=document.getElementById("permissionsContent");
+  if(!cont) return;
+  cont.innerHTML = PERM_USERS.map(u=>{
+    const rows = PERM_MODULES.map(mod=>{
+      const p = permFor(u.key, mod.key);
+      const groupsHtml = mod.groups ? mod.groups.map(g=>{
+        const checked = (p.groups||[]).includes(g);
+        const gLabel = g==="eiselfing"?"Eiselfing":"Ruhstorf";
+        return `<label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;margin-right:10px;cursor:pointer">
+          <input type="checkbox" class="perm-group-cb" data-user="${u.key}" data-module="${mod.key}" data-group="${g}" ${checked?"checked":""} style="width:14px;height:14px"> ${gLabel}
+        </label>`;
+      }).join("") : "";
+      return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--border);flex-wrap:wrap">
+        <span style="width:120px;font-size:12px;font-weight:600;flex-shrink:0">${mod.label}</span>
+        <select class="perm-access-select" data-user="${u.key}" data-module="${mod.key}" style="padding:4px 8px;font-size:12px;border:1px solid var(--border);border-radius:5px;background:var(--bg);color:var(--text)">
+          <option value="none" ${p.access==="none"||!p.access?"selected":""}>Fără acces</option>
+          <option value="view" ${p.access==="view"?"selected":""}>Vizualizare</option>
+          <option value="edit" ${p.access==="edit"?"selected":""}>Editare</option>
+        </select>
+        ${groupsHtml}
+      </div>`;
+    }).join("");
+    return `<div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px;background:var(--bg-elev)">
+      <div style="font-weight:800;font-size:14px;margin-bottom:2px;display:flex;align-items:center;gap:8px">
+        <span style="width:24px;height:24px;border-radius:50%;background:${u.color};color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;flex-shrink:0">${u.initial}</span>
+        ${u.name}
+      </div>
+      ${rows}
+    </div>`;
+  }).join("");
+  openModal("modalPermissions");
+}
+
+async function savePermissionsFromPanel(){
+  const newOverrides = {};
+  PERM_USERS.forEach(u=>{ newOverrides[u.key] = {}; });
+
+  document.querySelectorAll(".perm-access-select").forEach(sel=>{
+    const uk=sel.dataset.user, mod=sel.dataset.module;
+    if(!newOverrides[uk]) newOverrides[uk]={};
+    newOverrides[uk][mod] = {access: sel.value, groups: []};
+  });
+  document.querySelectorAll(".perm-group-cb:checked").forEach(cb=>{
+    const uk=cb.dataset.user, mod=cb.dataset.module, g=cb.dataset.group;
+    if(!newOverrides[uk]) newOverrides[uk]={};
+    if(!newOverrides[uk][mod]) newOverrides[uk][mod]={access:"none",groups:[]};
+    newOverrides[uk][mod].groups.push(g);
+  });
+
+  permOverrides = newOverrides;
+  const ok = await savePermOverrides();
+  if(ok){
+    closeModal("modalPermissions");
+    toast("✓ Permisiuni salvate — se aplică la următoarea logare");
+    logActivity("🔑 Permisiuni actualizate", "Admin", "");
+  }
+}
 let libereCurrentDate = new Date();
 let _libereDrag = { active: false, mode: null };
 let _libereUnsub = null;
@@ -4350,7 +4508,6 @@ function loadLibereState(){
 async function saveLibereState(){
   try{
     await db.collection(libereColl()).doc("state").set(JSON.parse(JSON.stringify(libereState)));
-    scheduleBackup();
     return true;
   }catch(e){
     console.error("libere save err",e);
@@ -4376,7 +4533,7 @@ function goLibereToday(){
 
 function canEditLibere(){
   const uk = window.activeUserKey||"";
-  return uk==="admin"||uk==="raluca"||uk==="mihaela";
+  return uk==="admin"||uk==="raluca"||uk==="mihaela"||hasModuleEdit(uk,"libere");
 }
 
 // Statusul automat dintr-un concediu/krank existent
@@ -4580,23 +4737,48 @@ document.addEventListener("mouseup",()=>{ _libereDrag={active:false,mode:null,na
 document.addEventListener("mousemove",e=>{ if(_libereDrag.active&&e.buttons===0) _libereDrag={active:false,mode:null,name:null}; });
 
 // ── Modal selectare persoane ──
+let _libereSelectChecked = new Set();
+let _libereAllDrivers = [];
+
 function openLibereSelect(){
   if(!isAdmin()) return;
-  const allDrivers=[...(state.drivers||[])].filter(d=>!d.archived).sort((a,b)=>a.name.localeCompare(b.name,"ro"));
-  const list=document.getElementById("liberePersonList");
-  if(!list) return;
-  list.innerHTML=allDrivers.map(d=>{
-    const checked=(libereState.persons||[]).includes(d.name);
-    return `<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:var(--bg)">
-      <input type="checkbox" value="${escapeHtml(d.name)}" ${checked?"checked":""} style="width:16px;height:16px">
-      <span style="font-size:12px">${escapeHtml(d.name)}</span>
-    </label>`;
-  }).join("");
+  _libereAllDrivers=[...(state.drivers||[])].filter(d=>!d.archived).sort((a,b)=>a.name.localeCompare(b.name,"ro"));
+  _libereSelectChecked = new Set(libereState.persons||[]);
+  const searchInput=document.getElementById("liberePersonSearch");
+  if(searchInput) searchInput.value="";
+  renderLiberePersonList(_libereAllDrivers);
   openModal("modalLibereSelect");
 }
 
+function renderLiberePersonList(drivers){
+  const list=document.getElementById("liberePersonList");
+  if(!list) return;
+  if(!drivers.length){
+    list.innerHTML='<div style="grid-column:1/-1;padding:16px;text-align:center;color:var(--text-dim);font-size:12px">Niciun rezultat.</div>';
+    return;
+  }
+  list.innerHTML=drivers.map(d=>{
+    const checked=_libereSelectChecked.has(d.name);
+    return `<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:var(--bg)">
+      <input type="checkbox" value="${escapeHtml(d.name)}" ${checked?"checked":""} onchange="toggleLiberePerson(this)" style="width:16px;height:16px">
+      <span style="font-size:12px">${escapeHtml(d.name)}</span>
+    </label>`;
+  }).join("");
+}
+
+function toggleLiberePerson(cb){
+  if(cb.checked) _libereSelectChecked.add(cb.value);
+  else _libereSelectChecked.delete(cb.value);
+}
+
+function filterLiberePersonList(){
+  const q=normalizeForSearch(document.getElementById("liberePersonSearch").value||"");
+  const filtered=q?_libereAllDrivers.filter(d=>normalizeForSearch(d.name).includes(q)):_libereAllDrivers;
+  renderLiberePersonList(filtered);
+}
+
 async function saveLiberePersons(){
-  const checked=[...document.querySelectorAll("#liberePersonList input[type=checkbox]:checked")].map(cb=>cb.value);
+  const checked=[..._libereSelectChecked];
   libereState.persons=checked;
   const ok=await saveLibereState();
   if(ok){
@@ -4636,7 +4818,6 @@ async function saveSortState(){
       : Object.values(sortState.drivers||{}).some(arr=>arr&&arr.length>0);
     if(!hasData){ console.warn("saveSortState: no data in any month — ABORTED"); return; }
     await db.collection(sortatoriColl()).doc("state").set(JSON.parse(JSON.stringify(sortState)));
-    scheduleBackup();
   }catch(e){ console.error("sort save",e); }
 }
 
@@ -4717,7 +4898,7 @@ function sortDragStart(driverName, day, isRight){
       toast("Poți marca prezența doar în luna curentă",true); return;
     }
   }
-  if(!isAdmin()&&!isMih&&!isMad) return;
+  if(!isAdmin()&&!isMih&&!isMad&&!hasModuleEdit(window.activeUserKey||"","sortatori")) return;
   const mk = getSortKey();
   const cur = (sortState.presence[mk]&&sortState.presence[mk][driverName]&&sortState.presence[mk][driverName][String(day)]);
   // Determinăm modul după butonul apăsat și starea curentă
@@ -4933,9 +5114,10 @@ function openAddSortatorCat(group, cat){
   const grpLabel = group==="eiselfing"?"Eiselfing":"Ruhstorf";
   
   let html = `<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Adaugă la ${catLabel} — ${grpLabel}</div>`;
-  html += '<div style="max-height:280px;overflow-y:auto">';
+  html += `<input type="text" id="sortPickSearch" placeholder="🔍 Caută după nume..." oninput="filterSortPickList()" style="width:100%;padding:7px 10px;margin-bottom:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;box-sizing:border-box">`;
+  html += '<div style="max-height:280px;overflow-y:auto" id="sortPickListInner">';
   avail.forEach((dr,i)=>{
-    html += `<label style="display:flex;align-items:center;gap:10px;padding:7px 4px;cursor:pointer;border-bottom:1px solid var(--border)">
+    html += `<label class="sort-pick-row" data-search="${escapeHtml(normalizeForSearch(dr.name))}" style="display:flex;align-items:center;gap:10px;padding:7px 4px;cursor:pointer;border-bottom:1px solid var(--border)">
       <input type="checkbox" class="sort-pick-cb" value="${i}" style="width:16px;height:16px;cursor:pointer">
       <span style="font-size:13px">${escapeHtml(dr.name)}</span>
     </label>`;
@@ -4950,6 +5132,13 @@ function openAddSortatorCat(group, cat){
   document.getElementById("modalDaySub").textContent   = avail.length+" persoane disponibile";
   document.getElementById("dayDriversList").innerHTML  = html;
   openModal("modalDay");
+}
+
+function filterSortPickList(){
+  const q=normalizeForSearch(document.getElementById("sortPickSearch").value||"");
+  document.querySelectorAll(".sort-pick-row").forEach(row=>{
+    row.style.display = (!q||row.dataset.search.includes(q)) ? "flex" : "none";
+  });
 }
 
 function confirmSortPick(){
@@ -5060,8 +5249,8 @@ function renderSortatoriTimeline(){
   const isMihaela2=_uk2==="mihaela";
   const today2=new Date();
   const mihaelaCurMonth=isMihaela2&&(sortCurrentDate.getFullYear()===today2.getFullYear()&&sortCurrentDate.getMonth()===today2.getMonth());
-  const canEdit=isAdmin()||(!isMihaela2&&_uk2==="madalina")||(isMihaela2&&mihaelaCurMonth);
-  const canAdd=isAdmin();
+  const canEdit=isAdmin()||(!isMihaela2&&_uk2==="madalina")||(isMihaela2&&mihaelaCurMonth)||hasModuleEdit(_uk2,"sortatori");
+  const canAdd=isAdmin()||hasModuleEdit(_uk2,"sortatori");
 
   const perm   =drivers.filter(d=>!d.category||d.category==="permanent");
   const rotatie=drivers.filter(d=>d.category==="rotatie");
@@ -6446,7 +6635,7 @@ function confirmSortEdit(){
 
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.07.13-04";
+const APP_VERSION = "2026.07.13-06";
 
 // La login admin — publică automat dacă versiunea din cod e nouă față de Firestore
 async function autoPublishVersionIfNew(){
@@ -6621,7 +6810,7 @@ let _planMouseDrag = {active:false, driverId:null};
 let _planDraggedRowEl = null;
 
 function planRowMouseDown(ev, driverId){
-  if(!isAdmin()) return;
+  if(!canEditPlanificare()) return;
   ev.preventDefault();
   _planMouseDrag = {active:true, driverId};
   document.body.style.cursor = "grabbing";
@@ -6767,7 +6956,7 @@ function renderPlanificare(){
     isFirstCat=false;
 
     // Category header
-    const planDropAttrs = isAdmin()
+    const planDropAttrs = canEditPlanificare()
       ? `data-plan-drop-cat="${cat.key}" onmouseenter="planCatMouseEnter(event)" onmouseleave="planCatMouseLeave(event)" onmouseup="planCatMouseUp(event,'${cat.key}')"`
       : "";
     html+=`<tr class="plan-cat-drop" ${planDropAttrs}>`;
@@ -6793,7 +6982,7 @@ function renderPlanificare(){
 
       html+=`<tr>`;
       html+=`<td style="width:26px;background:${rowBg};border-bottom:1px solid var(--border);text-align:center;padding:2px">${badge}</td>`;
-      html+=`<td data-plan-drag-id="${dr.id}" ${isAdmin()?`onmousedown="planRowMouseDown(event,'${dr.id}')"`:""} style="background:${rowBg};border-bottom:1px solid var(--border);padding:4px 8px;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:158px;${isAdmin()?"cursor:grab":""}">${escapeHtml(dr.name)}</td>`;
+      html+=`<td data-plan-drag-id="${dr.id}" ${canEditPlanificare()?`onmousedown="planRowMouseDown(event,'${dr.id}')"`:""} style="background:${rowBg};border-bottom:1px solid var(--border);padding:4px 8px;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:158px;${canEditPlanificare()?"cursor:grab":""}">${escapeHtml(dr.name)}</td>`;
 
       weeks.forEach((wkDays,wi)=>{
         const wkStateKey=wkDays[0].getFullYear()+"-W"+String(getISOWeek(wkDays[0])).padStart(2,"0");
@@ -6933,7 +7122,7 @@ function renderPlanCompliance(){
 }
 
 function planDragStart(name,wkKey,dow){
-  if(!isAdmin()) return; // doar Admin poate bifa planificarea; Tania doar vizualizează
+  if(!canEditPlanificare()) return; // doar Admin sau useri cu acces de editare acordat
   const cur=(planState[wkKey]&&planState[wkKey][name]&&planState[wkKey][name][dow])||0;
   _planDrag={active:true,mode:cur===1?0:1,changed:false};
   _setPlanCell(name,wkKey,dow,_planDrag.mode);
@@ -7694,7 +7883,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
-<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.07.13-04</div>
+<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.07.13-06</div>
 
 </body>
 </html>

@@ -738,7 +738,28 @@
   .tl-driver-row:active { cursor: grabbing; }
   .tl-driver-row:hover { background: var(--bg-elev-2); }
   .tl-grid-wrap { overflow: visible; }
-  .tl-rem-col { position: sticky; right: 0; background: var(--bg-elev); z-index: 2; border-left: 2px solid var(--border); display: flex; flex-direction: column; min-width: 52px; }
+  .tl-cell.conflict {
+    position: relative;
+    outline: 2px solid #ef4444 !important;
+    outline-offset: -2px;
+    animation: conflict-pulse 1.5s ease-in-out infinite;
+    cursor: pointer !important;
+    z-index: 3;
+  }
+  .tl-cell.conflict::after {
+    content: "❓";
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%,-50%);
+    font-size: 13px;
+    line-height: 1;
+    pointer-events: none;
+    filter: drop-shadow(0 0 2px rgba(239,68,68,0.8));
+  }
+  @keyframes conflict-pulse {
+    0%,100% { outline-color: #ef4444; box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+    50% { outline-color: #ff6b6b; box-shadow: 0 0 0 3px rgba(239,68,68,0); }
+  } background: var(--bg-elev); z-index: 2; border-left: 2px solid var(--border); display: flex; flex-direction: column; min-width: 52px; }
   .tl-rem-cell { height: 34px; min-height: 34px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; border-bottom: 1px solid var(--border); box-sizing: border-box; }
   .tl-rem-header { height: 42px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; text-transform: uppercase; color: var(--text-dim); letter-spacing: 0.3px; border-bottom: 2px solid var(--border); }
   .tl-rem-cell.pos { color: #10b981; }
@@ -1113,7 +1134,7 @@
         <button id="modConcedii" class="mod-tab mod-tab-active" data-color="amber" onclick="setAppMode('concedii')"><span class="mod-tab-icon">📅</span>Concedii</button>
         <button id="modSortatori" class="mod-tab" data-color="indigo" onclick="setAppMode('sortatori')" style="display:none"><span class="mod-tab-icon">📦</span>Sortatori</button>
         <button id="modPlanificare" class="mod-tab" data-color="green" onclick="setAppMode('planificare')" style="display:none"><span class="mod-tab-icon">🗓️</span>Planificare</button>
-        <button id="modLibere" class="mod-tab" data-color="red" onclick="setAppMode('libere')" style="display:none"><span class="mod-tab-icon">🏠</span>Libere</button>
+        <button id="modLibere" class="mod-tab" data-color="red" onclick="setAppMode('libere')" style="display:none"><span class="mod-tab-icon">🏠</span>Libere Springeri</button>
       </div>
     </div>
     <div id="concediiModule">
@@ -1265,8 +1286,8 @@
     <!-- MODAL Selectare persoane pentru Libere -->
     <div class="modal-bg" id="modalLibereSelect">
       <div class="modal" style="max-width:520px">
-        <h3>⚙️ Persoane afișate în tab Libere</h3>
-        <div class="modal-sub">Selectează angajații care apar în tab-ul Libere. Aceștia pot fi marcați cu Lucrat/Liber.</div>
+        <h3>⚙️ Persoane afișate în tab Libere Springeri</h3>
+        <div class="modal-sub">Selectează angajații care apar în tab-ul Libere Springeri. Aceștia pot fi marcați cu Lucrat/Liber.</div>
         <div id="liberePersonList" style="max-height:360px;overflow-y:auto;margin:12px 0;display:grid;grid-template-columns:1fr 1fr;gap:6px"></div>
         <div class="modal-actions">
           <button class="btn btn-secondary" onclick="closeModal('modalLibereSelect')">Anulează</button>
@@ -1417,6 +1438,20 @@
       <button class="btn btn-secondary" id="archiveDriverBtn" onclick="archiveDriver(editingDriverId)" style="display:none;border-color:#8b5cf6;color:#8b5cf6">📦 Arhivează</button>
       <button class="btn btn-secondary" onclick="closeModal('modalDriver')">Anulează</button>
       <button class="btn" onclick="saveDriver()">Salvează</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CONFLICT EXCEL vs APP -->
+<div class="modal-bg" id="modalConflict">
+  <div class="modal" style="max-width:440px">
+    <h3>⚠️ Conflict detectat</h3>
+    <div id="conflictDetails" style="margin:12px 0;padding:12px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:8px;font-size:13px;line-height:1.7"></div>
+    <div style="margin:8px 0;font-size:12px;color:var(--text-dim)">Ce vrei să păstrezi?</div>
+    <div class="modal-actions" style="justify-content:stretch;flex-direction:column;gap:8px">
+      <button class="btn" id="conflictKeepApp" style="width:100%;background:#6366f1;border-color:#6366f1" onclick="resolveConflict('keepApp')">✅ Păstrează aplicația (ignoră Excel)</button>
+      <button class="btn" id="conflictApplyExcel" style="width:100%;background:#f59e0b;border-color:#f59e0b;color:#000" onclick="resolveConflict('applyExcel')">📥 Aplică ce zice Excel</button>
+      <button class="btn btn-secondary" onclick="closeModal('modalConflict');_currentConflict=null">Amână (lasă ❓ vizibil)</button>
     </div>
   </div>
 </div>
@@ -2906,6 +2941,102 @@ function unarchiveDriver(id){
   toast("✅ "+dr.name+" restaurat din arhivă");
 }
 
+// ── Rezolvare conflicte Excel vs Aplicație ──
+let _currentConflict=null;
+window._importConflicts={}; // conflicte detectate la import Excel — cheie: drId_dateStr
+
+function openConflictModal(conflictKey){
+  const c=window._importConflicts&&window._importConflicts[conflictKey];
+  if(!c) return;
+  _currentConflict=c;
+  const exLabel={urlaub:"🟡 Urlaub (Concediu)",krank:"🔵 Krank (Medical)",unpaid:"🟣 Fără plată",prezent:"✅ Prezent (X)"}[c.excelSays]||c.excelSays;
+  const appLabel={urlaub:"🟡 Urlaub (Concediu)",krank:"🔵 Krank (Medical)",unpaid:"🟣 Fără plată",prezent:"✅ Prezent (X)"}[c.appSays]||c.appSays;
+  document.getElementById("conflictDetails").innerHTML=`
+    <div style="font-weight:700;font-size:14px;margin-bottom:8px">${escapeHtml(c.drName)} — ${c.dateStr}</div>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <div style="flex:1;padding:8px;background:var(--bg-elev-2);border-radius:6px;text-align:center">
+        <div style="font-size:10px;color:var(--text-dim);margin-bottom:4px">ÎN APLICAȚIE</div>
+        <div style="font-weight:700">${appLabel}</div>
+      </div>
+      <div style="font-size:18px;color:var(--text-dim)">≠</div>
+      <div style="flex:1;padding:8px;background:var(--bg-elev-2);border-radius:6px;text-align:center">
+        <div style="font-size:10px;color:var(--text-dim);margin-bottom:4px">ÎN EXCEL</div>
+        <div style="font-weight:700">${exLabel}</div>
+      </div>
+    </div>
+  `;
+  openModal("modalConflict");
+}
+
+function resolveConflict(action){
+  const c=_currentConflict; if(!c) return;
+  const dr=state.drivers.find(d=>d.id===c.drId); if(!dr) return;
+  if(action==="applyExcel"){
+    const ds=c.dateStr;
+    // Ștergem din aplicație ziua conflictuală (din orice tip de concediu)
+    const removeDay=(arr)=>{
+      if(!arr) return arr;
+      const result=[];
+      arr.forEach(l=>{
+        const ls=parseDate(l.start),le=parseDate(l.end),d=parseDate(ds);
+        if(d<ls||d>le){result.push(l);return;}
+        // Scoatem ziua respectivă din interval
+        if(fmtDate(ls)===ds&&fmtDate(le)===ds) return; // interval de 1 zi — eliminat complet
+        if(fmtDate(ls)===ds){result.push({start:fmtDate(new Date(d.getTime()+86400000)),end:l.end});return;}
+        if(fmtDate(le)===ds){result.push({start:l.start,end:fmtDate(new Date(d.getTime()-86400000))});return;}
+        // Ziua e la mijloc — split
+        result.push({start:l.start,end:fmtDate(new Date(d.getTime()-86400000))});
+        result.push({start:fmtDate(new Date(d.getTime()+86400000)),end:l.end});
+      });
+      return result;
+    };
+    // Aplicăm ce zice Excel
+    if(c.excelSays==="prezent"){
+      // Excel: prezent — scoatem ziua din concedii/krank/unpaid
+      dr.leaves=removeDay(dr.leaves);
+      dr.krankLeaves=removeDay(dr.krankLeaves);
+      dr.unpaidLeaves=removeDay(dr.unpaidLeaves);
+      // Marcăm prezent explicit
+      const mk=ds.slice(0,7); const dn=parseInt(ds.slice(8));
+      if(!presState.presence[mk]) presState.presence[mk]={};
+      if(!presState.presence[mk][dr.name]) presState.presence[mk][dr.name]={};
+      presState.presence[mk][dr.name][String(dn)]="prezent";
+      savePresState();
+    } else if(c.excelSays==="urlaub"){
+      dr.leaves=removeDay(dr.leaves);
+      dr.krankLeaves=removeDay(dr.krankLeaves);
+      dr.unpaidLeaves=removeDay(dr.unpaidLeaves);
+      dr.leaves.push({start:ds,end:ds});
+      dr.leaves=cleanLeavesFromHolidays(dr.leaves);
+    } else if(c.excelSays==="krank"){
+      dr.leaves=removeDay(dr.leaves);
+      dr.krankLeaves=removeDay(dr.krankLeaves);
+      dr.unpaidLeaves=removeDay(dr.unpaidLeaves);
+      dr.krankLeaves.push({start:ds,end:ds});
+      dr.krankLeaves=cleanLeavesFromHolidays(dr.krankLeaves);
+    } else if(c.excelSays==="unpaid"){
+      dr.leaves=removeDay(dr.leaves);
+      dr.krankLeaves=removeDay(dr.krankLeaves);
+      dr.unpaidLeaves=removeDay(dr.unpaidLeaves);
+      dr.unpaidLeaves.push({start:ds,end:ds});
+      dr.unpaidLeaves=cleanLeavesFromHolidays(dr.unpaidLeaves);
+    }
+    scheduleSave();
+    logActivity("🔧 Conflict rezolvat (Excel aplicat)",dr.name,ds);
+    toast("✓ Ziua "+ds+" actualizată conform Excel");
+  } else {
+    // keepApp — nu facem nimic în date, doar marcăm conflictul ca rezolvat
+    logActivity("🔧 Conflict rezolvat (app păstrată)",dr.name,c.dateStr);
+    toast("✓ Ziua "+c.dateStr+" — aplicația păstrată");
+  }
+  // Ștergem conflictul din lista globală
+  const key=c.drId+"_"+c.dateStr;
+  if(window._importConflicts) delete window._importConflicts[key];
+  _currentConflict=null;
+  closeModal("modalConflict");
+  renderAll();
+}
+
 function openArchive(){
   if(!isAdminOrTania()) return;
   renderArchiveList();
@@ -3389,7 +3520,7 @@ function importBackup(e){
 }
 
 async function loadLastFirestoreBackup(){
-  if(!isAdminOrTania()){toast("Doar Admin sau Tania",true);return;}
+  if(!isAdmin()){toast("Doar Admin",true);return;}
   try{
     setSaveStatus("saving","Se încarcă lista backup-uri...");
     const snap = await db.collection(backupColl()).orderBy("savedAt","desc").limit(9).get();
@@ -3933,6 +4064,10 @@ function renderTimeline(){
       const ds=fmtDate(d);
       const isOccupied=onLeave||onKrank||onUnpaid;
       const isBlocked=isSun||!!holiday||!contractActive;
+      // Verificăm dacă această celulă are un conflict detectat la import Excel
+      const conflictKey=dr.id+"_"+ds;
+      const hasConflict=window._importConflicts&&window._importConflicts[conflictKey];
+      if(hasConflict) cls.push("conflict");
       const canEditPres=!isBlocked&&["admin","tania","raluca","madalina","corina"].includes(window.activeUserKey||"");
       const safeName2=dr.name.replace(/"/g,"&quot;");
       // Concedii timeline: stânga=drag concediu(U), dreapta=prezent(✓)
@@ -3949,11 +4084,12 @@ function renderTimeline(){
         `onmousemove="if(event.buttons===1&&tlDrag.active)tlDragMove(${dn},event.pageX,event.pageY);`+
         (canEditPres?`if(event.buttons===2&&_presDrag.active)presDragMove('`+safeName2+`',${dn})`:"")+`" `;
       const rightClick=canEditPres?`oncontextmenu="event.preventDefault()" `:"";
+      const conflictClick=hasConflict?`onclick="openConflictModal('${conflictKey}')" `:"";
       const tipPres=isPresP?" · ✗Prezent":isPresA?" · ✗Absent":"";
       const tipLabel=onKrank?"Krank":onUnpaid?"Fără plată":onLeave?"Concediu":"";
-      const tipText=isBlocked?"Zi liberă":(isOccupied?"Drag stânga=șterge ("+tipLabel+") · Click/drag dreapta=prezent":"Drag stânga=concediu (U) · Click/drag dreapta=prezent")+tipPres;
-      const cellLabel=isPresP?"✗":isPresA?"✗":onKrank?"K":onUnpaid?"S":onLeave?"U":"";
-      gridHtml+=`<div class='${cls.join(" ")}' ${mousedown}${mousemoveAttr}${rightClick}title="${escapeHtml(dr.name+" · "+formatDateRO(ds)+(holiday?" · "+holiday:"")+" — "+tipText)}" data-driver='${dr.id}' data-day='${dn}'>${cellLabel}</div>`;
+      const tipText=hasConflict?"⚠️ CONFLICT — click pentru rezolvare":(isBlocked?"Zi liberă":(isOccupied?"Drag stânga=șterge ("+tipLabel+") · Click/drag dreapta=prezent":"Drag stânga=concediu (U) · Click/drag dreapta=prezent")+tipPres);
+      const cellLabel=hasConflict?"":isPresP?"✗":isPresA?"✗":onKrank?"K":onUnpaid?"S":onLeave?"U":"";
+      gridHtml+=`<div class='${cls.join(" ")}' ${hasConflict?conflictClick:mousedown}${hasConflict?"":mousemoveAttr}${rightClick}title="${escapeHtml(dr.name+" · "+formatDateRO(ds)+(holiday?" · "+holiday:"")+" — "+tipText)}" data-driver='${dr.id}' data-day='${dn}'>${cellLabel}</div>`;
     }
     gridHtml+="</div>";
   });
@@ -4214,7 +4350,12 @@ async function saveLibereState(){
   try{
     await db.collection(libereColl()).doc("state").set(JSON.parse(JSON.stringify(libereState)));
     scheduleBackup();
-  }catch(e){ console.error("libere save err",e); }
+    return true;
+  }catch(e){
+    console.error("libere save err",e);
+    toast("❌ Eroare la salvare Libere: "+(e.message||e.code||"necunoscută")+" — verifică regulile Firestore pentru colecția 'libere'",true);
+    return false;
+  }
 }
 
 function libereMonthKey(d){
@@ -4456,10 +4597,13 @@ function openLibereSelect(){
 async function saveLiberePersons(){
   const checked=[...document.querySelectorAll("#liberePersonList input[type=checkbox]:checked")].map(cb=>cb.value);
   libereState.persons=checked;
-  await saveLibereState();
-  closeModal("modalLibereSelect");
-  renderLibere();
-  toast("✓ Lista persoane Libere salvată ("+checked.length+" persoane)");
+  const ok=await saveLibereState();
+  if(ok){
+    closeModal("modalLibereSelect");
+    renderLibere();
+    toast("✓ Lista persoane Libere salvată ("+checked.length+" persoane)");
+  }
+  // Dacă a eșuat, modalul rămâne deschis și eroarea reală apare deja din saveLibereState()
 }
 
 function setSortView(v){
@@ -4572,7 +4716,7 @@ function sortDragStart(driverName, day, isRight){
       toast("Poți marca prezența doar în luna curentă",true); return;
     }
   }
-  if(!isAdminOrTania()&&!isMih&&!isMad) return;
+  if(!isAdmin()&&!isMih&&!isMad) return;
   const mk = getSortKey();
   const cur = (sortState.presence[mk]&&sortState.presence[mk][driverName]&&sortState.presence[mk][driverName][String(day)]);
   // Determinăm modul după butonul apăsat și starea curentă
@@ -4693,7 +4837,7 @@ function updateTodayLeavePanel(){
 }
 
 function copySortatoriFromPrevMonth(){
-  if(!isAdminOrTania()){toast("Doar Admin/Tania",true);return;}
+  if(!isAdmin()){toast("Doar Admin",true);return;}
   const curMk=getSortKey();
   const prev=new Date(sortCurrentDate.getFullYear(),sortCurrentDate.getMonth()-1,1);
   const prevMk=prev.getFullYear()+"-"+String(prev.getMonth()+1).padStart(2,"0");
@@ -4915,8 +5059,8 @@ function renderSortatoriTimeline(){
   const isMihaela2=_uk2==="mihaela";
   const today2=new Date();
   const mihaelaCurMonth=isMihaela2&&(sortCurrentDate.getFullYear()===today2.getFullYear()&&sortCurrentDate.getMonth()===today2.getMonth());
-  const canEdit=isAdminOrTania()||(!isMihaela2&&_uk2==="madalina")||(isMihaela2&&mihaelaCurMonth);
-  const canAdd=isAdminOrTania();
+  const canEdit=isAdmin()||(!isMihaela2&&_uk2==="madalina")||(isMihaela2&&mihaelaCurMonth);
+  const canAdd=isAdmin();
 
   const perm   =drivers.filter(d=>!d.category||d.category==="permanent");
   const rotatie=drivers.filter(d=>d.category==="rotatie");
@@ -5621,7 +5765,7 @@ function presDragEnd(){
 let _backupDocs=[], _selectedBackupIdx=-1;
 
 async function openBackupManager(){
-  if(!isAdminOrTania()){toast("Doar Admin sau Tania",true);return;}
+  if(!isAdmin()){toast("Doar Admin",true);return;}
   openModal("modalBackupManager");
   document.getElementById("backupManagerPreview").style.display="none";
   document.getElementById("backupManagerList").style.display="block";
@@ -6048,6 +6192,9 @@ function parseExcelForImport(wb,fileName){
         if(runType){flush(runType,runStart,dayNum-1);runType=null;runStart=null;}
       }
       if(dayType==="prezent") changes.prezente.push(dayNum);
+      // Stocăm statusul Excel per zi (pentru detecția de conflicte)
+      if(!changes.excelDayStatus) changes.excelDayStatus={};
+      if(dayType) changes.excelDayStatus[fmtDate(new Date(yearVal,monthNum-1,dayNum))] = dayType;
     }
     if(runType)flush(runType,runStart,new Date(yearVal,monthNum,0).getDate());
 
@@ -6091,13 +6238,60 @@ function parseExcelForImport(wb,fileName){
     const mk=yearVal+"-"+String(monthNum).padStart(2,"0");
     const existingPres=(presState.presence&&presState.presence[mk]&&presState.presence[mk][dr.name])||{};
     const newPrezente=changes.prezente.filter(d=>existingPres[String(d)]!=="prezent");
-    results.push({name:personName,drId:dr.id,drName:dr.name,monthNum,yearVal,monthStr,fileName,newLeaves,newKrank,newUnpaid,newPrezente,totalNew:newLeaves.length+newKrank.length+newUnpaid.length+newPrezente.length});
+
+    // ── Detecție conflicte zi cu zi ──
+    // Un conflict există când Excel și aplicația au stări incompatibile pentru aceeași zi:
+    //   A) Excel: prezent (X) → dar în aplicație: urlaub/krank/fără plată
+    //   B) Excel: urlaub/krank/fără plată → dar în aplicație: prezent (marcat explicit)
+    const conflicts=[];
+    const exDs=changes.excelDayStatus||{};
+    Object.entries(exDs).forEach(([dateStr,excelType])=>{
+      const d=parseDate(dateStr);
+      if(d.getMonth()!==monthNum-1||d.getFullYear()!==yearVal) return;
+      const dayNum=d.getDate();
+      const appLeave=existing.leaves.some(l=>dateStr>=l.start&&dateStr<=l.end);
+      const appKrank=existing.krank.some(l=>dateStr>=l.start&&dateStr<=l.end);
+      const appUnpaid=existing.unpaid.some(l=>dateStr>=l.start&&dateStr<=l.end);
+      const appPres=(existingPres[String(dayNum)]==="prezent");
+      // Conflict A: Excel zice prezent dar app zice concediu/krank/unpaid
+      if(excelType==="prezent"&&(appLeave||appKrank||appUnpaid)){
+        const appType=appLeave?"urlaub":appKrank?"krank":"unpaid";
+        conflicts.push({dateStr,dayNum,drId:dr.id,drName:dr.name,monthNum,yearVal,
+          excelSays:"prezent", appSays:appType,
+          desc:`Excel: prezent (X) — Aplicație: ${appType==="urlaub"?"Urlaub 🟡":appType==="krank"?"Krank 🔵":"Fără plată 🟣"}`
+        });
+      }
+      // Conflict B: Excel zice urlaub/krank/unpaid dar app zice prezent
+      if((excelType==="urlaub"||excelType==="krank"||excelType==="unpaid")&&appPres){
+        const exLabel=excelType==="urlaub"?"Urlaub 🟡":excelType==="krank"?"Krank 🔵":"Fără plată 🟣";
+        conflicts.push({dateStr,dayNum,drId:dr.id,drName:dr.name,monthNum,yearVal,
+          excelSays:excelType, appSays:"prezent",
+          desc:`Excel: ${exLabel} — Aplicație: prezent ✅`
+        });
+      }
+    });
+    results.push({name:personName,drId:dr.id,drName:dr.name,monthNum,yearVal,monthStr,fileName,newLeaves,newKrank,newUnpaid,newPrezente,conflicts,totalNew:newLeaves.length+newKrank.length+newUnpaid.length+newPrezente.length});
   });
   return results;
 }
 
 function renderImportPreview(results){
   _importPending=results.filter(r=>!r.error&&!r.skip&&r.totalNew>0);
+
+  // Stocăm global toate conflictele detectate, indexate după dată+persoana
+  // pentru acces rapid din renderTimeline
+  window._importConflicts={};
+  results.forEach(r=>{
+    (r.conflicts||[]).forEach(c=>{
+      const key=c.drId+"_"+c.dateStr;
+      window._importConflicts[key]=c;
+    });
+  });
+  const totalConflicts=Object.keys(window._importConflicts).length;
+  if(totalConflicts>0){
+    // Re-randăm timeline-ul ca să apară indicatorii de conflict
+    setTimeout(()=>renderAll(),100);
+  }
   const errors=results.filter(r=>r.error),skipped=results.filter(r=>r.skip),empty=results.filter(r=>!r.error&&!r.skip&&r.totalNew===0);
   const MRO=["","Ianuarie","Februarie","Martie","Aprilie","Mai","Iunie","Iulie","August","Septembrie","Octombrie","Noiembrie","Decembrie"];
   document.getElementById("importExcelSub").textContent=results.length+" persoane · "+_importPending.length+" cu date noi";
@@ -6107,7 +6301,20 @@ function renderImportPreview(results){
     <div style="padding:7px 14px;background:rgba(100,100,100,0.1);border-radius:6px;font-size:13px">✅ OK: <strong>${empty.length}</strong></div>
     ${skipped.length?`<div style="padding:7px 14px;background:rgba(100,100,100,0.1);border-radius:6px;font-size:13px">⏭ Sărite: <strong>${skipped.length}</strong></div>`:""}
     ${errors.length?`<div style="padding:7px 14px;background:rgba(239,68,68,0.15);border-radius:6px;font-size:13px">❌ Erori: <strong>${errors.length}</strong></div>`:""}
+    ${totalConflicts>0?`<div style="padding:7px 14px;background:rgba(239,68,68,0.2);border:1px solid #ef4444;border-radius:6px;font-size:13px;font-weight:700;color:#ef4444">⚠️ Conflicte: <strong>${totalConflicts}</strong> — vizibile în timeline cu ❓</div>`:""}
   </div>`;
+  // Afișăm conflictele grupate
+  const allConflicts=results.flatMap(r=>r.conflicts||[]);
+  if(allConflicts.length){
+    html+=`<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:7px;padding:10px 14px;margin-bottom:12px">
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px;color:#ef4444">⚠️ Conflicte detectate (${allConflicts.length}) — ziua are stări diferite în Excel vs Aplicație</div>
+      ${allConflicts.slice(0,20).map(c=>`<div style="font-size:11px;padding:2px 0;color:var(--text)">
+        • <b>${escapeHtml(c.drName)}</b> — <b>${c.dateStr}</b>: ${c.desc}
+      </div>`).join("")}
+      ${allConflicts.length>20?`<div style="font-size:11px;color:var(--text-dim);margin-top:4px">...și încă ${allConflicts.length-20} conflicte. Click pe ❓ în timeline pentru rezolvare.</div>`:""}
+      <div style="font-size:11px;color:var(--text-dim);margin-top:6px">Apasă pe o casetă <b>❓</b> în timeline pentru a rezolva fiecare conflict.</div>
+    </div>`;
+  }
   if(_importPending.length===0){html+='<div style="text-align:center;padding:20px;color:var(--text-dim)">Nimic de importat.</div>';}
   else{
     html+='<div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;padding:8px;background:var(--bg-elev-2);border-radius:6px">⚠️ Datele existente <strong>nu se șterg</strong> — se adaugă doar ce lipsește.</div>';
@@ -6238,7 +6445,7 @@ function confirmSortEdit(){
 
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.07.13-02";
+const APP_VERSION = "2026.07.13-03";
 
 // La login admin — publică automat dacă versiunea din cod e nouă față de Firestore
 async function autoPublishVersionIfNew(){
@@ -6413,7 +6620,7 @@ let _planMouseDrag = {active:false, driverId:null};
 let _planDraggedRowEl = null;
 
 function planRowMouseDown(ev, driverId){
-  if(!isAdminOrTania()) return;
+  if(!isAdmin()) return;
   ev.preventDefault();
   _planMouseDrag = {active:true, driverId};
   document.body.style.cursor = "grabbing";
@@ -6559,7 +6766,7 @@ function renderPlanificare(){
     isFirstCat=false;
 
     // Category header
-    const planDropAttrs = isAdminOrTania()
+    const planDropAttrs = isAdmin()
       ? `data-plan-drop-cat="${cat.key}" onmouseenter="planCatMouseEnter(event)" onmouseleave="planCatMouseLeave(event)" onmouseup="planCatMouseUp(event,'${cat.key}')"`
       : "";
     html+=`<tr class="plan-cat-drop" ${planDropAttrs}>`;
@@ -6585,7 +6792,7 @@ function renderPlanificare(){
 
       html+=`<tr>`;
       html+=`<td style="width:26px;background:${rowBg};border-bottom:1px solid var(--border);text-align:center;padding:2px">${badge}</td>`;
-      html+=`<td data-plan-drag-id="${dr.id}" ${isAdminOrTania()?`onmousedown="planRowMouseDown(event,'${dr.id}')"`:""} style="background:${rowBg};border-bottom:1px solid var(--border);padding:4px 8px;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:158px;${isAdminOrTania()?"cursor:grab":""}">${escapeHtml(dr.name)}</td>`;
+      html+=`<td data-plan-drag-id="${dr.id}" ${isAdmin()?`onmousedown="planRowMouseDown(event,'${dr.id}')"`:""} style="background:${rowBg};border-bottom:1px solid var(--border);padding:4px 8px;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:158px;${isAdmin()?"cursor:grab":""}">${escapeHtml(dr.name)}</td>`;
 
       weeks.forEach((wkDays,wi)=>{
         const wkStateKey=wkDays[0].getFullYear()+"-W"+String(getISOWeek(wkDays[0])).padStart(2,"0");
@@ -6725,6 +6932,7 @@ function renderPlanCompliance(){
 }
 
 function planDragStart(name,wkKey,dow){
+  if(!isAdmin()) return; // doar Admin poate bifa planificarea; Tania doar vizualizează
   const cur=(planState[wkKey]&&planState[wkKey][name]&&planState[wkKey][name][dow])||0;
   _planDrag={active:true,mode:cur===1?0:1,changed:false};
   _setPlanCell(name,wkKey,dow,_planDrag.mode);
@@ -7485,7 +7693,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
-<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.07.13-02</div>
+<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.07.13-03</div>
 
 </body>
 </html>

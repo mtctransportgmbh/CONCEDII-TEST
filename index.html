@@ -721,7 +721,7 @@
   
   .timeline-wrap { background: var(--bg-elev); border-radius: 8px; border: 1px solid var(--border); overflow: auto; max-height: calc(100vh - 110px); }
   .tl-names { position: sticky; left: 0; z-index: 4; background: var(--bg-elev); }
-  .timeline { display: grid; grid-template-columns: 200px 1fr; min-width: 100%; }
+  .timeline { display: grid; grid-template-columns: 200px 1fr 52px; min-width: 100%; }
   .tl-driver-col { position: sticky; left: 0; background: var(--bg-elev); z-index: 2; border-right: 2px solid var(--border); display: flex; flex-direction: column; }
   .tl-driver-header { padding: 0 12px; height: 42px; display: flex; align-items: center; font-size: 11px; text-transform: uppercase; color: var(--text-dim); border-bottom: 1px solid var(--border); font-weight: 600; letter-spacing: 0.5px; position: sticky; top: 0; background: var(--bg-elev); z-index: 3; flex-shrink: 0; }
   .tl-driver-row { padding: 0 12px; height: 34px; min-height: 34px; display: flex; align-items: center; border-bottom: 1px solid var(--border); font-size: 12px; cursor: pointer; flex-shrink: 0; box-sizing: border-box; }
@@ -760,6 +760,7 @@
     0%,100% { outline-color: #ef4444; box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
     50% { outline-color: #ff6b6b; box-shadow: 0 0 0 3px rgba(239,68,68,0); }
   } background: var(--bg-elev); z-index: 2; border-left: 2px solid var(--border); display: flex; flex-direction: column; min-width: 52px; }
+  .tl-rem-col { position: sticky; right: 0; background: var(--bg-elev); z-index: 2; border-left: 2px solid var(--border); display: flex; flex-direction: column; min-width: 52px; }
   .tl-rem-cell { height: 34px; min-height: 34px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; border-bottom: 1px solid var(--border); box-sizing: border-box; }
   .tl-rem-header { height: 42px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; text-transform: uppercase; color: var(--text-dim); letter-spacing: 0.3px; border-bottom: 2px solid var(--border); }
   .tl-rem-cell.pos { color: #10b981; }
@@ -6445,7 +6446,7 @@ function confirmSortEdit(){
 
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.07.13-03";
+const APP_VERSION = "2026.07.13-04";
 
 // La login admin — publică automat dacă versiunea din cod e nouă față de Firestore
 async function autoPublishVersionIfNew(){
@@ -7693,7 +7694,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
-<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.07.13-03</div>
+<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.07.13-04</div>
 
 </body>
 </html>

@@ -1685,7 +1685,7 @@ const db   = firebase.firestore();
 // Pornim încărcarea permisiunilor cât mai devreme posibil — de regulă se
 // termină cu mult înainte ca userul să apuce să se logheze (PIN/parolă),
 // ca enterApp() să aibă deja datele disponibile sincron.
-setTimeout(()=>{ if(typeof loadPermOverrides==="function") loadPermOverrides(); }, 0);
+setTimeout(()=>{ if(typeof loadPermOverrides==="function"){ _permOverridesPromise = loadPermOverrides(); } }, 0);
 
 const ADMIN_EMAIL = "paulandreimacarie@yahoo.com";
 
@@ -2318,7 +2318,7 @@ async function clearPinFromFirestore(uk){
 window.loginAsUser = function(userKey){
   if(typeof enterApp !== "function"){ setTimeout(()=>window.loginAsUser(userKey),100); return; }
   fullReset(); // curăță datele user-ului anterior
-  if(getSession(userKey)){ window.activeUserKey=userKey; resetAutoLogout(); enterApp(userKey); return; }
+  if(getSession(userKey)){ window.activeUserKey=userKey; resetAutoLogout(); enterAppSafe(userKey); return; }
   showPinScreen(userKey);
 };
 
@@ -2368,7 +2368,7 @@ async function pinSubmit(){
       setSession(pinState.userKey);
       resetAutoLogout();
       document.getElementById("pinScreen").classList.remove("show");
-      enterApp(pinState.userKey);
+      await enterAppSafe(pinState.userKey);
       toast("✓ Cod PIN setat cu succes!");
     } else {
       pinDotsError();
@@ -2384,7 +2384,7 @@ async function pinSubmit(){
       setSession(pinState.userKey);
       resetAutoLogout();
       document.getElementById("pinScreen").classList.remove("show");
-      enterApp(pinState.userKey);
+      await enterAppSafe(pinState.userKey);
     } else {
       pinState.attempts++;
       pinDotsError();
@@ -2491,7 +2491,7 @@ window.loginAdmin = async function(){
   catch(e){ if(e.code==="auth/wrong-password"||e.code==="auth/invalid-credential") showErr("Parolă greșită"); else showErr("Eroare: "+e.message); }
 };
 auth.onAuthStateChanged(user=>{
-  if(user&&user.email===ADMIN_EMAIL){ window.activeUserKey="admin"; enterApp("admin"); }
+  if(user&&user.email===ADMIN_EMAIL){ window.activeUserKey="admin"; enterAppSafe("admin"); }
   else if(!user&&window.activeUserKey==="admin"){ window.activeUserKey=null; document.getElementById("authScreen").style.display="flex"; document.getElementById("appRoot").style.display="none"; }
 });
 window.doLogout = async function(){
@@ -2511,14 +2511,11 @@ function enterApp(userKey){
   av.textContent = user.initial; av.style.background = user.color;
   document.getElementById("userName").textContent = user.name+(userKey==="admin"?" 👑":"");
   const isAdm = userKey==="admin";
-  const isTaniaAdm = userKey==="tania"||isAdm;
-  const isMihaela = userKey==="mihaela";
 
   // Pornim timer-ul de auto-lock corespunzător (10s pentru Admin, 1 min pentru ceilalți)
   if(isAdm) resetAdminAutoLock();
   else resetAutoLogout();
 
-  // Mihaela — doar sortatori, fără concedii
   const concediiModule = document.getElementById("concediiModule");
   const sortatoriModule = document.getElementById("sortatoriModule");
   const modConcedii = document.getElementById("modConcedii");
@@ -2530,75 +2527,50 @@ function enterApp(userKey){
   const legend = document.querySelector(".legend");
   const sidebarToggle = document.getElementById("sidebarToggleBtn");
   const sidebarColl = document.getElementById("sidebarCollapsible");
+  const modPlanificare2 = document.getElementById("modPlanificare");
+  const modLibere2 = document.getElementById("modLibere");
 
-  if(isMihaela){
-    // Ascunde tot ce e concedii
-    if(concediiModule) concediiModule.style.display="none";
-    if(modConcedii)    modConcedii.style.display="none";
-    if(modSortatori)   modSortatori.style.display="none"; // nu trebe tab daca e doar sortatori
-    if(quickAction)    quickAction.style.display="none";
-    if(groupFilterBar) groupFilterBar.style.display="none";
-    if(statsBar)       statsBar.style.display="none";
-    if(holidayBanner)  holidayBanner.style.display="none";
-    if(legend)         legend.style.display="none";
-    if(sidebarToggle)  sidebarToggle.style.display="none";
-    if(sidebarColl)    sidebarColl.style.display="none";
-    // Forțează sortatori — ascunde toate celelalte module
-    appMode="sortatori";
-    if(sortatoriModule) sortatoriModule.style.display="block";
-    const _planMod=document.getElementById("planificareModule");
-    if(_planMod) _planMod.style.display="none";
-    const _planComp=document.getElementById("planCompliancePanel");
-    if(_planComp) _planComp.style.display="none";
-    const _concMod=document.getElementById("concediiModule");
-    if(_concMod) _concMod.style.display="none";
-    // Setează grup — implicit doar Ruhstorf, dar Admin poate acorda și Eiselfing
-    const mihOverrideGroups = hasModuleView(userKey,"sortatori") ? (permFor(userKey,"sortatori").groups||[]) : [];
-    const tabEis=document.getElementById("sortTabEiselfing");
-    const tabRuh=document.getElementById("sortTabRuhstorf");
-    if(mihOverrideGroups.includes("eiselfing")){
-      if(tabEis) tabEis.style.display="block";
-      sortView="ruhstorf"; // rămâne implicit pe Ruhstorf, dar poate comuta
-    } else {
-      if(tabEis) tabEis.style.display="none";
-      sortView="ruhstorf";
-    }
-    if(tabRuh){tabRuh.classList.add("active");tabRuh.style.display="block";}
-  } else {
-    // Ceilalți useri — arată normal
-    if(sidebarColl)    sidebarColl.style.display=""; // reset from Mihaela hide
-    if(sidebarToggle)  sidebarToggle.style.display=""; // reset
-    if(concediiModule) concediiModule.style.display="block";
-    const sortOverrideView = hasModuleView(userKey,"sortatori");
-    const canSeeSortatori2 = ["madalina","tania","admin"].includes(userKey) || sortOverrideView;
-    if(modSortatori)   modSortatori.style.display = canSeeSortatori2?"block":"none";
-    if(modConcedii)    modConcedii.style.display="block";
-    if(quickAction)    quickAction.style.display = userKey==="tania" ? "none" : "";
-    if(statsBar)       statsBar.style.display="";
-    if(legend)         legend.style.display="";
-    appMode="concedii";
-    // Filter tabs pentru sortatori — combinăm grupurile implicite cu cele acordate suplimentar de Admin
-    const tabEis=document.getElementById("sortTabEiselfing");
-    const tabRuh=document.getElementById("sortTabRuhstorf");
-    const defaultSortGroups = userKey==="madalina" ? ["eiselfing"] : (isTaniaAdm ? ["eiselfing","ruhstorf"] : []);
-    const overrideSortGroups = sortOverrideView ? (permFor(userKey,"sortatori").groups||[]) : [];
-    const allowedSortGroups = new Set([...defaultSortGroups, ...overrideSortGroups]);
-    if(tabEis) tabEis.style.display = allowedSortGroups.has("eiselfing") ? "block" : "none";
-    if(tabRuh) tabRuh.style.display = allowedSortGroups.has("ruhstorf") ? "block" : "none";
-    sortView = allowedSortGroups.has("eiselfing") ? "eiselfing" : (allowedSortGroups.has("ruhstorf") ? "ruhstorf" : "eiselfing");
-    if(tabEis) tabEis.classList.toggle("active", sortView==="eiselfing");
-    if(tabRuh) tabRuh.classList.toggle("active", sortView==="ruhstorf");
-  }
+  // ── Acces pe modul: STRICT din permisiuni, fără nicio excepție hardcodată (doar Admin) ──
+  const canConcedii   = isAdm || hasModuleView(userKey,"concedii");
+  const canSortatori  = isAdm || hasModuleView(userKey,"sortatori");
+  const canPlanificare= isAdm || hasModuleView(userKey,"planificare");
+  const canLibere     = isAdm || hasModuleView(userKey,"libere");
+
+  if(sidebarColl)    sidebarColl.style.display="";
+  if(sidebarToggle)  sidebarToggle.style.display="";
+  if(concediiModule) concediiModule.style.display = canConcedii?"block":"none";
+  if(modConcedii)    modConcedii.style.display    = canConcedii?"block":"none";
+  if(modSortatori)   modSortatori.style.display   = canSortatori?"block":"none";
+  if(modPlanificare2) modPlanificare2.style.display = canPlanificare?"block":"none";
+  if(modLibere2)     modLibere2.style.display     = canLibere?"block":"none";
+
+  if(quickAction)    quickAction.style.display = (canConcedii && canEdit()) ? "" : "none";
+  if(groupFilterBar) groupFilterBar.style.display = canConcedii?"flex":"none";
+  if(statsBar)       statsBar.style.display = canConcedii?"":"none";
+  if(holidayBanner)  holidayBanner.style.display = canConcedii?"":"none";
+  if(legend)         legend.style.display = canConcedii?"":"none";
+
+  // Alegem tab-ul inițial: primul modul la care userul chiar are acces
+  appMode = canConcedii?"concedii" : canSortatori?"sortatori" : canPlanificare?"planificare" : canLibere?"libere" : "concedii";
+
+  // Sub-grupuri Sortatori (Eiselfing/Ruhstorf) — STRICT din permisiunile acordate
+  const tabEis=document.getElementById("sortTabEiselfing");
+  const tabRuh=document.getElementById("sortTabRuhstorf");
+  const allowedSortGroups = new Set(isAdm ? ["eiselfing","ruhstorf"] : (permFor(userKey,"sortatori").groups||[]));
+  if(tabEis) tabEis.style.display = allowedSortGroups.has("eiselfing") ? "block" : "none";
+  if(tabRuh) tabRuh.style.display = allowedSortGroups.has("ruhstorf") ? "block" : "none";
+  sortView = allowedSortGroups.has("eiselfing") ? "eiselfing" : (allowedSortGroups.has("ruhstorf") ? "ruhstorf" : "eiselfing");
+  if(tabEis) tabEis.classList.toggle("active", sortView==="eiselfing");
+  if(tabRuh) tabRuh.classList.toggle("active", sortView==="ruhstorf");
 
   document.getElementById("addDriverBtn").style.display = isAdm?"block":"none";
   document.getElementById("pinMgrBtn").style.display   = isAdm?"block":"none";
-  if(groupFilterBar && !isMihaela) groupFilterBar.style.display = isTaniaAdm?"flex":"none";
 
   document.getElementById("authScreen").style.display = "none";
   document.getElementById("appRoot").style.display    = "grid";
 
   const quickKrankBtn = document.getElementById("quickKrankBtn");
-  if(quickKrankBtn) quickKrankBtn.style.display = isMihaela?"none":"block";
+  if(quickKrankBtn) quickKrankBtn.style.display = (canConcedii && canEdit()) ? "block" : "none";
 
   if(loadBackupBtn) loadBackupBtn.style.display = isAdm?"block":"none";
   const archiveBtn = document.getElementById("archiveBtn");
@@ -2612,7 +2584,7 @@ function enterApp(userKey){
   const normalizeBtn = document.getElementById("normalizeBtn");
   if(normalizeBtn) normalizeBtn.style.display = isAdm?"block":"none";
   const sortEditBtn = document.getElementById("sortEditModeBtn");
-  const canEditSort = isAdm || userKey==="mihaela" || userKey==="madalina" || hasModuleEdit(userKey,"sortatori");
+  const canEditSort = isAdm || hasModuleEdit(userKey,"sortatori");
   if(sortEditBtn) sortEditBtn.style.display = canEditSort?"inline-flex":"none";
   const actLogBtn2 = document.getElementById("actLogBtn");
   if(actLogBtn2) actLogBtn2.style.display = isAdm?"block":"none";
@@ -2621,54 +2593,56 @@ function enterApp(userKey){
   const uploadBackupBtn = document.getElementById("uploadBackupBtn");
   if(uploadBackupBtn) uploadBackupBtn.style.display = isAdm?"block":"none";
 
-  const modPlanificare2 = document.getElementById("modPlanificare");
-  if(modPlanificare2) modPlanificare2.style.display = (isAdm||hasModuleView(userKey,"planificare"))?"block":"none";
-  const modLibere2 = document.getElementById("modLibere");
-  if(modLibere2) modLibere2.style.display = (isAdm||userKey==="raluca"||userKey==="mihaela"||userKey==="tania"||hasModuleView(userKey,"libere"))?"block":"none";
   const sidebarCollapseBtn = document.getElementById("sidebarCollapseBtn");
-  if(sidebarCollapseBtn) sidebarCollapseBtn.style.display = isTaniaAdm?"inline-flex":"none";
+  if(sidebarCollapseBtn) sidebarCollapseBtn.style.display = (isAdm||canConcedii)?"inline-flex":"none";
   // Asigurăm vizibilitatea și după render
   setTimeout(()=>{
     const btn=document.getElementById("sidebarCollapseBtn");
-    if(btn) btn.style.display=isTaniaAdm?"inline-flex":"none";
+    if(btn) btn.style.display=(isAdm||canConcedii)?"inline-flex":"none";
   },300);
   const publishVersionBtn = document.getElementById("publishVersionBtn");
   if(publishVersionBtn) publishVersionBtn.style.display = isAdm?"block":"none";
   startVersionWatch();
   if(isAdm) autoPublishVersionIfNew();
   if(isAdm) loadPlanState();
-  if(legendUnpaid) legendUnpaid.style.display = isTaniaAdm?"flex":"none";
+  if(legendUnpaid) legendUnpaid.style.display = (isAdm||canConcedii)?"flex":"none";
 
   const statsBtn = document.getElementById("statsBtn");
-  if(statsBtn) statsBtn.style.display = isTaniaAdm?"block":"none";
+  if(statsBtn) statsBtn.style.display = (isAdm||canConcedii)?"block":"none";
   const statKrankBox = document.getElementById("statKrankBox");
-  if(statKrankBox) statKrankBox.style.display = isTaniaAdm?"flex":"none";
+  if(statKrankBox) statKrankBox.style.display = (isAdm||canConcedii)?"flex":"none";
   const printBtn = document.getElementById("printBtn");
-  if(printBtn) printBtn.style.display = isTaniaAdm?"block":"none";
+  if(printBtn) printBtn.style.display = (isAdm||canConcedii)?"block":"none";
   const sortPrintBtn = document.getElementById("sortPrintBtn");
-  if(sortPrintBtn) sortPrintBtn.style.display = isTaniaAdm?"block":"none";
+  if(sortPrintBtn) sortPrintBtn.style.display = (isAdm||canSortatori)?"block":"none";
   const sortAdm = document.getElementById("sortAdminControls");
   if(sortAdm) sortAdm.style.display = (isAdm||hasModuleEdit(userKey,"sortatori"))?"inline":"none";
 
-  // Notificare la login — setăm flag, se afișează după ce datele sunt încărcate din Firebase
-  window._pendingLoginNotif = !isMihaela ? userKey : null;
+  // Notificare la login — doar dacă userul are acces la Concedii (altfel n-are sens contextul)
+  window._pendingLoginNotif = canConcedii ? userKey : null;
 
   // Load sortatori — onSnapshot va re-renderi automat la orice schimbare
   loadSortState();
+  // Load Libere Springeri — la fel, altfel rămâne gol până la schimbare de an
+  loadLibereState();
 
-  if(!isMihaela){
+  // Sursa de date pentru concedii: userii cu document propriu (raluca/madalina/
+  // corina/tania/admin) încarcă normal. Cei fără document propriu (ex: Mihaela)
+  // au nevoie de o vedere combinată din toate documentele, doar ca sursă de date
+  // pentru markerele "U" din Sortatori — asta ține de arhitectura datelor, nu de
+  // ce module vede userul (acelea rămân strict din permisiuni, mai sus).
+  const OWNS_CONCEDII_DOC = ["raluca","madalina","corina","tania","admin"];
+  if(OWNS_CONCEDII_DOC.includes(userKey)){
     initApp(userKey);
   } else {
-    // Mihaela — setup modal listeners and show sortatori
     document.querySelectorAll(".modal-bg").forEach(m=>{
       m.addEventListener("click",e=>{if(e.target===m)m.classList.remove("show");});
     });
     document.addEventListener("keydown",e=>{
       if(e.key==="Escape")document.querySelectorAll(".modal-bg.show").forEach(m=>m.classList.remove("show"));
     });
-    setSaveStatus("ok","Bine ai venit, Mihaela!");
-    // Mihaela are nevoie de datele de concedii ca să vadă U în sortatori
-    // Ascultăm toate doc-urile de concedii (la fel ca Tania)
+    setSaveStatus("ok","Bine ai venit, "+user.name+"!");
+    // Ascultăm toate doc-urile de concedii, ca să avem datele U pentru Sortatori
     const docKeys = ["raluca","madalina","corina","tania"];
     const cache = {}; let loaded = 0;
     const rebuild = () => {
@@ -2682,14 +2656,14 @@ function enterApp(userKey){
         if(!dr.unpaidLeaves) dr.unpaidLeaves = [];
         if(!dr.leaves)       dr.leaves       = [];
       });
-      renderSortatoriTimeline();
+      renderAll();
     };
     docKeys.forEach(dk=>{
       const unsub = db.collection(concediiColl()).doc(dk).onSnapshot(snap=>{
         cache[dk] = snap.exists ? snap.data() : {drivers:[],thresholds:{warn:3,crit:5}};
         loaded = Math.min(loaded+1, docKeys.length);
         if(loaded>=docKeys.length) rebuild();
-      }, err=>console.error("mihaela snap",dk,err));
+      }, err=>console.error("merged concedii snap",dk,err));
       unsubListeners.push(unsub);
     });
   }
@@ -2778,10 +2752,10 @@ function getCarryOverForYear(dr, year){
 function getLevel(count){const{warn,crit}=state.thresholds;if(count===0)return 0;if(count>=crit)return 4;if(count>=warn)return 3;if(count>=Math.ceil(warn/2)+1)return 2;return 1;}
 
 function getVisibleDrivers(){
-  const uk = window.activeUserKey||"tania";
+  const uk = window.activeUserKey||"";
   const y = currentDate.getFullYear(), m = currentDate.getMonth();
   let drivers;
-  if(uk==="tania"||uk==="admin"){
+  if(isAdmin()){
     let drivers = state.drivers.filter(dr=>!dr.archived);
     if(activeGroup!=="total"){
       const groupUserKey = activeGroup==="eiselfing"?"madalina":activeGroup==="ruhstorf"?"raluca":activeGroup==="camion"?"corina":null;
@@ -2795,18 +2769,27 @@ function getVisibleDrivers(){
     }
     // Filtrează după data angajare/plecare
     return drivers.filter(dr=>isDriverActiveInMonth(dr,y,m));
-  } else {
-    drivers = state.drivers.filter(dr=>{
-      if(dr.archived) return false;
-      if(!dr.visibleTo||dr.visibleTo.length===0){
-        if(uk==="raluca")   return DRIVERS_RALUCA.includes(dr.name);
-        if(uk==="madalina") return DRIVERS_MADALINA.includes(dr.name);
-        if(uk==="corina")   return DRIVERS_CORINA.includes(dr.name);
-        return false;
-      }
-      return dr.visibleTo.includes(uk);
-    });
   }
+
+  // Toți ceilalți (inclusiv Tania) — acces STRICT pe baza permisiunilor acordate de Admin.
+  // Fără nicio excepție hardcodată: dacă Admin nu a acordat acces la Concedii, nu vede nimic.
+  if(!hasModuleView(uk,"concedii")) return [];
+  const grantedGroups = permFor(uk,"concedii").groups||[];
+  const GROUP_TO_KEY = {eiselfing:"madalina", ruhstorf:"raluca", camion:"corina"};
+  const allowedIdentityKeys = grantedGroups.map(g=>GROUP_TO_KEY[g]).filter(Boolean);
+
+  drivers = state.drivers.filter(dr=>{
+    if(dr.archived) return false;
+    if(!dr.visibleTo||dr.visibleTo.length===0){
+      return allowedIdentityKeys.some(k=>{
+        if(k==="raluca")   return DRIVERS_RALUCA.includes(dr.name);
+        if(k==="madalina") return DRIVERS_MADALINA.includes(dr.name);
+        if(k==="corina")   return DRIVERS_CORINA.includes(dr.name);
+        return false;
+      });
+    }
+    return allowedIdentityKeys.some(k=>dr.visibleTo.includes(k));
+  });
   // Filtrează după data angajare/plecare
   return drivers.filter(dr=>isDriverActiveInMonth(dr,y,m));
 }
@@ -2818,7 +2801,7 @@ function krankOnDate(date){
   return getVisibleDrivers().filter(dr=>(dr.krankLeaves||[]).some(l=>dateInLeave(date,l)));
 }
 function unpaidOnDate(date){
-  if(!isAdminOrTania()) return [];
+  if(!isAdmin()&&!hasModuleView(window.activeUserKey||"","concedii")) return [];
   return getVisibleDrivers().filter(dr=>(dr.unpaidLeaves||[]).some(l=>dateInLeave(date,l)));
 }
 
@@ -2863,10 +2846,10 @@ function updateThresholdLegend(){
   document.getElementById("legWarn").textContent=3;document.getElementById("legWarn1").textContent=2;
   document.getElementById("legCrit").textContent=5;document.getElementById("legCrit1").textContent=4;
 }
-function isAdminOrTania(){return window.activeUserKey==="admin"||window.activeUserKey==="tania";}
+function isAdminOrTania(){return isAdmin()||hasModuleView(window.activeUserKey||"","concedii");}
 function isAdmin(){return window.activeUserKey==="admin";}
 // Tania are drepturi de VIZUALIZARE+PRINT, dar nu de editare (adăugare/ștergere concedii, persoane etc.)
-function canEdit(){return window.activeUserKey==="admin";}
+function canEdit(){return isAdmin()||hasModuleEdit(window.activeUserKey||"","concedii");}
 
 // Verifică dacă persoana e activă (contractul activ) într-o lună
 function isDriverActiveInMonth(dr, y, m){
@@ -3194,9 +3177,9 @@ function openLeaveModal(id, leaveType){
     quotaBar.innerHTML=`<div style="font-size:12px;color:var(--text-dim)">Zile folosite ${new Date().getFullYear()}: <strong>${used}</strong></div>`;
   }
 
-  // MaxDays + carry editor for admin/tania on leaves type
+  // MaxDays + carry editor — doar Admin (setare la nivel de configurație)
   const maxRow=document.getElementById("leaveMaxDaysRow");
-  if(isAdminOrTania()&&leaveType==="leaves"){
+  if(isAdmin()&&leaveType==="leaves"){
     maxRow.style.display="block";
     document.getElementById("leaveMaxDaysInput").value=maxDays;
     // Show carry over field
@@ -3253,6 +3236,7 @@ function renderLeaveList(dr, leaveType){
 }
 
 function addLeave(){
+  if(!canEdit()){ toast("Nu ai drepturi de editare pentru Concedii",true); return; }
   if(!leaveDriverId)return;
   const leaveType = document.getElementById("modalLeave").dataset.leaveType||"leaves";
   const start=document.getElementById("leaveStart").value,end=document.getElementById("leaveEnd").value;
@@ -3358,6 +3342,7 @@ function addLeave(){
 }
 
 function deleteLeave(driverId,start,end,leaveType){
+  if(!canEdit()){ toast("Nu ai drepturi de editare pentru Concedii",true); return; }
   if(!leaveType)leaveType="leaves";
   const dr=state.drivers.find(d=>d.id===driverId);if(!dr)return;
   // Map leaveType to correct array name
@@ -3480,7 +3465,7 @@ function saveQuickLeave(){
 function renderDrivers(){
   const uk=window.activeUserKey||"tania";
   const canAdmin=isAdmin();
-  const isTaniaAdm=isAdminOrTania();
+  const isTaniaAdm=isAdmin()||hasModuleView(uk,"concedii");
   const q=normalizeForSearch((document.getElementById("searchDriver").value||"").trim());
   const visible=getVisibleDrivers();
   const filtered=q?visible.filter(d=>normalizeForSearch(d.name).includes(q)):[...visible];
@@ -4327,10 +4312,7 @@ function setMonthDrivers(drivers, mk){
 }
 
 function getSortDrivers(){
-  const uk = window.activeUserKey||"tania";
   const all = getMonthDrivers();
-  if(uk==="mihaela")  return all.filter(d=>d.group==="ruhstorf");
-  if(uk==="madalina") return all.filter(d=>d.group==="eiselfing");
   return all.filter(d=>d.group===sortView);
 }
 
@@ -4379,11 +4361,26 @@ let _permUnsub = null;
 
 function permColl(){ return "permissions"; }
 
+let _permOverridesLoaded = false;
+let _permOverridesPromise = null;
 async function loadPermOverrides(){
   try{
     const snap = await db.collection(permColl()).doc("overrides").get();
     permOverrides = snap.exists ? (snap.data()||{}) : {};
   }catch(e){ console.warn("perm load err",e); permOverrides={}; }
+  _permOverridesLoaded = true;
+}
+
+// Garantează că permOverrides e complet încărcat înainte ca enterApp() să
+// evalueze orice permisiune — previne cazul în care userul se loghează mai
+// repede decât apucă să se termine fetch-ul de permisiuni (declanșat devreme,
+// dar fără nicio garanție de ordine față de login).
+async function enterAppSafe(userKey){
+  if(!_permOverridesLoaded){
+    if(!_permOverridesPromise) _permOverridesPromise = loadPermOverrides();
+    await _permOverridesPromise;
+  }
+  enterApp(userKey);
 }
 
 async function savePermOverrides(){
@@ -4423,6 +4420,7 @@ const PERM_USERS = [
   {key:"tania",    name:"Tania",     initial:"T", color:"#2563eb"},
 ];
 const PERM_MODULES = [
+  {key:"concedii",    label:"📅 Concedii",     groups:["eiselfing","ruhstorf","camion"]},
   {key:"sortatori",   label:"📦 Sortatori",   groups:["eiselfing","ruhstorf"]},
   {key:"planificare", label:"🗓️ Planificare", groups:null},
   {key:"libere",      label:"🏠 Libere",       groups:null},
@@ -4437,7 +4435,7 @@ function openPermissionsPanel(){
       const p = permFor(u.key, mod.key);
       const groupsHtml = mod.groups ? mod.groups.map(g=>{
         const checked = (p.groups||[]).includes(g);
-        const gLabel = g==="eiselfing"?"Eiselfing":"Ruhstorf";
+        const gLabel = g==="eiselfing"?"Eiselfing":g==="ruhstorf"?"Ruhstorf":"Camion";
         return `<label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;margin-right:10px;cursor:pointer">
           <input type="checkbox" class="perm-group-cb" data-user="${u.key}" data-module="${mod.key}" data-group="${g}" ${checked?"checked":""} style="width:14px;height:14px"> ${gLabel}
         </label>`;
@@ -4899,17 +4897,19 @@ let _sortDrag = {active:false, driverName:null, mode:null}; // mode: "prezent"|"
 
 function sortDragStart(driverName, day, isRight){
   const _uk=window.activeUserKey||"";
-  const isMih=_uk==="mihaela", isMad=_uk==="madalina";
-  if((isMih||isMad)&&!_sortEditMode){
+  const hasEdit = isAdmin()||hasModuleEdit(_uk,"sortatori");
+  if(!hasEdit) return;
+  // Siguranță UX: non-admin trebuie să apese explicit ✏️ Editează înainte de a modifica prezența
+  if(!isAdmin()&&!_sortEditMode){
     toast("Apasă ✏️ Editează pentru a modifica prezența",true); return;
   }
-  if(isMih){
+  // Constrângere de business (nu de acces): Mihaela editează doar luna curentă
+  if(_uk==="mihaela"){
     const now=new Date();
     if(sortCurrentDate.getFullYear()!==now.getFullYear()||sortCurrentDate.getMonth()!==now.getMonth()){
       toast("Poți marca prezența doar în luna curentă",true); return;
     }
   }
-  if(!isAdmin()&&!isMih&&!isMad&&!hasModuleEdit(window.activeUserKey||"","sortatori")) return;
   const mk = getSortKey();
   const cur = (sortState.presence[mk]&&sortState.presence[mk][driverName]&&sortState.presence[mk][driverName][String(day)]);
   // Determinăm modul după butonul apăsat și starea curentă
@@ -4985,18 +4985,23 @@ function updateTodayLeavePanel(){
   const list  = document.getElementById("todayLeaveList");
   if(!panel||!list) return;
   const uk = window.activeUserKey||"";
-  if(uk!=="mihaela"){ panel.style.display="none"; return; }
+  const hasSort = isAdmin()||hasModuleView(uk,"sortatori");
+  const hasConc = isAdmin()||hasModuleView(uk,"concedii");
+  // Panou util doar pentru cei cu acces la Sortatori dar FĂRĂ acces complet la Concedii
+  // (altfel au deja informația completă acolo)
+  if(!hasSort || hasConc){ panel.style.display="none"; return; }
   panel.style.display="block";
 
   const today = new Date(); today.setHours(0,0,0,0);
   const yesterday = new Date(today); yesterday.setDate(yesterday.getDate()-1);
   const tomorrow  = new Date(today); tomorrow.setDate(tomorrow.getDate()+1);
 
-  // Aceeași listă "Ruhstorf" pe care o vede Raluca în Concedii (visibleTo include "raluca",
-  // cu fallback pe lista hardcodată DRIVERS_RALUCA pentru persoanele vechi)
+  // Grupul de referință = primul grup Sortatori acordat prin permisiuni
+  const grantedSortGroups = permFor(uk,"sortatori").groups||[];
+  const groupKey = grantedSortGroups.includes("ruhstorf") ? "raluca" : "madalina";
   const ruhDrivers = (state.drivers||[]).filter(dr=>{
-    if(dr.visibleTo && dr.visibleTo.length>0) return dr.visibleTo.includes("raluca");
-    return DRIVERS_RALUCA.includes(dr.name);
+    if(dr.visibleTo && dr.visibleTo.length>0) return dr.visibleTo.includes(groupKey);
+    return groupKey==="raluca" ? DRIVERS_RALUCA.includes(dr.name) : DRIVERS_MADALINA.includes(dr.name);
   });
 
   const namesOnDate = (date)=> ruhDrivers
@@ -5260,14 +5265,17 @@ function renderSortatoriTimeline(){
   const isMihaela2=_uk2==="mihaela";
   const today2=new Date();
   const mihaelaCurMonth=isMihaela2&&(sortCurrentDate.getFullYear()===today2.getFullYear()&&sortCurrentDate.getMonth()===today2.getMonth());
-  const canEdit=isAdmin()||(!isMihaela2&&_uk2==="madalina")||(isMihaela2&&mihaelaCurMonth)||hasModuleEdit(_uk2,"sortatori");
-  const canAdd=isAdmin()||hasModuleEdit(_uk2,"sortatori");
+  const hasSortEdit=isAdmin()||hasModuleEdit(_uk2,"sortatori");
+  // Constrângere de business (nu de acces): Mihaela editează doar luna curentă,
+  // dar doar dacă are oricum drept de editare acordat prin permisiuni.
+  const canEdit=hasSortEdit&&(!isMihaela2||mihaelaCurMonth);
+  const canAdd=hasSortEdit;
 
   const perm   =drivers.filter(d=>!d.category||d.category==="permanent");
   const rotatie=drivers.filter(d=>d.category==="rotatie");
   const camion =drivers.filter(d=>d.category==="camion");
   const urgenta=drivers.filter(d=>d.category==="urgenta");
-  const group  =window.activeUserKey==="mihaela"?"ruhstorf":window.activeUserKey==="madalina"?"eiselfing":sortView;
+  const group  =sortView;
 
   let dH="<div class='tl-driver-col'><div class='tl-driver-header'>Sortator</div>";
   let gH="<div class='tl-grid-wrap'>";
@@ -6646,7 +6654,7 @@ function confirmSortEdit(){
 
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.07.13-07";
+const APP_VERSION = "2026.07.13-09";
 
 // La login admin — publică automat dacă versiunea din cod e nouă față de Firestore
 async function autoPublishVersionIfNew(){
@@ -7571,14 +7579,21 @@ function showLoginNotification(userKey){
   const dateStr = dayNames[today.getDay()]+", "+today.getDate()+" "+monthNames[today.getMonth()]+" "+today.getFullYear();
   const userName = USERS[userKey]?.name || userKey;
 
-  // Lista de persoane vizibilă: pentru Mihaela = grupul Ruhstorf (ca la Raluca), altfel = visibleTo
+  // Lista de persoane vizibilă — STRICT din grupurile Concedii acordate prin permisiuni
+  const grantedGroups = isAdmin() ? ["eiselfing","ruhstorf","camion"] : (permFor(userKey,"concedii").groups||[]);
+  const GROUP_TO_KEY2 = {eiselfing:"madalina", ruhstorf:"raluca", camion:"corina"};
+  const allowedIdentityKeys2 = grantedGroups.map(g=>GROUP_TO_KEY2[g]).filter(Boolean);
   const visibleDrivers = (state.drivers||[]).filter(d=>{
-    if(userKey==="mihaela"){
-      if(d.visibleTo && d.visibleTo.length>0) return d.visibleTo.includes("raluca");
-      return DRIVERS_RALUCA.includes(d.name);
-    }
     const vis = d.visibleTo||[];
-    return vis.includes(userKey)||vis.includes("tania");
+    if(vis.length===0){
+      return allowedIdentityKeys2.some(k=>{
+        if(k==="raluca")   return DRIVERS_RALUCA.includes(d.name);
+        if(k==="madalina") return DRIVERS_MADALINA.includes(d.name);
+        if(k==="corina")   return DRIVERS_CORINA.includes(d.name);
+        return false;
+      });
+    }
+    return allowedIdentityKeys2.some(k=>vis.includes(k)) || vis.includes(userKey);
   });
   const onLeaveToday = visibleDrivers.filter(d=>{
     return (d.leaves||[]).some(l=>dateInLeave(today,l));
@@ -7894,7 +7909,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
-<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.07.13-07</div>
+<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.07.13-09</div>
 
 </body>
 </html>

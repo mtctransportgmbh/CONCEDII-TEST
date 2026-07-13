@@ -726,6 +726,7 @@
   .timeline-wrap { background: var(--bg-elev); border-radius: 8px; border: 1px solid var(--border); overflow: auto; max-height: calc(100vh - 110px); }
   .tl-names { position: sticky; left: 0; z-index: 4; background: var(--bg-elev); }
   .timeline { display: grid; grid-template-columns: 200px 1fr 128px; min-width: 100%; }
+  #libereTimeline { grid-template-columns: 200px 1fr; }
   .tl-driver-col { position: sticky; left: 0; background: var(--bg-elev); z-index: 2; border-right: 2px solid var(--border); display: flex; flex-direction: column; }
   .tl-driver-header { padding: 0 12px; height: 42px; display: flex; align-items: center; font-size: 11px; text-transform: uppercase; color: var(--text-dim); border-bottom: 1px solid var(--border); font-weight: 600; letter-spacing: 0.5px; position: sticky; top: 0; background: var(--bg-elev); z-index: 3; flex-shrink: 0; }
   .tl-driver-row { padding: 0 12px; height: 34px; min-height: 34px; display: flex; align-items: center; border-bottom: 1px solid var(--border); font-size: 12px; cursor: pointer; flex-shrink: 0; box-sizing: border-box; }
@@ -4058,7 +4059,7 @@ function renderTimeline(){
       },0);
       const rem=total-usedBefore-usedThis;
       const cls=rem<0?"neg":rem<3?"warn":"pos";
-      remHtml+=`<div class='tl-rem-cell ${cls}' title='Disponibil: ${total} · Folosit: ${usedBefore+usedThis}'><span class='tl-rem-name'>${escapeHtml(dr.name)}</span><span class='tl-rem-val'>${rem}</span></div>`;
+      remHtml+=`<div class='tl-rem-cell ${cls}' title='Disponibil: ${total} · Folosit luna aceasta: ${usedThis}'><span class='tl-rem-name'>${escapeHtml(dr.name)}</span><span class='tl-rem-val'>${rem}</span></div>`;
     }
   });
 
@@ -4645,12 +4646,22 @@ function renderLibere(){
   driverHtml+="</div>";
   gridHtml+="</div>";
 
-  tl.innerHTML=stickyHtml+driverHtml+gridHtml;
+  // Punem sticky header ÎNAINTE de timeline în timeline-wrap (exact ca la Concedii),
+  // NU în interiorul #libereTimeline — altfel CSS Grid l-ar plasa greșit ca a 3-a
+  // coloană alături de driver-col/grid-wrap, stricând complet layout-ul.
+  const libWrap = tl.closest(".timeline-wrap");
+  if(libWrap){
+    const oldSticky = libWrap.querySelector(".tl-sticky-header");
+    if(oldSticky) oldSticky.remove();
+    libWrap.insertAdjacentHTML("afterbegin", stickyHtml);
+    const stickyDays = libWrap.querySelector("#libereStickyDays");
+    const gridWrapEl = tl.querySelector(".tl-grid-wrap");
+    if(stickyDays && gridWrapEl){
+      gridWrapEl.addEventListener("scroll", ()=>{ stickyDays.scrollLeft = gridWrapEl.scrollLeft; });
+    }
+  }
 
-  // Sync scroll header
-  const wrap=tl.querySelector(".tl-grid-wrap");
-  const sticky=tl.querySelector("#libereStickyDays");
-  if(wrap&&sticky) wrap.addEventListener("scroll",()=>{ sticky.style.transform=`translateX(-${wrap.scrollLeft}px)`; },{passive:true});
+  tl.innerHTML=driverHtml+gridHtml;
 
   // ── Statistici ──
   renderLibereStats(persons, statsPerPerson, mk, y, m);
@@ -6635,7 +6646,7 @@ function confirmSortEdit(){
 
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.07.13-06";
+const APP_VERSION = "2026.07.13-07";
 
 // La login admin — publică automat dacă versiunea din cod e nouă față de Firestore
 async function autoPublishVersionIfNew(){
@@ -7883,7 +7894,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
-<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.07.13-06</div>
+<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.07.13-07</div>
 
 </body>
 </html>

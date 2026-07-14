@@ -2760,6 +2760,45 @@ function usedDaysThisYear(dr, type, year){
 // (startDate) setată, se calculează automat 2 zile/lună lucrată în anul respectiv
 // (proporțional dacă au început în cursul anului). Pentru cei FĂRĂ startDate,
 // rămâne valoarea introdusă manual (dr.maxDays), neschimbată.
+// ============================================================
+// PROTECȚIE CENTRALĂ ANTI-SUPRAPUNERE: nicio persoană nu poate avea, în
+// aceeași zi, mai mult dintr-o singură stare simultan — Concediu, Krank,
+// Fără plată și Prezență se exclud reciproc. Folosită de TOATE punctele
+// din aplicație unde se scrie una din aceste stări (drag, modal, import,
+// rezolvare conflict), indiferent de user.
+// ============================================================
+function checkDateRangeConflict(dr, startStr, endStr, excludeType){
+  // excludeType = tipul pe care tocmai încercăm să-l scriem (nu se auto-exclude pe sine)
+  const overlaps=(arr)=>(arr||[]).some(l=>l.start<=endStr&&l.end>=startStr);
+
+  if(excludeType!=="leaves" && overlaps(dr.leaves)){
+    return {conflict:true, type:"leaves", label:"Concediu (Urlaub)"};
+  }
+  if(excludeType!=="krank" && overlaps(dr.krankLeaves)){
+    return {conflict:true, type:"krank", label:"Krank"};
+  }
+  if(excludeType!=="unpaid" && overlaps(dr.unpaidLeaves)){
+    return {conflict:true, type:"unpaid", label:"Fără plată"};
+  }
+  if(excludeType!=="presence"){
+    // Verificăm prezența marcată explicit, lună cu lună (perioada poate traversa mai multe luni)
+    const s=parseDate(startStr), e=parseDate(endStr);
+    for(let d=new Date(s.getFullYear(),s.getMonth(),1); d<=e; d.setMonth(d.getMonth()+1)){
+      const mk=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+      const drP=(presState.presence&&presState.presence[mk]&&presState.presence[mk][dr.name])||{};
+      for(let dd=new Date(Math.max(s,new Date(d.getFullYear(),d.getMonth(),1))); dd.getMonth()===d.getMonth() && dd<=e; dd.setDate(dd.getDate()+1)){
+        if(drP[String(dd.getDate())]) return {conflict:true, type:"presence", label:"Prezență marcată"};
+      }
+    }
+  }
+  return {conflict:false};
+}
+
+// Mesaj gata de afișat cu toast() pentru un conflict găsit
+function conflictMessage(dr, result){
+  return "⛔ "+dr.name+" are deja „"+result.label+"” în această perioadă — șterge mai întâi statusul existent.";
+}
+
 function getEffectiveMaxDays(dr, year){
   if(!dr.startDate) return dr.maxDays||0;
   const start = parseDate(dr.startDate);
@@ -3068,11 +3107,33 @@ function resolveConflict(action){
       dr.unpaidLeaves.push({start:ds,end:ds});
       dr.unpaidLeaves=cleanLeavesFromHolidays(dr.unpaidLeaves);
     }
+    // Curățăm orice marcaj de prezență rezidual/contradictoriu, dacă statusul
+    // final NU e prezent (evită aceeași problemă: prezență veche care ar
+    // suprascrie vizual noul status de Urlaub/Krank/Fără plată)
+    if(c.excelSays!=="prezent"){
+      const mk2=ds.slice(0,7); const dn2=String(parseInt(ds.slice(8)));
+      if(presState.presence&&presState.presence[mk2]&&presState.presence[mk2][dr.name]&&presState.presence[mk2][dr.name][dn2]){
+        delete presState.presence[mk2][dr.name][dn2];
+        savePresState();
+      }
+    }
     scheduleSave();
     logActivity("🔧 Conflict rezolvat (Excel aplicat)",dr.name,ds);
     toast("✓ Ziua "+ds+" actualizată conform Excel");
   } else {
-    // keepApp — nu facem nimic în date, doar marcăm conflictul ca rezolvat
+    // keepApp — păstrăm datele din aplicație (Urlaub/Krank/Fără plată/Prezent),
+    // dar curățăm orice marcaj de PREZENȚĂ rezidual/contradictoriu pentru acea
+    // zi — altfel, dacă persoana are ex. Krank în date ȘI un marcaj vechi de
+    // "prezent" rămas separat (ex. dintr-un import anterior), afișarea celulei
+    // prioritizează greșit prezența peste Krank, arătând ✗ (prezent) în loc de K.
+    if(c.appSays!=="prezent"){
+      const ds=c.dateStr;
+      const mk=ds.slice(0,7); const dn=String(parseInt(ds.slice(8)));
+      if(presState.presence&&presState.presence[mk]&&presState.presence[mk][dr.name]&&presState.presence[mk][dr.name][dn]){
+        delete presState.presence[mk][dr.name][dn];
+        savePresState();
+      }
+    }
     logActivity("🔧 Conflict rezolvat (app păstrată)",dr.name,c.dateStr);
     toast("✓ Ziua "+c.dateStr+" — aplicația păstrată");
   }
@@ -3306,6 +3367,23 @@ function addLeave(){
     }
   }
 
+  // Blocaj strict: Concediu (Urlaub) nu poate fi adăugat peste zile care au
+  // deja Krank sau Fără plată — spre deosebire de direcția inversă (mai jos),
+  // nu există aici o conversie automată sensibilă, deci blocăm direct.
+  if(leaveType==="leaves"){
+    const krankOverlap=(dr.krankLeaves||[]).some(l=>l.start<=end&&l.end>=start);
+    if(krankOverlap){ toast("⛔ "+dr.name+" are deja Krank în această perioadă — șterge mai întâi Krank.",true); return; }
+  }
+  // Krank și Fără plată nu se pot suprapune reciproc
+  if(leaveType==="krank"){
+    const unpaidOverlap=(dr.unpaidLeaves||[]).some(l=>l.start<=end&&l.end>=start);
+    if(unpaidOverlap){ toast("⛔ "+dr.name+" are deja Fără plată în această perioadă.",true); return; }
+  }
+  if(leaveType==="unpaid"){
+    const krankOverlap2=(dr.krankLeaves||[]).some(l=>l.start<=end&&l.end>=start);
+    if(krankOverlap2){ toast("⛔ "+dr.name+" are deja Krank în această perioadă.",true); return; }
+  }
+
   if(leaveType==="krank"||leaveType==="unpaid"){
     // Verifică dacă există perioade de concediu care se suprapun
     const overlapping = (dr.leaves||[]).filter(l=>l.start<=end&&l.end>=start);
@@ -3469,19 +3547,31 @@ function saveQuickLeave(){
   if(start>end){toast("Data început după data sfârșit",true);return;}
   const dr=state.drivers.find(d=>d.id===comboSelectedId);if(!dr)return;
   const newDays=countWorkdays(parseDate(start),parseDate(end));
-  const viewedYear=currentDate.getFullYear();
-  const maxDays=getEffectiveMaxDays(dr,viewedYear)+(dr.carryOverDays||0);
-  if(maxDays>0){
-    const used=usedDaysThisYear(dr,"leaves",viewedYear);
-    if(used+newDays>maxDays){
-      const over=used+newDays-maxDays;
-      if(!confirm("⚠️ Depășire!\n"+dr.name+": "+maxDays+" zile disponibile.\nFolosite: "+used+" · Adăugat: "+newDays+" · Depășire: "+over+"\n\nContinui?"))return;
+  const _qType=document.getElementById("modalQuick")?.dataset?.quickType||"leaves";
+
+  // Verificare centrală: blochează dacă perioada se suprapune cu oricare
+  // altă stare (Concediu/Krank/Fără plată/Prezență), indiferent de tip
+  const conflictCheck=checkDateRangeConflict(dr, start, end, _qType);
+  if(conflictCheck.conflict){ toast(conflictMessage(dr, conflictCheck),true); return; }
+
+  if(_qType==="leaves"){
+    const viewedYear=currentDate.getFullYear();
+    const maxDays=getEffectiveMaxDays(dr,viewedYear)+(dr.carryOverDays||0);
+    if(maxDays>0){
+      const used=usedDaysThisYear(dr,"leaves",viewedYear);
+      if(used+newDays>maxDays){
+        const over=used+newDays-maxDays;
+        if(!confirm("⚠️ Depășire!\n"+dr.name+": "+maxDays+" zile disponibile.\nFolosite: "+used+" · Adăugat: "+newDays+" · Depășire: "+over+"\n\nContinui?"))return;
+      }
     }
   }
-  if(!dr.leaves)dr.leaves=[];
-  dr.leaves.push({start,end});
-  dr.leaves = mergeLeaves(dr.leaves);
-  const _qType=document.getElementById("modalQuick")?.dataset?.quickType||"leaves";
+
+  // Scriem în array-ul CORECT în funcție de tipul selectat (nu mereu "leaves")
+  const targetArr = _qType==="krank"?"krankLeaves":_qType==="unpaid"?"unpaidLeaves":"leaves";
+  if(!dr[targetArr])dr[targetArr]=[];
+  dr[targetArr].push({start,end});
+  dr[targetArr] = cleanLeavesFromHolidays(dr[targetArr]);
+
   const _qLabel=_qType==="krank"?"Krank adăugat rapid":_qType==="unpaid"?"S adăugat rapid":"Concediu adăugat rapid";
   logActivity("➕ "+_qLabel,dr.name,start+" → "+end+" ("+newDays+"z)");
   closeModal("modalQuick");renderAll();scheduleSave();
@@ -3994,14 +4084,9 @@ function tlDragEnd(){
         if(!confirm("⚠️ Depășire!\n"+dr.name+": "+maxDays+" zile disponibile.\nFolosite: "+used+" · Adăugat: "+newDays+" · Depășire: "+over+"\n\nContinui?"))return;
       }
     }
-    // Check unpaid overlap
-    const hasUnpaid2=(dr.unpaidLeaves||[]).some(l=>l.start<=endStr2&&l.end>=startStr2);
-    if(hasUnpaid2){ toast("⛔ "+dr.name+" are zile fără plată în această perioadă!",true); return; }
-    // Check if any day in range has presence marked
-    const mk2=currentDate.getFullYear()+"-"+String(currentDate.getMonth()+1).padStart(2,"0");
-    const drPres2=(presState.presence&&presState.presence[mk2]&&presState.presence[mk2][dr.name])||{};
-    const hasPresence=filteredDays.some(dn=>drPres2[String(dn)]);
-    if(hasPresence){ toast("⛔ "+dr.name+" are prezență marcată în această perioadă. Șterge mai întâi prezența.",true); return; }
+    // Verificare centrală: blochează dacă perioada se suprapune cu Krank/Fără plată/Prezență
+    const conflictCheck=checkDateRangeConflict(dr, startStr2, endStr2, "leaves");
+    if(conflictCheck.conflict){ toast(conflictMessage(dr, conflictCheck),true); return; }
     if(!dr.leaves)dr.leaves=[];
     // Împărțim în segmente continue sărind sărbătorile
     const segments=[];
@@ -4854,6 +4939,14 @@ function libereDragMove(name, dn){
 
 function libereSetDay(name, dn, mode){
   const mk=libereMonthKey();
+  // Plasă de siguranță: nu suprascriem o zi care are deja status automat
+  // (Concediu/Krank/Fără plată) din modulul Concedii — indiferent cum a
+  // fost apelată funcția (UI normal sau altă cale).
+  const y=libereCurrentDate.getFullYear(), m=libereCurrentDate.getMonth();
+  if(getAutoStatus(name, dn, y, m)){
+    toast("⛔ "+name+" are deja Concediu/Krank/Fără plată în această zi.",true);
+    return;
+  }
   if(!libereState.days[mk]) libereState.days[mk]={};
   if(!libereState.days[mk][name]) libereState.days[mk][name]={};
   if(mode===null) delete libereState.days[mk][name][String(dn)];
@@ -6787,7 +6880,7 @@ function confirmSortEdit(){
 
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.07.14-05";
+const APP_VERSION = "2026.07.14-08";
 
 // La login admin — publică automat dacă versiunea din cod e nouă față de Firestore
 async function autoPublishVersionIfNew(){
@@ -7148,12 +7241,17 @@ function renderPlanificare(){
           const dow=(d.getDay()+6)%7;
           const isSun=d.getDay()===0,holiday=getHoliday(d);
           const isBlocked=isSun||!!holiday;
-          const onLeave=concDr&&((concDr.leaves||[]).some(l=>dateInLeave(d,l))||(concDr.krankLeaves||[]).some(l=>dateInLeave(d,l))||(concDr.unpaidLeaves||[]).some(l=>dateInLeave(d,l)));
+          const isOnLeave=concDr&&(concDr.leaves||[]).some(l=>dateInLeave(d,l));
+          const isOnKrank=concDr&&(concDr.krankLeaves||[]).some(l=>dateInLeave(d,l));
+          const isOnUnpaid=concDr&&(concDr.unpaidLeaves||[]).some(l=>dateInLeave(d,l));
+          const onLeave=isOnLeave||isOnKrank||isOnUnpaid;
           const isToday=sameDay(d,today);
           const val=wkData[dow];
           let bg,color,label,cursor;
           if(isBlocked){bg="rgba(239,68,68,0.06)";color="";label="";cursor="not-allowed";}
-          else if(onLeave){bg="rgba(255,220,0,0.25)";color="#7a5800";label="U";cursor="not-allowed";}
+          else if(isOnKrank){bg="rgba(239,68,68,0.3)";color="#7a1a1a";label="K";cursor="not-allowed";}
+          else if(isOnUnpaid){bg="rgba(59,130,246,0.3)";color="#1e3a8a";label="S";cursor="not-allowed";}
+          else if(isOnLeave){bg="rgba(255,220,0,0.25)";color="#7a5800";label="U";cursor="not-allowed";}
           else if(val===1){bg="#10b981";color="#fff";label="✓";cursor="pointer";}
           else{bg=isToday?"rgba(37,99,235,0.12)":rowBg;color="";label="";cursor="pointer";}
           const todayStripe=isToday?"box-shadow:inset 3px 0 0 #2563eb, inset -3px 0 0 #2563eb;":"";
@@ -8043,7 +8141,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
-<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.07.14-05</div>
+<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.07.14-08</div>
 
 </body>
 </html>

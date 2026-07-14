@@ -1287,6 +1287,7 @@
           <span style="display:flex;align-items:center;gap:4px;font-size:12px"><span style="width:14px;height:14px;border-radius:3px;background:#ef4444;display:inline-block"></span>Liber acasă</span>
           <span style="display:flex;align-items:center;gap:4px;font-size:12px"><span style="width:14px;height:14px;border-radius:3px;background:rgba(255,220,0,0.5);display:inline-block"></span>Concediu/Krank</span>
           <button id="libereSelectBtn" onclick="openLibereSelect()" style="display:none;padding:5px 12px;background:var(--bg-elev-2);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px;color:var(--text)">⚙️ Selectează persoane</button>
+          <button id="libereCopyPrevBtn" onclick="copyLiberePersonsFromPrevMonth()" title="Copiază lista de persoane din luna precedentă" style="display:none;padding:5px 12px;background:var(--bg-elev-2);border:1px solid #6366f1;border-radius:6px;cursor:pointer;font-size:12px;color:#6366f1">📋 Copiază luna prec.</button>
         </div>
       </div>
       <!-- Statistici sumare -->
@@ -2103,6 +2104,8 @@ function fullReset(){
   unsubAll();
   if(_sortUnsub){ try{_sortUnsub();}catch(e){} _sortUnsub=null; }
   if(_presUnsub){ try{_presUnsub();}catch(e){} _presUnsub=null; }
+  if(_permWatchUnsub){ try{_permWatchUnsub();}catch(e){} _permWatchUnsub=null; }
+  const _permBanner=document.getElementById("permChangeBanner"); if(_permBanner) _permBanner.remove();
   state      = {drivers:[], thresholds:{warn:3,crit:5}};
   presState  = {presence:{}};
   sortState  = {drivers:[], presence:{}};
@@ -4409,15 +4412,21 @@ function setLiberePersons(persons, mk){
   libereState.persons[mk]=[...persons].sort((a,b)=>a.localeCompare(b,"ro"));
 }
 function copyLiberePersonsFromPrevMonth(){
+  if(!isAdmin()){toast("Doar Admin",true);return;}
+  const curKey=libereMonthKey();
   const cur=new Date(libereCurrentDate.getFullYear(),libereCurrentDate.getMonth(),1);
   const prev=new Date(cur.getFullYear(),cur.getMonth()-1,1);
   const prevKey=prev.getFullYear()+"-"+String(prev.getMonth()+1).padStart(2,"0");
   const prevPersons=getLiberePersons(prevKey);
-  if(!prevPersons.length){ toast("Luna anterioară nu are persoane selectate",true); return; }
-  setLiberePersons(prevPersons, libereMonthKey());
+  if(!prevPersons.length){ toast("Luna precedentă ("+prevKey+") nu are persoane selectate",true); return; }
+  const curPersons=getLiberePersons(curKey);
+  if(curPersons.length>0){
+    if(!confirm("Luna "+curKey+" are deja "+curPersons.length+" persoane selectate.\nSuprascriem cu lista din "+prevKey+" ("+prevPersons.length+" persoane)?")) return;
+  }
+  setLiberePersons(prevPersons, curKey);
   saveLibereState();
   renderLibere();
-  toast("✓ Copiat "+prevPersons.length+" persoane din luna anterioară");
+  toast("✅ "+prevPersons.length+" persoane copiate din "+prevKey+" → "+curKey);
 }
 
 // ============================================================
@@ -4453,6 +4462,36 @@ async function enterAppSafe(userKey){
     await _permOverridesPromise;
   }
   enterApp(userKey);
+  startPermChangeWatch(userKey);
+}
+
+let _permWatchUnsub = null;
+function startPermChangeWatch(userKey){
+  if(_permWatchUnsub){ try{_permWatchUnsub();}catch(e){} _permWatchUnsub=null; }
+  if(userKey==="admin") return; // Admin are mereu acces complet, nu are nevoie de avertizare
+  // Reținem permisiunile exact cum erau la login, ca să detectăm orice schimbare ulterioară
+  const permsAtLogin = JSON.stringify(permOverrides[userKey]||{});
+  let firstSnapshot = true;
+  _permWatchUnsub = db.collection(permColl()).doc("overrides").onSnapshot(snap=>{
+    if(firstSnapshot){ firstSnapshot=false; return; } // ignorăm livrarea inițială (deja o avem din login)
+    const data = snap.exists ? (snap.data()||{}) : {};
+    const permsNow = JSON.stringify(data[userKey]||{});
+    if(permsNow !== permsAtLogin){
+      showPermChangeBanner();
+    }
+  }, err=>console.warn("perm watch err",err));
+}
+
+function showPermChangeBanner(){
+  if(document.getElementById("permChangeBanner")) return; // deja afișat
+  const banner=document.createElement("div");
+  banner.id="permChangeBanner";
+  banner.style.cssText="position:fixed;top:0;left:0;right:0;z-index:9999;background:#f59e0b;color:#000;padding:10px 16px;display:flex;align-items:center;justify-content:center;gap:14px;font-size:13px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.2)";
+  banner.innerHTML=`
+    <span>🔑 Permisiunile tale de acces au fost actualizate de Admin — trebuie să reîncarci pagina pentru a le vedea aplicate.</span>
+    <button onclick="location.reload()" style="background:#000;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-weight:800;font-size:12px">🔄 Reîncarcă acum</button>
+  `;
+  document.body.prepend(banner);
 }
 
 async function savePermOverrides(){
@@ -4637,6 +4676,8 @@ function renderLibere(){
 
   const selectBtn = document.getElementById("libereSelectBtn");
   if(selectBtn) selectBtn.style.display = isAdmin()?"inline-block":"none";
+  const copyPrevBtn = document.getElementById("libereCopyPrevBtn");
+  if(copyPrevBtn) copyPrevBtn.style.display = isAdmin()?"inline-block":"none";
 
   const persons = getLiberePersons(mk);
   const dayData = (libereState.days||{})[mk]||{};
@@ -6746,7 +6787,7 @@ function confirmSortEdit(){
 
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.07.14-01";
+const APP_VERSION = "2026.07.14-05";
 
 // La login admin — publică automat dacă versiunea din cod e nouă față de Firestore
 async function autoPublishVersionIfNew(){
@@ -7041,7 +7082,7 @@ function renderPlanificare(){
       const dow=(d.getDay()+6)%7;
       const col=isToday?"#fff":holiday?"var(--holiday)":isSun||isSat?"rgba(239,68,68,0.8)":"var(--text)";
       const bg=isToday?"#2563eb":holiday?"rgba(168,85,247,0.18)":isSun||isSat?"rgba(239,68,68,0.04)":"var(--bg-elev-2)";
-      const extra=isToday?"box-shadow:0 2px 10px rgba(37,99,235,0.55);border-radius:6px;position:relative;z-index:2;":"";
+      const extra=isToday?"box-shadow:inset 3px 0 0 #2563eb, inset -3px 0 0 #2563eb, inset 0 -3px 0 #2563eb;position:relative;z-index:2;":"";
       html+=`<th style="width:${dayW}px;min-width:${dayW}px;background:${bg};border:1px solid var(--border);border-bottom:2px solid var(--border);font-size:9px;font-weight:700;color:${col};text-align:center;padding:2px 0;${extra}" title="${holiday||""}">${DOW_SHORT[dow]}<div style="font-size:11px;font-weight:900">${d.getDate()}</div></th>`;
     });
     if(wi<weeks.length-1) html+=`<th style="width:8px;background:var(--bg);border-bottom:2px solid var(--border)"></th>`;
@@ -7840,6 +7881,7 @@ function renderAll(includeDrivers=true){
   }
   if(includeDrivers)renderDrivers();
   renderMain();
+  updateTodayLeavePanel();
 }
 
 function openStats(filter){
@@ -8001,7 +8043,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
-<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.07.14-01</div>
+<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.07.14-05</div>
 
 </body>
 </html>

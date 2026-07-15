@@ -799,7 +799,7 @@
   .tl-cell.today-col {
     box-shadow: inset 3px 0 0 #2563eb, inset -3px 0 0 #2563eb;
   }
-  .tl-cell.today-col:not(.in-leave):not(.in-krank):not(.in-unpaid):not(.pres-p):not(.pres-a):not(.sort-p):not(.sort-a) {
+  .tl-cell.today-col:not(.in-leave):not(.in-krank):not(.in-unpaid):not(.pres-p):not(.pres-a):not(.sort-p):not(.sort-a):not(.lib-lucrat):not(.lib-liber):not(.lib-concediu):not(.lib-krank) {
     background: rgba(37,99,235,0.12) !important;
   }
   .tl-row { display: grid; height: 34px; border-bottom: 1px solid var(--border); position: relative; box-sizing: border-box; }
@@ -1902,6 +1902,7 @@ function buildCompleteBackup(){
       maxDays:       dr.maxDays||0,
       carryOverDays: dr.carryOverDays||0,
       carryOverByYear: dr.carryOverByYear||{},
+      borrowedDays: dr.borrowedDays||[],
       startDate:     dr.startDate||null,
       endDate:       dr.endDate||null,
       archived:      dr.archived||false,
@@ -1940,6 +1941,7 @@ function restoreCompleteBackup(bk){
       dr.maxDays       = bkDr.maxDays||dr.maxDays||0;
       dr.carryOverDays = bkDr.carryOverDays||0;
       dr.carryOverByYear = bkDr.carryOverByYear||{};
+      dr.borrowedDays = bkDr.borrowedDays||[];
       if(bkDr.startDate) dr.startDate=bkDr.startDate; else delete dr.startDate;
       if(bkDr.endDate)   dr.endDate=bkDr.endDate;     else delete dr.endDate;
       restored++;
@@ -1966,6 +1968,7 @@ async function triggerAutoBackup(time, customDocId){
         name:dr.name, visibleTo:dr.visibleTo||[],
         maxDays:dr.maxDays||0, carryOverDays:dr.carryOverDays||0,
         carryOverByYear:dr.carryOverByYear||{},
+        borrowedDays:dr.borrowedDays||[],
         startDate:dr.startDate||null, endDate:dr.endDate||null,
         leaves:dr.leaves||[], krankLeaves:dr.krankLeaves||[], unpaidLeaves:dr.unpaidLeaves||[]
       };
@@ -2809,9 +2812,23 @@ function getEffectiveMaxDays(dr, year){
   return monthsActive * 2;
 }
 
+// ============================================================
+// ÎMPRUMUT EXPLICIT DIN ANUL VIITOR: dr.borrowedDays = [{fromYear, toYear, days, addedAt}]
+// Se creează DOAR când adminul alege explicit "împrumută" la o depășire de
+// cotă — nu automat. Reduce vizibil cota anului toYear ÎNCĂ DIN MOMENTUL
+// împrumutului (nu abia la trecerea de an), ca să fie clar peste tot.
+// ============================================================
+function getBorrowedDaysForYear(dr, year){
+  return (dr.borrowedDays||[]).filter(b=>b.toYear===year).reduce((s,b)=>s+b.days,0);
+}
+
 function getCarryOverForYear(dr, year){
   if(dr.carryOverByYear && dr.carryOverByYear[String(year)] !== undefined)
-    return dr.carryOverByYear[String(year)];
+    return dr.carryOverByYear[String(year)]; // deja finalizat definitiv (calculat la trecerea de an)
+  // Nu s-a finalizat încă anul — dar poate exista deja un împrumut ANTICIPAT,
+  // ales explicit de admin, care trebuie să se vadă imediat în calcul.
+  const borrowed = getBorrowedDaysForYear(dr, year);
+  if(borrowed) return -borrowed;
   // Fallback la carryOverDays vechi (compatibilitate)
   return dr.carryOverDays||0;
 }
@@ -2974,6 +2991,57 @@ function openEditDriver(id){
   openModal("modalDriver");
   setTimeout(()=>document.getElementById("driverNameInput").focus(),50);
 }
+// ============================================================
+// AVERTIZARE: zile de concediu deja folosite în ani VIITORI față de data
+// de plecare — acestea trebuie recuperate (de regulă din ultimul salariu),
+// fiindcă persoana nu va mai fi activă când ar fi urmat să le folosească.
+// ============================================================
+// Gestionează depășirea cotei — întreabă explicit dacă userul vrea să
+// împrumute din anul viitor (nu se întâmplă niciodată automat).
+// Returnează true dacă adăugarea trebuie să continue, false dacă s-a anulat.
+function handleOverdraftChoice(dr, viewedYear, used, newDays, maxDays){
+  const over=used+newDays-maxDays;
+  if(!confirm("⚠️ Depășire!\n"+dr.name+": "+maxDays+" zile disponibile.\nFolosite: "+used+" · Adăugat: "+newDays+" · Depășire: "+over+"\n\nContinui?")) return false;
+  const wantsBorrow = confirm(
+    "Vrei să scazi acum cele "+over+" zile depășite din cota anului "+(viewedYear+1)+"?\n\n"+
+    "OK = ÎMPRUMUTĂ din anul viitor ("+(viewedYear+1)+" pornește cu "+over+" zile mai puține)\n"+
+    "Anulează = lasă pur și simplu ca depășire în "+viewedYear+" (fără împrumut explicit)"
+  );
+  if(wantsBorrow){
+    if(!dr.borrowedDays) dr.borrowedDays=[];
+    dr.borrowedDays.push({fromYear:viewedYear, toYear:viewedYear+1, days:over, addedAt:fmtDate(new Date())});
+    logActivity("📌 Zile împrumutate din anul viitor",dr.name,over+"z din "+(viewedYear+1));
+    toast("📌 "+over+" zile împrumutate din cota "+(viewedYear+1));
+  }
+  return true;
+}
+
+function getFutureLeaveAfterDeparture(dr, endDateStr){
+  const endYear = parseDate(endDateStr).getFullYear();
+  const byYear = {};
+  // 1) Zile cu dată calendaristică literalmente în anii de după plecare
+  (dr.leaves||[]).forEach(l=>{
+    const ls=parseDate(l.start), le=parseDate(l.end);
+    for(let yr=Math.max(ls.getFullYear(), endYear+1); yr<=le.getFullYear(); yr++){
+      const ys=new Date(yr,0,1), ye=new Date(yr,11,31);
+      const from = ls>ys?ls:ys, to = le<ye?le:ye;
+      if(from<=to){
+        byYear[yr] = (byYear[yr]||0) + countWorkdays(from,to);
+      }
+    }
+  });
+  // 2) Zile ÎMPRUMUTATE EXPLICIT dintr-un an viitor (chiar dacă datele reale
+  // ale concediului sunt în anul curent, ex: a luat 10 zile în iulie 2026,
+  // dar cota lor a fost atribuită explicit lui 2027) — persoana nu va mai
+  // ajunge în acel an dacă pleacă înainte, deci datoria trebuie recuperată.
+  (dr.borrowedDays||[]).forEach(b=>{
+    if(b.toYear>endYear){
+      byYear[b.toYear] = (byYear[b.toYear]||0) + b.days;
+    }
+  });
+  return byYear; // ex: {2027: 3} sau {2027: 10} din împrumut
+}
+
 function saveDriver(){
   if(!isAdmin()){toast("Doar Admin poate salva persoane",true);return;}
   const name=document.getElementById("driverNameInput").value.trim();
@@ -2989,9 +3057,20 @@ function saveDriver(){
   if(editingDriverId){
     const dr=state.drivers.find(d=>d.id===editingDriverId);
     if(dr){
+      const oldEndDate=dr.endDate||null;
       dr.name=name; dr.maxDays=maxDays; dr.visibleTo=visibleTo;
       if(startDate) dr.startDate=startDate; else delete dr.startDate;
       if(endDate) dr.endDate=endDate; else delete dr.endDate;
+      // Avertizare: dacă data de plecare e nouă/schimbată, verificăm dacă
+      // persoana are deja zile de concediu programate în ani DUPĂ plecare
+      if(endDate && endDate!==oldEndDate){
+        const futureByYear = getFutureLeaveAfterDeparture(dr, endDate);
+        const years = Object.keys(futureByYear);
+        if(years.length){
+          const lines = years.map(yr=>"  • "+yr+": "+futureByYear[yr]+" zile").join("\n");
+          alert("⚠️ ATENȚIE — "+name+" are deja zile de concediu programate DUPĂ data de plecare ("+endDate+"):\n\n"+lines+"\n\nAceste zile au fost deja folosite/programate din anii viitori, dar persoana nu va mai fi activă atunci.\nEle trebuie recuperate — de regulă scăzute din ultimul salariu.");
+        }
+      }
       logActivity("✏️ Persoană editată",name,"zile: "+maxDays+(startDate?" start:"+startDate:"")+(endDate?" end:"+endDate:""));
       toast("✓ "+name+" actualizat");
     }
@@ -3335,13 +3414,17 @@ function addLeave(){
   const newDays=countWorkdays(parseDate(start),parseDate(end));
 
   if(leaveType==="leaves"){
-    const viewedYear=currentDate.getFullYear();
+    // Avertizare simetrică: dacă persoana are DEJA dată de plecare setată,
+    // și acum adăugăm concediu care cade DUPĂ acea dată, avertizăm imediat
+    if(dr.endDate && start>dr.endDate){
+      if(!confirm("⚠️ "+dr.name+" are data de plecare "+dr.endDate+", iar perioada adăugată ("+start+" → "+end+") e DUPĂ plecare.\n\nAceste zile vor trebui recuperate — de regulă scăzute din ultimul salariu.\n\nContinui adăugarea?")) return;
+    }
+    const viewedYear=parseDate(start).getFullYear(); // anul REAL al perioadei, nu anul navigat — permite adăugare corectă și pentru anul viitor
     const maxDays=getEffectiveMaxDays(dr,viewedYear)+getCarryOverForYear(dr,viewedYear);
     if(maxDays>0){
       const used=usedDaysThisYear(dr,"leaves",viewedYear);
       if(used+newDays>maxDays){
-        const over=used+newDays-maxDays;
-        if(!confirm("⚠️ Depășire!\n"+dr.name+": "+maxDays+" zile disponibile.\nFolosite: "+used+" · Adăugat: "+newDays+" · Depășire: "+over+"\n\nContinui?"))return;
+        if(!handleOverdraftChoice(dr, viewedYear, used, newDays, maxDays)) return;
       }
     }
   }
@@ -3555,13 +3638,12 @@ function saveQuickLeave(){
   if(conflictCheck.conflict){ toast(conflictMessage(dr, conflictCheck),true); return; }
 
   if(_qType==="leaves"){
-    const viewedYear=currentDate.getFullYear();
+    const viewedYear=parseDate(start).getFullYear(); // anul REAL al perioadei
     const maxDays=getEffectiveMaxDays(dr,viewedYear)+(dr.carryOverDays||0);
     if(maxDays>0){
       const used=usedDaysThisYear(dr,"leaves",viewedYear);
       if(used+newDays>maxDays){
-        const over=used+newDays-maxDays;
-        if(!confirm("⚠️ Depășire!\n"+dr.name+": "+maxDays+" zile disponibile.\nFolosite: "+used+" · Adăugat: "+newDays+" · Depășire: "+over+"\n\nContinui?"))return;
+        if(!handleOverdraftChoice(dr, viewedYear, used, newDays, maxDays)) return;
       }
     }
   }
@@ -3715,6 +3797,7 @@ function uploadLocalBackup(e){
           maxDays:        d.maxDays||0,
           carryOverDays:  d.carryOverDays||0,
           carryOverByYear:d.carryOverByYear||{},
+          borrowedDays:  d.borrowedDays||[],
           leaves:         d.leaves||[],
           krankLeaves:    d.krankLeaves||[],
           unpaidLeaves:   d.unpaidLeaves||[]
@@ -4080,8 +4163,7 @@ function tlDragEnd(){
     if(maxDays>0){
       const used=usedDaysThisYear(dr,"leaves",viewedYear);
       if(used+newDays>maxDays){
-        const over=used+newDays-maxDays;
-        if(!confirm("⚠️ Depășire!\n"+dr.name+": "+maxDays+" zile disponibile.\nFolosite: "+used+" · Adăugat: "+newDays+" · Depășire: "+over+"\n\nContinui?"))return;
+        if(!handleOverdraftChoice(dr, viewedYear, used, newDays, maxDays)) return;
       }
     }
     // Verificare centrală: blochează dacă perioada se suprapune cu Krank/Fără plată/Prezență
@@ -4357,12 +4439,15 @@ async function initYearFromBase(uk, year){
 }
 
 function autoCalculateCarryOver(fromYear, toYear){
-  // Stocăm carry-over per an: dr.carryOverByYear = {2026: 5, 2027: 3}
+  // Stocăm carry-over per an: dr.carryOverByYear = {2026: 5, 2027: -3}
+  // Poate fi și NEGATIV — dacă persoana a depășit cota (a "împrumutat" zile),
+  // anul următor pornește cu mai puține zile disponibile, reflectând datoria.
   let updated = 0;
   state.drivers.forEach(dr=>{
-    if(!dr.maxDays || dr.maxDays===0) return;
+    const effMax = getEffectiveMaxDays(dr, fromYear);
+    if(!effMax || effMax===0) return;
     if(!dr.carryOverByYear) dr.carryOverByYear = {};
-    // Nu recalcula dacă există deja pentru acest fromYear
+    // Nu recalcula dacă există deja pentru acest toYear
     if(dr.carryOverByYear[String(toYear)] !== undefined) return;
     const usedInFromYear = (dr.leaves||[]).reduce((sum,l)=>{
       const s=parseDate(l.start),e=parseDate(l.end);
@@ -4371,15 +4456,19 @@ function autoCalculateCarryOver(fromYear, toYear){
       const from=s<ys?ys:s,to=e>ye?ye:e;
       return sum+countWorkdays(from,to);
     },0);
-    const remaining = Math.max(0, dr.maxDays - usedInFromYear);
-    if(remaining > 0){
-      dr.carryOverByYear[String(toYear)] = remaining;
-      updated++;
-    }
+    // prevCarry (reportul intrat în fromYear) NU include vreun împrumut al lui
+    // fromYear→toYear (acela ține de toYear, nu de fromYear) — citim direct
+    // din carryOverByYear ca să evităm orice suprapunere cu împrumutul curent.
+    const prevCarry = (dr.carryOverByYear[String(fromYear)] !== undefined) ? dr.carryOverByYear[String(fromYear)] : (dr.carryOverDays||0);
+    const totalAvailable = effMax + prevCarry;
+    const alreadyBorrowed = getBorrowedDaysForYear(dr, toYear); // împrumut ANTICIPAT ales explicit în cursul lui fromYear
+    const remaining = totalAvailable - usedInFromYear - alreadyBorrowed;
+    dr.carryOverByYear[String(toYear)] = remaining;
+    updated++;
   });
   if(updated > 0){
     scheduleSave();
-    toast("✓ "+updated+" persoane: zile rămase din "+fromYear+" reportate în "+toYear);
+    toast("✓ "+updated+" persoane: sold din "+fromYear+" reportat în "+toYear+" (inclusiv eventualele depășiri/împrumuturi)");
   }
 }
 
@@ -4837,7 +4926,7 @@ function renderLibere(){
       const evts = canEditLibere()&&!isSun&&!hol&&!autoSt
         ? `onmousedown="libereDragStart('${name.replace(/'/g,"\\'")}',${dn},event)" onmouseenter="libereDragMove('${name.replace(/'/g,"\\'")}',${dn})"`
         : "";
-      const lbl = status==="lucrat"?"✓":status==="liber"?"✗":status==="concediu"?"U":status==="krank"?"K":status==="unpaid"?"S":"";
+      const lbl = (isSun||hol) ? "" : (status==="lucrat"?"✓":status==="liber"?"✗":status==="concediu"?"U":status==="krank"?"K":status==="unpaid"?"S":"");
       const txtCol = (status==="lucrat"||status==="liber")?"#fff":"";
       gridHtml+=`<div class='${cls.join(" ")}' style='background:${bg};${txtCol?"color:"+txtCol:""}' ${evts}>${lbl}</div>`;
     }
@@ -6880,7 +6969,7 @@ function confirmSortEdit(){
 
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.07.14-08";
+const APP_VERSION = "2026.07.15-02";
 
 // La login admin — publică automat dacă versiunea din cod e nouă față de Firestore
 async function autoPublishVersionIfNew(){
@@ -8141,7 +8230,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
-<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.07.14-08</div>
+<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.07.15-02</div>
 
 </body>
 </html>

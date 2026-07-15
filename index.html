@@ -223,7 +223,8 @@
   .app {
     display: grid;
     grid-template-columns: 280px 1fr;
-    min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
     transition: grid-template-columns 0.25s ease;
   }
   .app.sidebar-collapsed {
@@ -413,7 +414,7 @@
   
   .main {
     padding: 20px 24px;
-    overflow-y: visible;
+    overflow-y: auto;
     max-height: 100vh;
   }
   
@@ -6969,7 +6970,7 @@ function confirmSortEdit(){
 
 // VERSION UPDATE NOTIFICATION
 // ============================================================
-const APP_VERSION = "2026.07.15-03";
+const APP_VERSION = "2026.07.15-04";
 
 // La login admin — publică automat dacă versiunea din cod e nouă față de Firestore
 async function autoPublishVersionIfNew(){
@@ -8230,7 +8231,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 </script>
 
 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Schimbă tema" style="display:none">🌙</button>
-<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.07.15-03</div>
+<div id="versionCorner" style="position:fixed;bottom:6px;right:10px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:100">v2026.07.15-04</div>
 
 </body>
 </html>

@@ -8269,6 +8269,15 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 .mtcCereriCard .ok{background:#2F855A; color:#fff;}
 .mtcCereriCard .no{background:#C0392B; color:#fff;}
 .mtcCereriEmpty{color:#888; font-size:12.5px; padding:10px 0; text-align:center;}
+
+/* ---------- Etichetă "cerere în așteptare" suprapusă pe calendar ---------- */
+.mtc-pending-overlay{
+  margin-top:4px; padding-top:4px; border-top:1.5px dashed #D98E04;
+}
+.mtc-pending-name{
+  font-size:10.5px; color:#8A6300; background:#FBF1DC; border-radius:4px;
+  padding:2px 5px; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
 </style>
 
 <div id="mtcCereriBadge" onclick="mtcToggleCereriPanel()">
@@ -8295,6 +8304,15 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
     };
   }
 
+  if(typeof renderCalendar === 'function'){
+    const _mtcOrigRenderCalendar = renderCalendar;
+    renderCalendar = function(){
+      const r = _mtcOrigRenderCalendar();
+      mtcOverlayPendingOnCalendar();
+      return r;
+    };
+  }
+
   function mtcInitCereriPanel(userKey){
     _mtcCurrentUserKey = userKey;
     const valid = ['raluca','madalina','corina','tania','admin'];
@@ -8317,6 +8335,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
     const count = document.getElementById('mtcCereriCount');
     badge.style.display = 'flex';
     count.textContent = _mtcRequests.length;
+    mtcOverlayPendingOnCalendar();
 
     const body = document.getElementById('mtcCereriBody');
     if(!_mtcRequests.length){
@@ -8406,6 +8425,31 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
     }
   };
 
+  function mtcOverlayPendingOnCalendar(){
+    const grid = document.getElementById('calGrid');
+    if(!grid) return;
+    grid.querySelectorAll('.mtc-pending-overlay').forEach(el=>el.remove());
+    if(!_mtcRequests.length) return;
+
+    const cells = grid.querySelectorAll('.cal-day');
+    cells.forEach(cell=>{
+      const onclickAttr = cell.getAttribute('onclick') || '';
+      const m = onclickAttr.match(/openDayDetail\('([\d-]+)'\)/);
+      if(!m) return;
+      const dateStr = m[1];
+      const pendingHere = _mtcRequests.filter(r => dateStr >= r.start && dateStr <= r.end);
+      if(!pendingHere.length) return;
+
+      const overlay = document.createElement('div');
+      overlay.className = 'mtc-pending-overlay';
+      overlay.innerHTML = pendingHere.map(r=>{
+        const familyName = (r.numeAngajat||'?').trim().split(/\s+/)[0];
+        return `<div class="mtc-pending-name">🕓 ${mtcEsc(familyName)} (cerere)</div>`;
+      }).join('');
+      cell.appendChild(overlay);
+    });
+  }
+
   function mtcEsc(s){
     return (s||'').toString().replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   }
@@ -8426,6 +8470,7 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
   }, 300);
 })();
 </script>
+
 
 
  

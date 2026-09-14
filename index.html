@@ -8409,8 +8409,24 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
   function mtcEsc(s){
     return (s||'').toString().replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   }
+
+  // Dacă sesiunea era deja activă (auto-login din localStorage, înainte
+  // ca acest cod să apuce să se agațe de enterAppSafe), pornim direct.
+  // Mai reverificăm de câteva ori în prima secundă, cât timp pagina încă
+  // se inițializează, ca să nu pierdem momentul în care activeUserKey apare.
+  let _mtcTries = 0;
+  const _mtcCheckInterval = setInterval(()=>{
+    _mtcTries++;
+    if(window.activeUserKey){
+      mtcInitCereriPanel(window.activeUserKey);
+      clearInterval(_mtcCheckInterval);
+    } else if(_mtcTries > 20){
+      clearInterval(_mtcCheckInterval);
+    }
+  }, 300);
 })();
 </script>
+
 
  
 </html>

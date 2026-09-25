@@ -8472,6 +8472,255 @@ function applyTheme(){ document.documentElement.setAttribute("data-theme","light
 </script>
 
 
+<!-- ============================================================
+     PANOU CERERI DE CONCEDIU — bucată adăugată, nu modifică nimic
+     din aplicația existentă. Se agață de enterAppSafe() ca să știe
+     cine e logat (raluca/madalina/corina/tania/admin) și arată doar
+     cererile din grupul lui (sau tot, dacă e admin).
+     ============================================================ -->
+<style>
+#mtcCereriBadge{
+  position:fixed; right:18px; bottom:18px; z-index:9999;
+  background:#1E3A5F; color:#fff; border-radius:100px; padding:12px 18px;
+  font-family:Arial,sans-serif; font-size:13px; font-weight:700; cursor:pointer;
+  box-shadow:0 6px 20px rgba(0,0,0,.25); display:none; align-items:center; gap:8px;
+}
+#mtcCereriBadge .num{
+  background:#C0392B; color:#fff; border-radius:100px; padding:1px 8px; font-size:12px;
+}
+#mtcCereriPanel{
+  position:fixed; right:18px; bottom:70px; z-index:9999; width:340px; max-height:70vh;
+  overflow-y:auto; background:#fff; border-radius:14px; box-shadow:0 20px 60px rgba(0,0,0,.3);
+  display:none; font-family:Arial,sans-serif;
+}
+#mtcCereriPanel .hd{padding:14px 16px; border-bottom:1px solid #eee; font-weight:700; font-size:14px; display:flex; justify-content:space-between; align-items:center;}
+#mtcCereriPanel .hd span.x{cursor:pointer; color:#888; font-weight:400;}
+#mtcCereriPanel .body{padding:10px 14px;}
+.mtcCereriCard{background:#F6F7F9; border-radius:10px; padding:12px; margin-bottom:10px;}
+.mtcCereriCard .who{font-weight:700; font-size:13.5px;}
+.mtcCereriCard .when{font-family:monospace; font-size:12px; color:#666; margin-top:2px;}
+.mtcCereriCard .motiv{font-size:12px; color:#666; font-style:italic; margin-top:4px;}
+.mtcCereriCard .warn{background:#FBF1DC; color:#8A6300; border-radius:7px; padding:6px 8px; font-size:11px; margin-top:6px;}
+.mtcCereriCard .acts{display:flex; gap:6px; margin-top:8px;}
+.mtcCereriCard .acts button{flex:1; border:none; border-radius:7px; padding:7px; font-weight:700; font-size:11.5px; cursor:pointer;}
+.mtcCereriCard .ok{background:#2F855A; color:#fff;}
+.mtcCereriCard .no{background:#C0392B; color:#fff;}
+.mtcCereriEmpty{color:#888; font-size:12.5px; padding:10px 0; text-align:center;}
+
+/* ---------- Etichetă "cerere în așteptare" suprapusă pe calendar ---------- */
+.mtc-pending-overlay{
+  margin-top:4px; padding-top:4px; border-top:1.5px dashed #D98E04;
+}
+.mtc-pending-name{
+  font-size:10.5px; color:#8A6300; background:#FBF1DC; border-radius:4px;
+  padding:2px 5px; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+</style>
+
+<div id="mtcCereriBadge" onclick="mtcToggleCereriPanel()">
+  📋 Cereri concediu <span class="num" id="mtcCereriCount">0</span>
+</div>
+<div id="mtcCereriPanel">
+  <div class="hd">Cereri de aprobat <span class="x" onclick="mtcToggleCereriPanel()">✕</span></div>
+  <div class="body" id="mtcCereriBody"></div>
+</div>
+
+<script>
+(function(){
+  let _mtcCurrentUserKey = null;
+  let _mtcUnsub = null;
+  let _mtcRequests = [];
+
+  // agățăm de enterAppSafe FĂRĂ să-i schimbăm codul — doar îl învelim
+  if(typeof enterAppSafe === 'function'){
+    const _mtcOrigEnterAppSafe = enterAppSafe;
+    enterAppSafe = async function(userKey){
+      const r = await _mtcOrigEnterAppSafe(userKey);
+      mtcInitCereriPanel(userKey);
+      return r;
+    };
+  }
+
+  if(typeof renderCalendar === 'function'){
+    const _mtcOrigRenderCalendar = renderCalendar;
+    renderCalendar = function(){
+      const r = _mtcOrigRenderCalendar();
+      mtcOverlayPendingOnCalendar();
+      return r;
+    };
+  }
+
+  function mtcInitCereriPanel(userKey){
+    _mtcCurrentUserKey = userKey;
+    const valid = ['raluca','madalina','corina','tania','admin'];
+    if(!valid.includes(userKey)){
+      document.getElementById('mtcCereriBadge').style.display = 'none';
+      if(_mtcUnsub){ _mtcUnsub(); _mtcUnsub = null; }
+      return;
+    }
+    if(_mtcUnsub) _mtcUnsub();
+    _mtcUnsub = db.collection('cereri_concediu').where('status','==','in_asteptare')
+      .onSnapshot(snap=>{
+        const toate = snap.docs.map(d=>({id:d.id, ...d.data()}));
+        _mtcRequests = userKey==='admin' ? toate : toate.filter(r=>r.coordonator===userKey);
+        mtcRenderBadgeAndPanel();
+      }, err=>console.error('mtcCereri onSnapshot', err));
+  }
+
+  function mtcRenderBadgeAndPanel(){
+    const badge = document.getElementById('mtcCereriBadge');
+    const count = document.getElementById('mtcCereriCount');
+    badge.style.display = 'flex';
+    count.textContent = _mtcRequests.length;
+    mtcOverlayPendingOnCalendar();
+
+    const body = document.getElementById('mtcCereriBody');
+    if(!_mtcRequests.length){
+      body.innerHTML = '<div class="mtcCereriEmpty">Nicio cerere în așteptare.</div>';
+      return;
+    }
+    body.innerHTML = _mtcRequests.map(r=>{
+      const warn = mtcFindOverlaps(r);
+      return `<div class="mtcCereriCard">
+        <div class="who">${mtcEsc(r.numeAngajat||'—')}${_mtcCurrentUserKey==='admin' ? ' <span style="color:#888;font-weight:400;">('+mtcEsc(r.coordonator||'')+')</span>' : ''}</div>
+        <div class="when">${r.start} → ${r.end}</div>
+        ${r.motiv ? `<div class="motiv">"${mtcEsc(r.motiv)}"</div>` : ''}
+        ${warn.length ? `<div class="warn">⚠ Se suprapune cu ${warn.map(w=>mtcEsc(w)).join(', ')}</div>` : ''}
+        <div class="acts">
+          <button class="ok" onclick="mtcDecide('${r.id}','aprobat')">Aprobă</button>
+          <button class="no" onclick="mtcDecide('${r.id}','respins')">Respinge</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function mtcFindOverlaps(req){
+    // verificăm suprapunere cu alte cereri active din același grup de coordonator
+    return _mtcRequests
+      .filter(o=>o.id!==req.id && o.coordonator===req.coordonator && o.employeeId!==req.employeeId)
+      .filter(o=> req.start<=o.end && o.start<=req.end)
+      .map(o=>o.numeAngajat);
+  }
+
+  window.mtcToggleCereriPanel = function(){
+    const p = document.getElementById('mtcCereriPanel');
+    p.style.display = p.style.display==='block' ? 'none' : 'block';
+  };
+
+  window.mtcDecide = async function(requestId, decision){
+    let motivRespingere = '';
+    if(decision==='respins'){
+      motivRespingere = prompt('Motivul respingerii (opțional):') || '';
+    }
+    try{
+      await db.runTransaction(async tx=>{
+        const reqRef = db.collection('cereri_concediu').doc(requestId);
+        const reqSnap = await tx.get(reqRef);
+        if(!reqSnap.exists) throw new Error('Cererea nu mai există.');
+        const req = reqSnap.data();
+        if(req.status !== 'in_asteptare') throw new Error('Cererea a fost deja decisă.');
+
+        let driverUpdates = [];
+        if(decision === 'aprobat'){
+          // Scriem instant în "tania" (sursa reală) ȘI în orice alt
+          // document unde șoferul mai apare, conform "visibleTo" — ca
+          // să nu depindă de următorul auto-save al aplicației.
+          const linkStr = req.linkConcedii || '';
+          const driverId = linkStr.includes(':') ? linkStr.split(':')[1] : linkStr;
+          const collName = (typeof concediiColl==='function') ? concediiColl() : 'concedii';
+          const taniaRef = db.collection(collName).doc('tania');
+          const taniaSnap = await tx.get(taniaRef);
+          if(taniaSnap.exists){
+            const taniaDrivers = taniaSnap.data().drivers || [];
+            let idx = taniaDrivers.findIndex(d=>String(d.id)===driverId);
+            if(idx === -1) idx = taniaDrivers.findIndex(d=>d.name===req.numeAngajat);
+            if(idx !== -1){
+              const realId = taniaDrivers[idx].id;
+              const visibleTo = (taniaDrivers[idx].visibleTo||[]).filter(k=>k && k!=='tania');
+
+              const updatedTania = [...taniaDrivers];
+              const leavesTania = Array.isArray(updatedTania[idx].leaves) ? [...updatedTania[idx].leaves] : [];
+              leavesTania.push({start:req.start, end:req.end});
+              updatedTania[idx] = {...updatedTania[idx], leaves: leavesTania};
+              driverUpdates.push({ref:taniaRef, drivers:updatedTania});
+
+              // toate citirile trebuie să fie înainte de orice scriere, într-o tranzacție
+              const otherSnaps = await Promise.all(visibleTo.map(k=>tx.get(db.collection(collName).doc(k))));
+              visibleTo.forEach((coordKey, i)=>{
+                const snap = otherSnaps[i];
+                if(!snap.exists) return;
+                const drivers = snap.data().drivers || [];
+                const j = drivers.findIndex(d=>String(d.id)===realId);
+                if(j === -1) return;
+                const updated = [...drivers];
+                const leaves = Array.isArray(updated[j].leaves) ? [...updated[j].leaves] : [];
+                leaves.push({start:req.start, end:req.end});
+                updated[j] = {...updated[j], leaves};
+                driverUpdates.push({ref:snap.ref, drivers:updated});
+              });
+            }
+          }
+        }
+
+        tx.update(reqRef, {
+          status: decision,
+          motivRespingere: decision==='respins' ? motivRespingere : '',
+          decisAt: firebase.firestore.FieldValue.serverTimestamp(),
+          decisDe: _mtcCurrentUserKey
+        });
+        driverUpdates.forEach(u=>{ tx.update(u.ref, {drivers: u.drivers}); });
+      });
+    }catch(err){
+      console.error(err);
+      alert('Eroare la decizie: ' + (err.message||err));
+    }
+  };
+
+  function mtcOverlayPendingOnCalendar(){
+    const grid = document.getElementById('calGrid');
+    if(!grid) return;
+    grid.querySelectorAll('.mtc-pending-overlay').forEach(el=>el.remove());
+    if(!_mtcRequests.length) return;
+
+    const cells = grid.querySelectorAll('.cal-day');
+    cells.forEach(cell=>{
+      const onclickAttr = cell.getAttribute('onclick') || '';
+      const m = onclickAttr.match(/openDayDetail\('([\d-]+)'\)/);
+      if(!m) return;
+      const dateStr = m[1];
+      const pendingHere = _mtcRequests.filter(r => dateStr >= r.start && dateStr <= r.end);
+      if(!pendingHere.length) return;
+
+      const overlay = document.createElement('div');
+      overlay.className = 'mtc-pending-overlay';
+      overlay.innerHTML = pendingHere.map(r=>{
+        const familyName = (r.numeAngajat||'?').trim().split(/\s+/)[0];
+        return `<div class="mtc-pending-name">🕓 ${mtcEsc(familyName)} (cerere)</div>`;
+      }).join('');
+      cell.appendChild(overlay);
+    });
+  }
+
+  function mtcEsc(s){
+    return (s||'').toString().replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  // Dacă sesiunea era deja activă (auto-login din localStorage, înainte
+  // ca acest cod să apuce să se agațe de enterAppSafe), pornim direct.
+  // Mai reverificăm de câteva ori în prima secundă, cât timp pagina încă
+  // se inițializează, ca să nu pierdem momentul în care activeUserKey apare.
+  let _mtcTries = 0;
+  const _mtcCheckInterval = setInterval(()=>{
+    _mtcTries++;
+    if(window.activeUserKey){
+      mtcInitCereriPanel(window.activeUserKey);
+      clearInterval(_mtcCheckInterval);
+    } else if(_mtcTries > 20){
+      clearInterval(_mtcCheckInterval);
+    }
+  }, 300);
+})();
+</script>
 
  
 </html>
